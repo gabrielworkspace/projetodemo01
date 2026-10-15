@@ -9,10 +9,26 @@
     },
     "Lighting": {
       "$properties": {
-        "Technology": { "Enum": 4 },
-        "Ambient": { "Color3": [0.35, 0.35, 0.4] },
-        "OutdoorAmbient": { "Color3": [0.5, 0.5, 0.55] },
-        "Brightness": { "Float32": 2.2 },
+        "Technology": {
+          "Enum": 4
+        },
+        "Ambient": {
+          "Color3": [
+            0.35,
+            0.35,
+            0.4
+          ]
+        },
+        "OutdoorAmbient": {
+          "Color3": [
+            0.5,
+            0.5,
+            0.55
+          ]
+        },
+        "Brightness": {
+          "Float32": 2.2
+        },
         "TimeOfDay": "14:30:00",
         "GlobalShadows": true
       }
@@ -33,6 +49,11 @@
       }
     },
     "StarterPlayer": {
+      "$properties": {
+        "AvatarJointUpgrade_SerializedRollout": {
+          "Enum": 1
+        }
+      },
       "StarterPlayerScripts": {
         "Client": {
           "$path": "src/client"

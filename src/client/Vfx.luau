@@ -9,6 +9,8 @@ local TweenService = game:GetService("TweenService")
 
 local UI = require(script.Parent.UI)
 local Sons = require(script.Parent.Sons)
+local VfxKit = require(script.Parent.VfxKit)
+local soltar = VfxKit.soltar
 
 local Vfx = {}
 Vfx.extras = {} -- outros módulos podem registrar efeitos aqui (ex.: salto dos inimigos)
@@ -251,6 +253,12 @@ local function arcoDeCorte(origem: CFrame, raio: number, arcoGraus: number, cor:
 	a1.Parent = terreno
 	local nucleo = novoFeixe(a0, a1, cor:Lerp(BRANCO, 0.55), 0.7 * espessura)
 	local aura = novoFeixe(a0, a1, cor, 2.4 * espessura)
+	-- bordas suaves: parece energia, não uma faixa sólida
+	aura.TextureMode = Enum.TextureMode.Stretch
+	VfxKit.texturaFeixe(aura, "rastro", VfxKit.TEX.luz)
+	local brilhoExterno = novoFeixe(a0, a1, cor, 4.2 * espessura)
+	brilhoExterno.TextureMode = Enum.TextureMode.Stretch
+	VfxKit.texturaFeixe(brilhoExterno, "rastro", VfxKit.TEX.luz)
 	posicionarArco(a0, a1, { nucleo, aura }, origem, raio, arcoGraus)
 
 	local inicio = os.clock()
@@ -259,7 +267,8 @@ local function arcoDeCorte(origem: CFrame, raio: number, arcoGraus: number, cor:
 		local t = (os.clock() - inicio) / duracao
 		local cabeca = t * 1.45
 		nucleo.Transparency = transparenciaDeVarredura(cabeca, 0.45, 0)
-		aura.Transparency = transparenciaDeVarredura(cabeca, 0.55, 0.45)
+		aura.Transparency = transparenciaDeVarredura(cabeca, 0.55, 0.3)
+		brilhoExterno.Transparency = transparenciaDeVarredura(cabeca, 0.7, 0.7)
 		if cabeca > 1.6 then
 			conexao:Disconnect()
 			a0:Destroy()
@@ -269,7 +278,10 @@ local function arcoDeCorte(origem: CFrame, raio: number, arcoGraus: number, cor:
 	-- faíscas na ponta do arco
 	local fim = origem:PointToWorldSpace(Vector3.new(raio * math.sin(math.rad(arcoGraus) / 2), 0, -raio * math.cos(math.rad(arcoGraus) / 2)))
 	task.delay(duracao * 0.6, function()
-		particulas(fim, { cor = cor:Lerp(BRANCO, 0.4), quantidade = 6, tamanho = 0.35, velocidade = 12, vida = 0.3 })
+		soltar(fim, "faiscas", { cor = cor, quantidade = math.floor(10 * espessura), escala = 0.7 })
+		local meio = origem:PointToWorldSpace(Vector3.new(0, 0, -raio * 0.85))
+		soltar(meio, "corte", { cor = cor, quantidade = 1, escala = raio / 6 * espessura })
+		soltar(fim, "brasas", { cor = cor, quantidade = 6, escala = 0.6 })
 	end)
 end
 
@@ -298,6 +310,7 @@ end
 
 function Vfx.golpeInimigo(dados)
 	local base = dados.pos
+	soltar(base - Vector3.new(0, 1.5, 0), "poeira", { cor = Color3.fromRGB(160, 140, 120), quantidade = 8, escala = 0.8 })
 	if dados.arco >= 360 then
 		local chao = Vector3.new(base.X, base.Y - 1.5, base.Z)
 		local onda = disco(chao, 2, dados.cor, 0.25)
@@ -445,6 +458,8 @@ local MAGIAS = {}
 MAGIAS.dardoArcano = function(escala: number)
 	local cor = Color3.fromRGB(190, 110, 255)
 	local nucleo = parte(Vector3.one * 0.7 * escala, CFrame.new(), cor:Lerp(BRANCO, 0.6), 0, Enum.PartType.Ball)
+	VfxKit.continuo(nucleo, "brasas", 50, { cor = cor, escala = 0.6 * escala })
+	VfxKit.continuo(nucleo, "clarao", 20, { cor = cor, escala = 0.35 * escala, extra = { LockedToPart = true, Lifetime = NumberRange.new(0.1, 0.12) } })
 	local aura = parte(Vector3.one * 1.5 * escala, CFrame.new(), cor, 0.55, Enum.PartType.Ball)
 	local anel1 = anelDeMagia(0.9 * escala, 0.08, cor:Lerp(BRANCO, 0.3), 0.2)
 	local anel2 = anelDeMagia(0.7 * escala, 0.08, cor, 0.3)
@@ -476,6 +491,7 @@ end
 MAGIAS.lancaGelo = function(escala: number)
 	local cor = Color3.fromRGB(150, 225, 255)
 	local lanca = parte(Vector3.new(0.55, 0.55, 2.8) * escala, CFrame.new(), cor:Lerp(BRANCO, 0.4), 0.1, nil, Enum.Material.Glass)
+	VfxKit.continuo(lanca, "brasas", 45, { cor = cor, escala = 0.6 * escala, extra = { Acceleration = Vector3.new(0, -4, 0) } })
 	local brilho = parte(Vector3.new(0.25, 0.25, 3.1) * escala, CFrame.new(), cor, 0, nil, Enum.Material.Neon)
 	local extras = { { parte = brilho, cf = function()
 		return CFrame.new()
@@ -511,6 +527,8 @@ MAGIAS.bolaFogo = function(escala: number)
 	local cor = Color3.fromRGB(255, 130, 40)
 	local nucleo = parte(Vector3.one * 1.3 * escala, CFrame.new(), Color3.fromRGB(255, 240, 160), 0, Enum.PartType.Ball)
 	local camada = parte(Vector3.one * 2.2 * escala, CFrame.new(), cor, 0.35, Enum.PartType.Ball)
+	VfxKit.continuo(nucleo, "fogo", 70, { cor = cor, escala = 0.9 * escala, extra = { Speed = NumberRange.new(1, 4) } })
+	VfxKit.continuo(nucleo, "fumaca", 18, { cor = Color3.fromRGB(70, 60, 55), escala = 0.6 * escala, extra = { Speed = NumberRange.new(0.5, 2) } })
 	local fogo = Instance.new("Fire")
 	fogo.Size = 4 * escala
 	fogo.Heat = 0
@@ -551,6 +569,8 @@ end
 MAGIAS.orbeCarregado = function(escala: number)
 	local cor = Color3.fromRGB(170, 70, 255)
 	local nucleo = parte(Vector3.one * 1.4 * escala, CFrame.new(), Color3.fromRGB(18, 6, 30), 0, Enum.PartType.Ball, Enum.Material.SmoothPlastic)
+	VfxKit.continuo(nucleo, "vortice", 14, { cor = cor, escala = 1.1 * escala, extra = { LockedToPart = true } })
+	VfxKit.continuo(nucleo, "fumaca", 20, { cor = Color3.fromRGB(45, 15, 70), escala = 0.7 * escala, extra = { Speed = NumberRange.new(0.5, 2) } })
 	local borda = parte(Vector3.one * 1.9 * escala, CFrame.new(), cor, 0.45, Enum.PartType.Ball, Enum.Material.ForceField)
 	local extras = { { parte = borda, cf = function()
 		return CFrame.new()
@@ -616,6 +636,7 @@ end
 MAGIAS.flechaCarregada = function(escala: number)
 	local cor = Color3.fromRGB(255, 225, 110)
 	local haste, extras = construirFlecha(escala, cor, cor, true)
+	VfxKit.continuo(haste, "faiscas", 40, { cor = cor, escala = 0.5, extra = { Acceleration = Vector3.zero } })
 	for i = 0, 1 do
 		local espiral = anelDeMagia(0.7 * escala, 0.08, if i == 0 then BRANCO else cor, 0.25)
 		table.insert(extras, { parte = espiral, cf = function(t)
@@ -649,10 +670,30 @@ local SOM_DISPARO = {
 	flechaOssea = { "arcoSoltar", { tom = 0.8, volume = 0.5 } },
 }
 
+local COR_MAGIA = {
+	dardoArcano = Color3.fromRGB(190, 110, 255),
+	lancaGelo = Color3.fromRGB(150, 225, 255),
+	bolaFogo = Color3.fromRGB(255, 130, 40),
+	orbeCarregado = Color3.fromRGB(170, 70, 255),
+}
+
 local function somDeDisparo(lista)
 	local primeiro = lista[1]
 	if not primeiro then
 		return
+	end
+	-- magias do Mago: um círculo mágico de pé aparece diante do cajado
+	local corMagia = COR_MAGIA[primeiro.tipo]
+	if corMagia then
+		local grande = primeiro.tipo == "orbeCarregado" or primeiro.tipo == "bolaFogo"
+		soltar(primeiro.pos, "circulo", {
+			cor = corMagia,
+			escala = if grande then 0.45 else 0.3,
+			quantidade = 1,
+			direcao = primeiro.dir,
+			extra = { Lifetime = NumberRange.new(0.45, 0.45), RotSpeed = NumberRange.new(220, 220) },
+		})
+		soltar(primeiro.pos, "faiscas", { cor = corMagia, quantidade = 10, escala = 0.6, direcao = primeiro.dir, extra = { SpreadAngle = Vector2.new(35, 35), Acceleration = Vector3.zero } })
 	end
 	local info = SOM_DISPARO[primeiro.tipo]
 	if info then
@@ -779,6 +820,19 @@ function Vfx.explosao(dados)
 	local pos, raio, cor = dados.pos, dados.raio or 6, dados.cor or FOGO
 	local forte = dados.forte == true
 	local leve = dados.leve == true
+	if not VfxKit.custom("Explosao", CFrame.new(pos), raio / 6) then
+		local e = raio / 6
+		soltar(pos, "clarao", { cor = cor, escala = e * 1.5, quantidade = 1 })
+		soltar(pos, "nucleo", { cor = cor, escala = e, quantidade = if leve then 3 else 7 })
+		soltar(pos, "fogo", { cor = cor, escala = e, quantidade = if leve then 8 else 22 })
+		soltar(pos, "faiscas", { cor = cor, escala = e * 1.2, quantidade = if leve then 12 else 34 })
+		soltar(pos, "brasas", { cor = cor, escala = e, quantidade = if leve then 6 else 20 })
+		if not leve then
+			soltar(pos, "fumaca", { cor = Color3.fromRGB(70, 62, 60), escala = e, quantidade = if forte then 16 else 10 })
+			soltar(pos - Vector3.new(0, 1.5, 0), "onda", { cor = cor, escala = e, quantidade = 1 })
+			soltar(pos - Vector3.new(0, 1.5, 0), "poeira", { cor = Color3.fromRGB(150, 135, 115), escala = e, quantidade = 14 })
+		end
+	end
 	Sons.tocar("explosao", { pos = pos, volume = if leve then 0.5 elseif forte then 1.15 else 0.9, tom = if leve then 1.3 else 1, alcance = 220 })
 	local nucleo = parte(Vector3.one * 1.5, CFrame.new(pos), cor:Lerp(BRANCO, 0.5), 0, Enum.PartType.Ball)
 	animar(nucleo, if leve then 0.22 else 0.35, { Size = Vector3.one * raio * 2, Transparency = 1, Color = cor })
@@ -804,6 +858,18 @@ end
 
 -- Orbe do Vazio: primeiro tudo é sugado para um ponto escuro, depois explode em violeta
 function Vfx.vazio(dados)
+	if not VfxKit.custom("Vazio", CFrame.new(dados.pos), (dados.raio or 8) / 6) then
+		local roxo = Color3.fromRGB(170, 70, 255)
+		local e = (dados.raio or 8) / 6
+		soltar(dados.pos, "implosao", { cor = roxo, escala = e, quantidade = 3 })
+		soltar(dados.pos, "vortice", { cor = roxo, escala = e * 1.5, quantidade = 3 })
+		task.delay(0.18, function()
+			soltar(dados.pos, "nucleo", { cor = roxo, escala = e, quantidade = 6 })
+			soltar(dados.pos, "faiscas", { cor = roxo, escala = e * 1.3, quantidade = 36 })
+			soltar(dados.pos, "fumaca", { cor = Color3.fromRGB(40, 15, 60), escala = e, quantidade = 14 })
+			soltar(dados.pos - Vector3.new(0, 1.5, 0), "onda", { cor = roxo, escala = e, quantidade = 1 })
+		end)
+	end
 	Sons.tocar("vazioExplode", { pos = dados.pos, alcance = 220 })
 	local pos, raio = dados.pos, dados.raio or 8
 	local cor = Color3.fromRGB(170, 70, 255)
@@ -1079,6 +1145,13 @@ end
 -- Respingo de sangue: gotas que caem e mancham o chão (golpes do Assassino)
 local function respingoDeSangue(posicao: Vector3, forca: number, soGotas: boolean?)
 	local sangue = Color3.fromRGB(150, 0, 15)
+	if not soGotas then
+		if VfxKit.custom("Sangue", CFrame.new(posicao)) then
+			return
+		end
+		soltar(posicao, "gotas", { cor = Color3.fromRGB(170, 10, 25), quantidade = math.floor(16 * forca), escala = forca })
+		soltar(posicao, "fumaca", { cor = Color3.fromRGB(120, 0, 15), quantidade = 2, escala = 0.35 * forca })
+	end
 	if soGotas then
 		particulas(posicao, { cor = sangue, quantidade = 3, tamanho = 0.25, velocidade = 4, vida = 0.5, gravidade = 50, luz = 0 })
 		return
@@ -1122,8 +1195,26 @@ local function respingoDeSangue(posicao: Vector3, forca: number, soGotas: boolea
 	end
 end
 
+-- Impacto de um golpe: clarão, faíscas em rastro, brasas e (no crítico) núcleo e anel
+local function impactoDeGolpe(pos: Vector3, cor: Color3, critico: boolean)
+	if VfxKit.custom(if critico then "Critico" else "Impacto", CFrame.new(pos)) then
+		return
+	end
+	soltar(pos, "clarao", { cor = cor, escala = if critico then 0.9 else 0.5, quantidade = 1 })
+	soltar(pos, "estrela", { cor = cor, escala = if critico then 1.1 else 0.45, quantidade = 1 })
+	soltar(pos, "faiscas", { cor = cor, quantidade = if critico then 26 else 12, escala = if critico then 1.2 else 0.8 })
+	soltar(pos, "brasas", { cor = cor, quantidade = if critico then 12 else 5, escala = 0.7 })
+	if critico then
+		soltar(pos, "nucleo", { cor = Color3.fromRGB(255, 220, 120), quantidade = 2, escala = 0.45 })
+		soltar(pos, "anel", { cor = Color3.fromRGB(255, 230, 150), quantidade = 1, escala = 0.6, extra = { Orientation = Enum.ParticleOrientation.FacingCamera } })
+	end
+end
+
 function Vfx.dano(dados)
 	local critico = dados.critico
+	if dados.impacto and not dados.dot then
+		impactoDeGolpe(dados.impacto, dados.cor or Color3.fromRGB(255, 200, 140), critico == true)
+	end
 	-- som do golpe (dano contínuo de fogo/sangramento não faz barulho a cada tique)
 	if dados.impacto and not dados.dot then
 		Sons.tocar(if critico then "critico" else "impacto", { pos = dados.impacto })
@@ -1159,6 +1250,8 @@ function Vfx.danoJogador(dados)
 	local raiz = raizDoJogador(dados.jogador)
 	if raiz then
 		Sons.tocar("danoJogador", { pos = raiz.Position, volume = if dados.jogador == jogador then 1 else 0.5 })
+		soltar(raiz.Position, "faiscas", { cor = Color3.fromRGB(255, 60, 50), quantidade = 10, escala = 0.7 })
+		soltar(raiz.Position, "clarao", { cor = Color3.fromRGB(255, 60, 50), quantidade = 1, escala = 0.5 })
 	end
 	if Vfx.aoJogadorAtingido then
 		Vfx.aoJogadorAtingido(dados.jogador)
@@ -1268,6 +1361,11 @@ function Vfx.esquiva(dados)
 	Sons.tocar("esquiva", { pai = raiz })
 	local personagem = raiz.Parent
 	local cor = COR_ESQUIVA[dados.classe] or Color3.fromRGB(200, 230, 255)
+	if not VfxKit.custom("Esquiva", raiz.CFrame) then
+		local pe = raiz.Position - Vector3.new(0, 2.6, 0)
+		soltar(pe, "poeira", { cor = Color3.fromRGB(190, 175, 150), quantidade = 10, escala = 0.8 })
+		soltar(raiz.Position, "faiscas", { cor = cor, quantidade = 10, escala = 0.6, extra = { Acceleration = Vector3.zero } })
+	end
 	-- "fantasmas" do personagem que ficam para trás
 	for i = 0, 2 do
 		task.delay(i * 0.05, function()
@@ -1315,6 +1413,12 @@ end
 
 -- Carga cheia: clarão dourado na ponta da arma
 function Vfx.cargaCheia(dados)
+	if not VfxKit.custom("CargaCheia", CFrame.new(dados.pos)) then
+		local ouro = Color3.fromRGB(255, 214, 90)
+		soltar(dados.pos, "clarao", { cor = ouro, quantidade = 1, escala = 0.7 })
+		soltar(dados.pos, "anel", { cor = ouro, quantidade = 1, escala = 0.5, extra = { Orientation = Enum.ParticleOrientation.FacingCamera } })
+		soltar(dados.pos, "brasas", { cor = ouro, quantidade = 14, escala = 0.7 })
+	end
 	Sons.tocar("cargaCheia", { pos = dados.pos, volume = if dados.local_ then 1 else 0.5 })
 	local ouro = Color3.fromRGB(255, 214, 90)
 	local bola = parte(Vector3.one * 0.6, CFrame.new(dados.pos), ouro:Lerp(BRANCO, 0.4), 0.1, Enum.PartType.Ball, Enum.Material.Neon)
@@ -1337,6 +1441,13 @@ end
 
 -- Assassino: some numa fumaça e aparece em outro lugar, deixando um risco no ar
 function Vfx.passoSombrio(dados)
+	if not VfxKit.custom("PassoSombrio", CFrame.new(dados.ate)) then
+		local escuro = Color3.fromRGB(35, 10, 30)
+		soltar(dados.de, "fumaca", { cor = escuro, quantidade = if dados.leve then 5 else 12, escala = 0.8 })
+		soltar(dados.ate, "implosao", { cor = dados.cor, quantidade = 2, escala = 0.5 })
+		soltar(dados.ate, "fumaca", { cor = escuro, quantidade = if dados.leve then 4 else 9, escala = 0.7 })
+		soltar(dados.ate, "faiscas", { cor = dados.cor, quantidade = 12, escala = 0.8 })
+	end
 	Sons.tocar("passoSombrio", { pos = dados.ate, volume = if dados.leve then 0.6 else 1 })
 	if dados.leve then
 		Sons.tocar("adaga", { pos = dados.ate })
@@ -1409,18 +1520,18 @@ function Vfx.zonaFogo(dados)
 	local base = disco(centro, diametro, FOGO, 0.45)
 	-- peça invisível e achatada: as chamas saem de toda a área dela, para cima
 	local area = parte(Vector3.new(diametro * 0.75, 0.2, diametro * 0.75), CFrame.new(centro), FOGO, 1)
-	local chamas = Instance.new("ParticleEmitter")
-	chamas.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(255, 70, 20))
-	chamas.LightEmission = 1
-	chamas.LightInfluence = 0
-	chamas.Size = sequencia({ { 0, 0.9 }, { 1, 0 } })
-	chamas.Lifetime = NumberRange.new(0.5, 0.9)
-	chamas.Speed = NumberRange.new(3, 6)
-	chamas.SpreadAngle = Vector2.new(10, 10)
-	chamas.Shape = Enum.ParticleEmitterShape.Box
-	chamas.EmissionDirection = Enum.NormalId.Top
-	chamas.Rate = 60
-	chamas.Parent = area
+	local chamas = VfxKit.continuo(area, "fogo", 45, {
+		cor = FOGO,
+		escala = 1.3,
+		extra = { Shape = Enum.ParticleEmitterShape.Box, EmissionDirection = Enum.NormalId.Top, SpreadAngle = Vector2.new(10, 10), Speed = NumberRange.new(3, 7) },
+	})
+	local fumacaZona = VfxKit.continuo(area, "fumaca", 8, {
+		cor = Color3.fromRGB(70, 60, 55),
+		extra = { Shape = Enum.ParticleEmitterShape.Box, EmissionDirection = Enum.NormalId.Top, Speed = NumberRange.new(2, 4) },
+	})
+	task.delay(dados.duracao, function()
+		fumacaZona.Enabled = false
+	end)
 	local luz = Instance.new("PointLight")
 	luz.Color = FOGO
 	luz.Range = diametro
@@ -1436,6 +1547,15 @@ end
 
 -- Escudo do Cavaleiro bloqueou um golpe: faíscas no escudo. Defesa perfeita: clarão dourado.
 function Vfx.defesa(dados)
+	if not VfxKit.custom("Defesa", CFrame.lookAt(dados.pos, dados.pos + (dados.dir or Vector3.new(0, 0, -1)))) then
+		local corFaisca = if dados.perfeita then Color3.fromRGB(255, 214, 90) else Color3.fromRGB(255, 170, 90)
+		soltar(dados.pos, "faiscas", { cor = corFaisca, quantidade = if dados.perfeita then 40 else 20, escala = 1.1, direcao = dados.dir, extra = { SpreadAngle = Vector2.new(55, 55) } })
+		soltar(dados.pos, "clarao", { cor = corFaisca, quantidade = 1, escala = if dados.perfeita then 1.2 else 0.6 })
+		if dados.perfeita then
+			soltar(dados.pos, "anel", { cor = corFaisca, quantidade = 1, escala = 0.9, extra = { Orientation = Enum.ParticleOrientation.FacingCamera } })
+			soltar(dados.pos, "brasas", { cor = corFaisca, quantidade = 16 })
+		end
+	end
 	Sons.tocar(if dados.perfeita then "escudoPerfeito" else "escudo", { pos = dados.pos })
 	local pos = dados.pos + Vector3.new(0, 0.6, 0)
 	local dir = dados.dir or Vector3.new(0, 0, -1)
@@ -1590,6 +1710,12 @@ end
 
 -- Estouro genérico (usado na morte dos inimigos)
 function Vfx.estouro(posicao: Vector3, cor: Color3, quantidade: number, velocidade: number)
+	if not VfxKit.custom("Morte", CFrame.new(posicao)) then
+		soltar(posicao, "fumaca", { cor = cor:Lerp(Color3.fromRGB(40, 35, 45), 0.6), quantidade = 10, escala = 0.9 })
+		soltar(posicao, "faiscas", { cor = cor, quantidade = 22, escala = 1 })
+		soltar(posicao, "brasas", { cor = cor, quantidade = 14, escala = 0.9 })
+		soltar(posicao, "clarao", { cor = cor, quantidade = 1, escala = 0.8 })
+	end
 	Sons.tocar("inimigoMorre", { pos = posicao })
 	particulas(posicao, { cor = cor:Lerp(BRANCO, 0.3), cor2 = cor, quantidade = quantidade, tamanho = 0.7, velocidade = velocidade, vida = 0.6, gravidade = 20 })
 	clarao(posicao, cor, 16, 0.3, 3)
@@ -1641,6 +1767,22 @@ function Vfx.redemoinho(dados)
 	local cor = if dados.fogo then FOGO else dados.cor
 	local raio = dados.raio
 	Sons.tocar("giro", { pai = raiz })
+	VfxKit.custom("Redemoinho", raiz.CFrame)
+	local aura = Instance.new("Attachment")
+	aura.Parent = raiz
+	local faiscasGiro = VfxKit.continuo(aura, "faiscas", 60, { cor = cor, escala = 0.8, extra = { Shape = Enum.ParticleEmitterShape.Cylinder, ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface } })
+	local brasasGiro = VfxKit.continuo(aura, "brasas", 30, { cor = cor })
+	local pePoeira = Instance.new("Attachment")
+	pePoeira.Position = Vector3.new(0, -2.6, 0)
+	pePoeira.Parent = raiz
+	local poeiraGiro = VfxKit.continuo(pePoeira, "poeira", 40, { cor = Color3.fromRGB(185, 170, 145), escala = 1.1, extra = { SpreadAngle = Vector2.new(180, 5), EmissionDirection = Enum.NormalId.Right } })
+	task.delay(dados.duracao, function()
+		faiscasGiro.Enabled = false
+		brasasGiro.Enabled = false
+		poeiraGiro.Enabled = false
+		Debris:AddItem(aura, 1.5)
+		Debris:AddItem(pePoeira, 1.5)
+	end)
 	-- arcos da espada (dois, girando)
 	local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
 	local b0, b1 = Instance.new("Attachment"), Instance.new("Attachment")
@@ -1756,6 +1898,19 @@ function Vfx.julgamento(dados)
 			sumir({ pedra }, 0.4, 1.2)
 		end
 		particulas(pos + Vector3.new(0, 1, 0), { cor = BRANCO, cor2 = cor, quantidade = 50, tamanho = 1, velocidade = 45, vida = 0.8, gravidade = 25 })
+		if not VfxKit.custom("Julgamento", CFrame.new(pos), raio / 10) then
+			local e = raio / 9
+			soltar(pos + Vector3.new(0, 2, 0), "clarao", { cor = cor, quantidade = 1, escala = e * 2 })
+			soltar(pos + Vector3.new(0, 0.25, 0), "circulo", { cor = cor, escala = raio / 4, quantidade = 1, extra = { Lifetime = NumberRange.new(1.4, 1.4) } })
+			soltar(pos + Vector3.new(0, 1, 0), "nucleo", { cor = cor, quantidade = 8, escala = e })
+			soltar(pos + Vector3.new(0, 0.3, 0), "onda", { cor = cor, quantidade = 1, escala = e * 1.4 })
+			task.delay(0.1, function()
+				soltar(pos + Vector3.new(0, 0.3, 0), "onda", { cor = BRANCO, quantidade = 1, escala = e })
+			end)
+			soltar(pos + Vector3.new(0, 0.5, 0), "poeira", { cor = Color3.fromRGB(170, 150, 120), quantidade = 30, escala = e * 1.4 })
+			soltar(pos + Vector3.new(0, 1, 0), "faiscas", { cor = cor, quantidade = 50, escala = e * 1.5 })
+			soltar(pos + Vector3.new(0, 1, 0), "brasas", { cor = cor, quantidade = 30, escala = e })
+		end
 		clarao(pos, cor, raio * 4, 0.6, 8)
 		Vfx.tremerEm(pos, 3.5, 0.5)
 	end)
@@ -1772,15 +1927,8 @@ function Vfx.meteoro(dados)
 	fogo.Size = 10
 	fogo.Heat = 0
 	fogo.Parent = rocha
-	emissorEm(rocha, {
-		Color = ColorSequence.new(Color3.fromRGB(80, 70, 70)),
-		LightEmission = 0,
-		Transparency = sequencia({ { 0, 0.3 }, { 1, 1 } }),
-		Size = sequencia({ { 0, 2 }, { 1, 5 } }),
-		Lifetime = NumberRange.new(0.6, 1),
-		Speed = NumberRange.new(1, 3),
-		Rate = 40,
-	})
+	VfxKit.continuo(rocha, "fogo", 70, { cor = FOGO, escala = 1.4 })
+	VfxKit.continuo(rocha, "fumaca", 30, { cor = Color3.fromRGB(60, 50, 50), escala = 1.2, extra = { Speed = NumberRange.new(1, 3) } })
 	emissorEm(rocha, {
 		Color = ColorSequence.new(Color3.fromRGB(255, 220, 120), FOGO),
 		LightEmission = 1,
@@ -1800,8 +1948,14 @@ function Vfx.meteoro(dados)
 	if dados.amigo then
 		local partes = anel(alvo + Vector3.new(0, 0.15, 0), dados.raio or 10, FOGO, 0.35, 24, 0.4)
 		sumir(partes, 0.2, dados.duracao)
+		soltar(alvo + Vector3.new(0, 0.2, 0), "circulo", { cor = FOGO, escala = (dados.raio or 10) / 4, quantidade = 1, extra = { Lifetime = NumberRange.new(dados.duracao + 0.2, dados.duracao + 0.2) } })
 	end
 	task.delay(dados.duracao, function()
+		if not VfxKit.custom("Meteoro", CFrame.new(alvo), (dados.raio or 10) / 10) then
+			soltar(alvo + Vector3.new(0, 1, 0), "fogo", { cor = FOGO, quantidade = 30, escala = 1.6 })
+			soltar(alvo + Vector3.new(0, 0.5, 0), "fumaca", { cor = Color3.fromRGB(60, 50, 48), quantidade = 18, escala = 1.6 })
+			soltar(alvo + Vector3.new(0, 0.3, 0), "poeira", { cor = Color3.fromRGB(140, 115, 95), quantidade = 24, escala = 1.5 })
+		end
 		-- cratera: pedras que se erguem em volta do impacto
 		local raioCratera = (dados.raio or 10) * 0.55
 		for i = 1, 12 do
@@ -1862,6 +2016,14 @@ end
 
 -- Raio que vem do céu, com galhos que se abrem e marca queimada no chão
 function Vfx.raioCeu(dados)
+	if not VfxKit.custom("Raio", CFrame.new(dados.pos)) then
+		local corRaio = dados.cor or Color3.fromRGB(200, 150, 255)
+		soltar(dados.pos + Vector3.new(0, 0.5, 0), "clarao", { cor = corRaio, quantidade = 1, escala = 1 })
+		VfxKit.feixeRaio(dados.pos + Vector3.new(math.random(-3, 3), 34, math.random(-3, 3)), dados.pos, corRaio, 4, 0.25)
+		soltar(dados.pos + Vector3.new(0, 0.5, 0), "faiscas", { cor = corRaio, quantidade = 22, escala = 1 })
+		soltar(dados.pos + Vector3.new(0, 0.2, 0), "anel", { cor = corRaio, quantidade = 1, escala = 0.7 })
+		soltar(dados.pos + Vector3.new(0, 0.3, 0), "fumaca", { cor = Color3.fromRGB(60, 55, 70), quantidade = 5, escala = 0.6 })
+	end
 	Sons.tocar("raio", { pos = dados.pos, volume = 0.7, alcance = 220 })
 	local cor = dados.cor or Color3.fromRGB(200, 150, 255)
 	local topo = dados.pos + Vector3.new(math.random(-3, 3), 34, math.random(-3, 3))
@@ -1891,6 +2053,7 @@ function Vfx.chuvaFlechas(dados)
 	local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
 	table.insert(partes, fundo)
 	sumir(partes, 0.4, duracao)
+	soltar(centro + Vector3.new(0, 0.2, 0), "circulo", { cor = cor, escala = raio / 4, quantidade = 1, extra = { Lifetime = NumberRange.new(duracao, duracao), RotSpeed = NumberRange.new(25, 25) } })
 	-- portal no céu
 	local ceu = centro + Vector3.new(4, 24, 4)
 	local portal = disco(ceu, 0.5, cor:Lerp(BRANCO, 0.3), 0.3)
@@ -1911,7 +2074,8 @@ function Vfx.chuvaFlechas(dados)
 			rastro(flecha, cor, 0.25, 0.12)
 			local tween = animar(flecha, 0.22, { CFrame = CFrame.lookAt(chao + Vector3.new(0, 0.8, 0), chao + (chao - topo).Unit) }, Enum.EasingStyle.Linear)
 			tween.Completed:Once(function()
-				particulas(chao + Vector3.new(0, 0.3, 0), { cor = Color3.fromRGB(200, 185, 160), cor2 = cor, quantidade = 4, tamanho = 0.3, velocidade = 7, vida = 0.25, luz = 0 })
+				soltar(chao + Vector3.new(0, 0.3, 0), "poeira", { cor = Color3.fromRGB(180, 165, 140), quantidade = 3, escala = 0.5 })
+				soltar(chao + Vector3.new(0, 0.5, 0), "faiscas", { cor = cor, quantidade = 4, escala = 0.5 })
 				sumir({ flecha }, 0.3, 0.5)
 			end)
 			task.wait(0.035)
@@ -1946,6 +2110,14 @@ function Vfx.supremo(dados)
 		return
 	end
 	Sons.tocar("supremo", { pos = raiz.Position, alcance = 220 })
+	if not VfxKit.custom("Supremo", raiz.CFrame) then
+		soltar(raiz.Position, "clarao", { cor = dados.cor, quantidade = 1, escala = 1.6 })
+		soltar(raiz.Position - Vector3.new(0, 2.6, 0), "anel", { cor = dados.cor, quantidade = 1, escala = 1.3 })
+		soltar(raiz.Position - Vector3.new(0, 2.5, 0), "circulo", { cor = dados.cor, quantidade = 1, escala = 1.6, extra = { Lifetime = NumberRange.new(1.2, 1.2) } })
+		soltar(raiz.Position - Vector3.new(0, 2.6, 0), "onda", { cor = dados.cor, quantidade = 1, escala = 1 })
+		soltar(raiz.Position, "brasas", { cor = dados.cor, quantidade = 30, escala = 1.2 })
+		soltar(raiz.Position, "vortice", { cor = dados.cor, quantidade = 2, escala = 2 })
+	end
 	if dados.nome == "Tempestade Arcana" then
 		nuvemDeTempestade(raiz, dados.cor, 5)
 		Sons.tocar("tempestade", { pos = raiz.Position + Vector3.new(0, 20, 0), alcance = 260 })

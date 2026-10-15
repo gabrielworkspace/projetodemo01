@@ -68,16 +68,73 @@ local misturar = Poses.misturar
 
 local personagens = {} -- [Model] = estado
 
+-- Junta que a animação pode mexer: Motor6D (rig clássico) ou AnimationConstraint (rig novo
+-- do Roblox, "Avatar Joint Upgrade"). As duas têm a propriedade Transform.
+local function ehJunta(objeto: Instance): boolean
+	return objeto:IsA("Motor6D") or objeto:IsA("AnimationConstraint")
+end
+
+-- Rotação de referência da junta (onde ela fica presa na peça "pai")
+local function rotacaoBase(junta: any): CFrame
+	if junta:IsA("Motor6D") then
+		return junta.C0.Rotation
+	end
+	local a0 = junta.Attachment0
+	return if a0 then a0.CFrame.Rotation else CFrame.identity
+end
+
+-- Peça que a junta move (a "filha")
+local function pecaFilha(junta: any): Instance?
+	if junta:IsA("Motor6D") then
+		return junta.Part1
+	end
+	local a1 = junta.Attachment1
+	return a1 and a1.Parent
+end
+
+local function acharJunta(personagem: Model, nomePeca: string, nomeJunta: string): Instance?
+	local peca = personagem:FindFirstChild(nomePeca)
+	local junta = peca and peca:FindFirstChild(nomeJunta)
+	if junta and ehJunta(junta) then
+		return junta
+	end
+	-- em outro lugar com o mesmo nome, ou com outro nome mas movendo a mesma peça
+	local porPeca = nil
+	for _, objeto in personagem:GetDescendants() do
+		if ehJunta(objeto) then
+			if objeto.Name == nomeJunta then
+				return objeto
+			end
+			local filha = pecaFilha(objeto)
+			if not porPeca and filha and filha.Name == nomePeca then
+				porPeca = objeto
+			end
+		end
+	end
+	return porPeca
+end
+
+local avisouSemJuntas = {}
+
 local function obterJuntas(personagem: Model)
 	local juntas = {}
 	local mapa = if personagem:FindFirstChild("UpperTorso") then JUNTAS_R15 else JUNTAS_R6
+	local quantas = 0
 	for nome, info in mapa do
-		local parte = personagem:FindFirstChild(info[1])
-		local motor = parte and parte:FindFirstChild(info[2])
-		if motor and motor:IsA("Motor6D") then
-			local rotacao = motor.C0.Rotation
-			juntas[nome] = { motor = motor, rot = rotacao, inv = rotacao:Inverse() }
+		local junta = acharJunta(personagem, info[1], info[2])
+		if junta then
+			local rotacao = rotacaoBase(junta)
+			juntas[nome] = { motor = junta, rot = rotacao, inv = rotacao:Inverse() }
+			quantas += 1
 		end
+	end
+	if quantas == 0 and personagem:FindFirstChildOfClass("Humanoid") and not avisouSemJuntas[personagem] then
+		avisouSemJuntas[personagem] = true
+		task.delay(3, function()
+			if personagem.Parent and next(obterJuntas(personagem)) == nil then
+				warn("[Animacoes] Nenhuma junta encontrada em " .. personagem.Name .. " (sem Motor6D nem AnimationConstraint): as animações não vão aparecer.")
+			end
+		end)
 	end
 	return juntas
 end
