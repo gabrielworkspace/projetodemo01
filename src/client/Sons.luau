@@ -56,13 +56,20 @@ local AJUSTES = {
 	reviver = { 0.6, 0 },
 	caiu = { 0.6, 0 },
 	portal = { 0.55, 0 },
+	pouso = { 0.7, 0.08 },
+	vento = { 0.6, 0.05 },
+	trovao = { 0.9, 0.04 },
+	golpeEspada = { 0.75, 0.08 },
 }
 
--- Antes de enviar o arquivo de sons, as explosões usam um som que já vem com o Roblox
+-- Sons que já vêm com o Roblox: tocam mesmo antes de enviar o arquivo de sons
 local SEM_ARQUIVO = {
 	explosao = "rbxasset://sounds/impact_explosion_03.mp3",
 	vazioExplode = "rbxasset://sounds/impact_explosion_03.mp3",
 	julgamento = "rbxasset://sounds/impact_explosion_03.mp3",
+	pouso = "rbxasset://sounds/action_jump_land.mp3", -- fim do rolamento do Cavaleiro
+	vento = "rbxasset://sounds/action_falling.ogg", -- vento do tornado
+	trovao = "rbxassetid://4299587602", -- estrondo de raio (veio no pacote de VFX): supremo do Cavaleiro
 }
 
 local grupo = Instance.new("SoundGroup")
@@ -92,7 +99,8 @@ local function origem(nome: string): (string?, { number }?)
 end
 
 --[[ opcoes: pos (Vector3: som no mundo), pai (Instance: segue a peça), volume (multiplica),
-	tom (multiplica a velocidade/altura), alcance (distância em que some, padrão 140)
+	tom (multiplica a velocidade/altura), alcance (distância em que some, padrão 140),
+	duracao (repete o som por esse tempo e some devagar no fim)
 	Devolve o Sound (para parar antes, se precisar). ]]
 function Sons.tocar(nome: string, opcoes): Sound?
 	opcoes = opcoes or {}
@@ -136,9 +144,19 @@ function Sons.tocar(nome: string, opcoes): Sound?
 		som.RollOffMaxDistance = opcoes.alcance or 140
 	end
 
+	local duracao = (if trecho then trecho[2] else 5) / som.PlaybackSpeed + 0.3
+	if opcoes.duracao then
+		-- som contínuo (vento): repete e some devagar no fim
+		som.Looped = true
+		duracao = opcoes.duracao + 0.4
+		task.delay(opcoes.duracao, function()
+			if som.Parent then
+				game:GetService("TweenService"):Create(som, TweenInfo.new(0.35), { Volume = 0 }):Play()
+			end
+		end)
+	end
 	som:Play()
 	tocando += 1
-	local duracao = (if trecho then trecho[2] else 5) / som.PlaybackSpeed + 0.3
 	task.delay(duracao, function()
 		tocando -= 1
 	end)

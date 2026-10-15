@@ -25,6 +25,14 @@
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
+      },
+      "EfeitosVFX": {
+        "$path": "vfx"
+      }
+    },
+    "ServerStorage": {
+      "ModelosArmas": {
+        "$path": "modelos"
       }
     },
     "ServerScriptService": {
@@ -33,6 +41,10 @@
       }
     },
     "StarterPlayer": {
+      "$properties": {
+        "GameSettingsAvatar": { "Enum": 1 },
+        "AvatarJointUpgrade": { "Enum": 1 }
+      },
       "StarterPlayerScripts": {
         "Client": {
           "$path": "src/client"

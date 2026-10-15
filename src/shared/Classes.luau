@@ -34,12 +34,14 @@ Classes.dados = {
 		armadura = 0.15,
 		esquivaMult = 1.25,
 		ameacaMult = 2.5,
+		-- a esquiva é um rolamento: mais lenta e mais longa, mas cobre a mesma distância
+		esquiva = { velocidade = 44, duracao = 0.3 },
 
 		ataque = {
 			tipo = "corte",
 			arco = 140,
-			combo = { 1, 1.1, 1.9 }, -- o terceiro golpe é o finalizador
-			impacto = { 0.13, 0.13, 0.27 }, -- quando a lâmina chega no alvo em cada golpe (segundos)
+			combo = { 1, 1.1, 1.9 }, -- o terceiro golpe é o finalizador: um giro que acerta em volta
+			impacto = { 0.13, 0.13, 0.24 }, -- quando a lâmina chega no alvo em cada golpe (segundos)
 			nome = "Combo de Espada",
 			icone = "⚔️",
 		},
@@ -48,13 +50,13 @@ Classes.dados = {
 			nome = "Redemoinho",
 			icone = "🌀",
 			recarga = 8,
-			descricao = "Gira por 2s puxando os inimigos para perto. Recebe 40% menos dano enquanto gira.",
+			descricao = "Uma tempestade de cortes em volta dele por 2s, puxando os inimigos. Recebe 40% menos dano enquanto gira.",
 		},
 		supremo = {
 			id = "julgamento",
 			nome = "Julgamento",
 			icone = "⚡",
-			descricao = "Esmaga o chão: atordoa todos ao redor e dá um escudo aos aliados próximos.",
+			descricao = "Um raio cai do céu: atordoa todos ao redor, dá um escudo aos aliados próximos e, por 10s, brilha e recebe 10% menos dano.",
 		},
 	},
 
@@ -66,18 +68,19 @@ Classes.dados = {
 		cor = Color3.fromRGB(180, 96, 255),
 		descricao = "Ataca de longe com orbes que explodem e controla o campo com fogo e raios.",
 		forte = "Enorme dano em área, magias de fogo, gelo e arcano",
-		fraco = "Pouca vida, ataque lento e depende de mana",
+		fraco = "Pouca vida, defesa baixa (leva 10% a mais de dano) e depende de mana",
 		notas = { Vida = 1, Dano = 5, Alcance = 4, Velocidade = 2 },
 
-		vida = 80,
-		dano = 21,
+		vida = 70,
+		dano = 25,
 		velocidade = 17,
 		intervalo = 0.52,
 		alcance = 50,
-		armadura = 0,
+		armadura = -0.1, -- defesa baixa: leva 10% a mais de dano
 		-- Mana: toda magia gasta mana, que volta sozinha com o tempo
 		mana = 100,
-		manaRegen = 14, -- por segundo
+		manaRegen = 9, -- por segundo (mais devagar: precisa escolher bem as magias)
+		danoEmArea = 1.15, -- explosões, meteoro e tempestade causam 15% a mais
 		custos = { ataque = 7, final = 14, carregado = 22, habilidade = 30 },
 
 		ataque = {

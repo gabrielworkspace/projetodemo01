@@ -178,6 +178,14 @@ local function criarBarra(v)
 	v.barra = barra
 end
 
+-- Toca um efeito pronto (ReplicatedStorage.EfeitosVFX) seguindo uma âncora do modelo; para sozinho
+-- quando a âncora some (morte ou fim da sala). Devolve a função que para o efeito.
+local function tocarPronto(ancora: BasePart, nome: string, escala: number): (() -> ())?
+	return Vfx.prefab(nome, function()
+		return if ancora.Parent then ancora.CFrame else nil
+	end, 0, escala)
+end
+
 local function criarVisual(modelo: Model)
 	local raiz = modelo:WaitForChild("HumanoidRootPart", 5) :: BasePart?
 	local humanoid = modelo:WaitForChild("Humanoid", 5) :: Humanoid?
@@ -262,6 +270,11 @@ local function criarVisual(modelo: Model)
 		local pivoCorpo = rig.ossos.corpo.pivo
 		ancoraCorpo = novaAncora("corpo", pivoCorpo + Vector3.new(0, (rig.altura or 2) * 0.5, 0))
 	end
+	-- efeitos prontos dos pacotes (chamas, névoa...) presos em ossos; começam depois de montar
+	local ancorasProntas = {}
+	for _, definicao in rig.prefabs or {} do
+		table.insert(ancorasProntas, { def = definicao, ancora = novaAncora(definicao.osso, definicao.pos) })
+	end
 	visual.Parent = pasta
 
 	local v = {
@@ -292,6 +305,24 @@ local function criarVisual(modelo: Model)
 
 	if not v.chefe then
 		criarBarra(v)
+	end
+
+	v.prontos = {}
+	for _, item in ancorasProntas do
+		item.parar = tocarPronto(item.ancora, item.def.nome, item.def.escala * escala)
+		table.insert(v.prontos, item)
+	end
+	-- entrada de chefe: o chão racha onde ele vai subir e, quando termina de subir, ele ruge
+	if rig.entrada then
+		local chao = raiz.Position - Vector3.new(0, v.alturaRaiz, 0)
+		Vfx.prefab(rig.entrada.tumulo, CFrame.new(chao), nil, escala)
+		Vfx.tremerEm(chao, 1.5, rig.subida or 1)
+		task.delay(rig.subida or 0.4, function()
+			if v.ancoraCorpo and v.ancoraCorpo.Parent then
+				Vfx.prefab(rig.entrada.rugido, CFrame.new(v.ancoraCorpo.Position), nil, 0.25 * escala)
+				Vfx.tremerEm(v.ancoraCorpo.Position, 3, 0.6)
+			end
+		end)
 	end
 
 	-- Elite: aura colorida
@@ -435,7 +466,20 @@ local function atualizarEstados(v)
 				peca.parte.Color = peca.corBase
 			end
 		end
-		emissor(ancora, Color3.fromRGB(255, 60, 40), { Rate = 30, Speed = NumberRange.new(3, 6), Acceleration = Vector3.new(0, 6, 0), Size = sequencia({ { 0, 0.8 * v.escala }, { 1, 0 } }) })
+		if v.rig.furia and Vfx.temPrefab(v.rig.furia.rugido) then
+			-- chamas verdes viram vermelhas e ele ruge
+			for _, item in v.prontos do
+				if item.def.furia then
+					if item.parar then
+						item.parar()
+					end
+					item.parar = tocarPronto(item.ancora, item.def.furia, item.def.escala * v.escala)
+				end
+			end
+			Vfx.prefab(v.rig.furia.rugido, CFrame.new(ancora.Position), nil, 0.25 * v.escala)
+		else
+			emissor(ancora, Color3.fromRGB(255, 60, 40), { Rate = 30, Speed = NumberRange.new(3, 6), Acceleration = Vector3.new(0, 6, 0), Size = sequencia({ { 0, 0.8 * v.escala }, { 1, 0 } }) })
+		end
 	end
 end
 
@@ -645,7 +689,78 @@ local function poseGosma(v, t: number, andar: number, alvos)
 	alvos.corpo = { oy = pulo, oz = oz, rapido = acao == "golpe" }
 end
 
+-- Rei Esqueleto: o corpo do bípede, mas pesado e com o espadão. Ergue a espada com as duas mãos
+-- antes do golpe e desce com tudo; no giro, a lâmina vai esticada para fora; ao invocar, segura
+-- o espadão em pé como um cetro e ergue a outra mão.
+local function poseRei(v, t: number, andar: number, alvos)
+	poseBipede(v, t, andar, alvos)
+	local escala = v.escala
+	local s = math.sin(v.fase)
+	alvos.corpo.rx = -0.12 - 0.06 * andar
+	alvos.corpo.ry = s * 0.1 * andar
+	alvos.corpo.oy = math.abs(math.cos(v.fase)) * 0.2 * andar * escala + math.sin(t * 1.4) * 0.07 * escala
+	alvos.cabeca = { rx = 0.12 + math.sin(t * 1.4) * 0.04 }
+	alvos.bracoD = { rx = 0.35 + s * 0.12 * andar, rz = 0.12 }
+	alvos.bracoE = { rx = 0.1 - s * 0.35 * andar, rz = -0.18 }
+	alvos.pernaE = { rx = s * 0.55 * andar }
+	alvos.pernaD = { rx = -s * 0.55 * andar }
+
+	local acao, at = v.acao, v.acaoT
+	if acao == "preparar" or acao == "salto" then
+		alvos.bracoD = { rx = 3, rz = 0.35 }
+		alvos.bracoE = { rx = 2.9, rz = -0.45 }
+		alvos.corpo.rx = 0.22
+		alvos.corpo.ry = 0.12
+		alvos.cabeca = { rx = 0.25 }
+		if acao == "salto" then
+			alvos.pernaE = { rx = 0.9 }
+			alvos.pernaD = { rx = -0.4 }
+		end
+	elseif acao == "golpe" then
+		alvos.bracoD = { rx = 0.05, rz = 0.2, rapido = true }
+		alvos.bracoE = { rx = 0.25, rz = 0.55, rapido = true }
+		alvos.corpo.rx = -0.55
+		alvos.corpo.ry = -0.1
+		alvos.corpo.oz = -0.5 * escala
+		alvos.corpo.oy = -0.35 * escala
+		alvos.corpo.rapido = true
+		alvos.pernaE = { rx = 0.5 }
+		alvos.pernaD = { rx = -0.35 }
+	elseif acao == "prepararGiro" then
+		alvos.bracoD = { rx = 0.15, rz = 1.35 }
+		alvos.bracoE = { rz = -1.1 }
+		alvos.corpo.ry = 1
+		alvos.corpo.oy = -0.3 * escala
+	elseif acao == "giro" then
+		alvos.bracoD = { rx = 0.1, rz = 1.45, rapido = true }
+		alvos.bracoE = { rz = -1.3, rapido = true }
+		alvos.corpo.ry = -at * 20
+		alvos.corpo.direto = true
+		alvos.corpo.oy = -0.25 * escala
+	elseif acao == "conjurar" then
+		alvos.bracoD = { rx = 1.45, rz = 0.05 }
+		alvos.bracoE = { rx = 2.7, rz = -0.4 }
+		alvos.corpo.rx = 0.12
+		alvos.cabeca = { rx = 0.35 }
+	elseif acao == "prepararSalto" then
+		alvos.corpo.oy = -0.9 * escala
+		alvos.corpo.rx = -0.35
+		alvos.bracoD = { rx = -0.7, rz = 0.2 }
+		alvos.bracoE = { rx = -0.7, rz = -0.2 }
+		alvos.pernaE = { rx = 0.8 }
+		alvos.pernaD = { rx = 0.8 }
+	end
+	if v.atordoado then
+		alvos.corpo.rx = -0.35
+		alvos.bracoD = { rx = 0.2, rz = 0.2 }
+		alvos.bracoE = { rx = 0.2, rz = -0.2 }
+	end
+	-- (o Rei quase não recua com os golpes)
+	alvos.corpo.rx += v.impacto * 0.12
+end
+
 local POSES = {
+	rei = poseRei,
 	bipede = poseBipede,
 	flutuante = poseFlutuante,
 	quadrupede = poseQuadrupede,
@@ -693,8 +808,10 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 		base = CFrame.new(base.Position + v.recuo * forca * 0.45 * v.escala) * CFrame.fromAxisAngle(eixo, forca * 0.2) * base.Rotation
 	end
 	local idade = agora - v.nascimento
-	if idade < 0.4 then
-		base *= CFrame.new(0, -(1 - idade / 0.4) * 3 * v.escala, 0)
+	local subida = v.rig.subida or 0.4
+	if idade < subida then
+		local falta = 1 - idade / subida
+		base *= CFrame.new(0, -falta * falta * (v.rig.profundidade or 3) * v.escala, 0)
 	end
 
 	local alvos = {}
@@ -782,6 +899,11 @@ local function morrer(v)
 	Vfx.estouro(centro, v.rig.cor or BRANCO, if v.chefe then 60 else 18, if v.chefe then 40 else 18)
 	if v.chefe then
 		Vfx.tremerEm(centro, 3, 0.8)
+		if v.rig.entrada then
+			-- o rei cai com um último rugido e o chão racha de novo
+			Vfx.prefab(v.rig.entrada.rugido, CFrame.new(centro), nil, 0.3 * v.escala)
+			Vfx.prefab(v.rig.entrada.tumulo, CFrame.new(centro - Vector3.new(0, v.alturaRaiz, 0)), nil, v.escala)
+		end
 	end
 	for _, peca in v.pecas do
 		local parte = peca.parte

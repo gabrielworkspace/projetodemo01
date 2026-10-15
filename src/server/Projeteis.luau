@@ -31,7 +31,8 @@ Projeteis.distanciaAoSegmento = distanciaAoSegmento
 	explosao                        (raio da explosão ao terminar, opcional)
 	aoAcertar(alvo, pos, projetil)  alvo = inimigo (lado jogador) ou estado do jogador (lado inimigo)
 	aoExplodir(pos, alvoPrincipal)
-	aoMover(projetil, dt)           (chamado a cada passo, opcional)  ]]
+	aoMover(projetil, dt)           (chamado a cada passo, opcional)
+	fogo                            (opcional: o visual vira de fogo)  ]]
 function Projeteis.disparar(run, lista)
 	local visuais = {}
 	for _, dados in lista do
@@ -64,6 +65,7 @@ function Projeteis.disparar(run, lista)
 			vel = dados.velocidade,
 			alcance = dados.alcance,
 			tamanho = dados.tamanho or 1,
+			fogo = dados.fogo, -- flechas de fogo (só muda o visual)
 		})
 	end
 	if #visuais > 0 then

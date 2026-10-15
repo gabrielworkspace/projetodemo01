@@ -235,6 +235,8 @@ local function finalizarJogador(run, estado, motivo: string)
 	})
 	task.spawn(function()
 		if player.Parent and not partidaDoJogador[player] then
+			player:SetAttribute("PoderFogo", false) -- as cartas ficam na partida
+			player:SetAttribute("BarreiraArcana", false)
 			player:LoadCharacterAsync()
 			Remotos.enviar(player, "lobby", {})
 			Dados.enviarPerfil(player)

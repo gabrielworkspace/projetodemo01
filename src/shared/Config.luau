@@ -8,7 +8,12 @@ Config.NOME_DO_JOGO = "Masmorra das Cartas"
 -- (ex.: "rbxassetid://1234567890"). Veja "Efeitos sonoros" em COMO_USAR.md.
 Config.SONS_ID = ""
 -- Opcional: um ID por som (tem preferência sobre o arquivo único). Ex.: espada = "rbxassetid://..."
-Config.SONS_IDS = {}
+Config.SONS_IDS = {
+	-- som de espada que você salvou no jogo (sword-swing-whoosh): golpes do Cavaleiro
+	espada = "rbxassetid://135315310485417",
+	espadaPesada = "rbxassetid://135315310485417",
+	golpeEspada = "rbxassetid://135315310485417", -- espada acertando o inimigo
+}
 
 -- Partida
 Config.MAX_JOGADORES_POR_PARTIDA = 4

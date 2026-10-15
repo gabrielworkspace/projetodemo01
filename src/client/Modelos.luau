@@ -157,34 +157,111 @@ function Modelos.esqueletoArqueiro()
 	return m
 end
 
+--[[ Rei Esqueleto (primeiro chefe): um rei morto-vivo de armadura, inspirado nos reis
+	espectrais de Warcraft. Bem maior que os esqueletos comuns, peitoral de ferro rachado
+	mostrando a alma verde, ombreiras com espinhos e caveiras, coroa alta com gemas, capa
+	longa rasgada e um espadão com runas. Chamas espectrais saem dos olhos, da coroa e da
+	espada (efeitos dos pacotes: "prefabs"); na fúria elas ficam vermelhas. ]]
 function Modelos.reiEsqueleto()
-	local m = esqueleto(C(110, 255, 120))
-	m.escala = 2.1
+	local alma = C(110, 255, 120)
+	local m = esqueleto(alma)
+	m.escala = 2.5
+	m.estilo = "rei"
+	m.ritmo = 0.75 -- passos pesados
+	m.subida = 1.8 -- na entrada ele sobe do chão devagar
+	m.profundidade = 7
 	local ouro = C(232, 186, 74)
-	m.ossos.capa = osso("corpo", V(0, 4.9, 0.55))
+	local ferro = C(52, 50, 60)
+	local ferroClaro = C(92, 92, 104)
+	local manto = C(96, 16, 34)
+	local pele = C(40, 34, 38)
+	local aco = C(72, 74, 86)
+	m.ossos.capa = osso("corpo", V(0, 5, 0.6))
 	juntar(m.pecas, {
-		-- coroa
-		P("cabeca", "cilindro", V(0.45, 1.5, 1.5), V(0, 6.35, 0), ouro, { rot = EM_PE, mat = METAL }),
-		P("cabeca", "canto", V(0.25, 0.6, 0.25), V(0, 6.8, -0.62), ouro, { mat = METAL }),
-		P("cabeca", "canto", V(0.25, 0.6, 0.25), V(-0.55, 6.8, -0.3), ouro, { mat = METAL }),
-		P("cabeca", "canto", V(0.25, 0.6, 0.25), V(0.55, 6.8, -0.3), ouro, { mat = METAL }),
-		P("cabeca", "bola", V(0.22, 0.22, 0.22), V(0, 6.4, -0.76), C(120, 255, 140), { neon = true }),
-		-- alma verde dentro das costelas
-		P("corpo", "elipse", V(0.9, 0.8, 0.5), V(0, 4.35, 0), C(110, 255, 120), { neon = true, transp = 0.2 }),
-		-- ombreiras
-		P("bracoE", "elipse", V(1, 0.65, 1.1), V(-1.15, 5, 0), ouro, { mat = METAL }),
-		P("bracoD", "elipse", V(1, 0.65, 1.1), V(1.15, 5, 0), ouro, { mat = METAL }),
-		P("bracoE", "canto", V(0.25, 0.6, 0.3), V(-1.3, 5.45, 0), ouro, { mat = METAL }),
-		P("bracoD", "canto", V(0.25, 0.6, 0.3), V(1.3, 5.45, 0), ouro, { mat = METAL }),
-		-- capa
-		P("capa", "bloco", V(1.9, 3.4, 0.12), V(0, 3.35, 0.6), C(120, 20, 30), { mat = TECIDO }),
-		-- espadão rúnico
-		P("bracoD", "bloco", V(0.18, 0.7, 4.6), V(1.05, 2.5, -2.5), C(170, 175, 180), { mat = METAL }),
-		P("bracoD", "bloco", V(0.2, 0.18, 3.6), V(1.05, 2.5, -2.6), C(110, 255, 120), { neon = true }),
-		P("bracoD", "bloco", V(1.1, 0.2, 0.22), V(1.05, 2.5, -0.2), ouro, { mat = METAL }),
+		-- coroa alta com cinco pontas e gemas
+		P("cabeca", "cilindro", V(0.5, 1.6, 1.6), V(0, 6.4, 0), ouro, { rot = EM_PE, mat = METAL }),
+		P("cabeca", "cunha", V(0.3, 1.3, 0.3), V(0, 7.25, -0.66), ouro, { mat = METAL, rot = R(0, 180, 0) }),
+		P("cabeca", "cunha", V(0.26, 0.95, 0.26), V(-0.58, 7.05, -0.36), ouro, { mat = METAL, rot = R(0, 150, 0) }),
+		P("cabeca", "cunha", V(0.26, 0.95, 0.26), V(0.58, 7.05, -0.36), ouro, { mat = METAL, rot = R(0, -150, 0) }),
+		P("cabeca", "cunha", V(0.24, 0.8, 0.24), V(-0.6, 6.95, 0.36), ouro, { mat = METAL, rot = R(0, 30, 0) }),
+		P("cabeca", "cunha", V(0.24, 0.8, 0.24), V(0.6, 6.95, 0.36), ouro, { mat = METAL, rot = R(0, -30, 0) }),
+		P("cabeca", "bola", V(0.3, 0.3, 0.3), V(0, 6.45, -0.8), alma, { neon = true }),
+		P("cabeca", "bola", V(0.2, 0.2, 0.2), V(-0.62, 6.45, -0.5), alma, { neon = true }),
+		P("cabeca", "bola", V(0.2, 0.2, 0.2), V(0.62, 6.45, -0.5), alma, { neon = true }),
+		-- mandíbula maior e dentes
+		P("cabeca", "bloco", V(1.05, 0.4, 0.85), V(0, 4.98, -0.18), OSSO_ESCURO),
+		P("cabeca", "bloco", V(0.8, 0.14, 0.1), V(0, 5.14, -0.62), OSSO),
+		-- gola de pele escura em volta do pescoço
+		P("corpo", "elipse", V(2.5, 0.6, 1.6), V(0, 5.12, 0.05), pele, { mat = TECIDO }),
+		-- peitoral de ferro rachado no meio: a alma verde aparece pela fenda
+		P("corpo", "bloco", V(0.7, 1.25, 0.28), V(-0.52, 4.45, -0.44), ferro, { mat = METAL, rot = R(0, 8, 0) }),
+		P("corpo", "bloco", V(0.7, 1.25, 0.28), V(0.52, 4.45, -0.44), ferro, { mat = METAL, rot = R(0, -8, 0) }),
+		P("corpo", "bloco", V(0.72, 0.12, 0.3), V(-0.52, 5.05, -0.45), ouro, { mat = METAL }),
+		P("corpo", "bloco", V(0.72, 0.12, 0.3), V(0.52, 5.05, -0.45), ouro, { mat = METAL }),
+		P("corpo", "elipse", V(0.5, 1.1, 0.3), V(0, 4.4, -0.38), alma, { neon = true, transp = 0.15 }),
+		P("corpo", "bloco", V(1.8, 1.3, 0.22), V(0, 4.45, 0.44), ferro, { mat = METAL }),
+		-- cinto de ouro com fivela de alma, saiote de placas e pano rasgado
+		P("corpo", "bloco", V(1.7, 0.32, 1.05), V(0, 3.05, 0), ouro, { mat = METAL }),
+		P("corpo", "bola", V(0.36, 0.36, 0.36), V(0, 3.05, -0.55), alma, { neon = true }),
+		P("corpo", "bloco", V(0.62, 0.95, 0.14), V(-0.55, 2.45, -0.52), ferro, { mat = METAL, rot = R(-8, 0, 6) }),
+		P("corpo", "bloco", V(0.62, 0.95, 0.14), V(0.55, 2.45, -0.52), ferro, { mat = METAL, rot = R(-8, 0, -6) }),
+		P("corpo", "bloco", V(0.62, 0.95, 0.14), V(-0.75, 2.45, 0.1), ferro, { mat = METAL, rot = R(0, 90, -8) }),
+		P("corpo", "bloco", V(0.62, 0.95, 0.14), V(0.75, 2.45, 0.1), ferro, { mat = METAL, rot = R(0, 90, 8) }),
+		P("corpo", "bloco", V(0.6, 1.5, 0.08), V(0, 2.2, -0.6), manto, { mat = TECIDO }),
+		-- capa longa com barra dourada e a ponta rasgada
+		P("capa", "bloco", V(2.4, 4.3, 0.12), V(0, 2.95, 0.72), manto, { mat = TECIDO }),
+		P("capa", "bloco", V(2.5, 0.22, 0.16), V(0, 5, 0.7), ouro, { mat = METAL }),
+		P("capa", "cunha", V(0.12, 0.9, 0.8), V(-0.8, 0.45, 0.72), manto, { mat = TECIDO, rot = R(0, 90, 180) }),
+		P("capa", "cunha", V(0.12, 0.6, 0.8), V(0, 0.55, 0.72), manto, { mat = TECIDO, rot = R(0, -90, 180) }),
+		P("capa", "cunha", V(0.12, 0.9, 0.8), V(0.8, 0.45, 0.72), manto, { mat = TECIDO, rot = R(0, 90, 180) }),
 	})
-	table.insert(m.efeitos, { osso = "corpo", pos = V(0, 4.35, 0), tipo = "alma", cor = C(110, 255, 120) })
-	m.luzes[1].alcance = 14
+	for _, lado in { -1, 1 } do
+		local braco = if lado < 0 then "bracoE" else "bracoD"
+		local perna = if lado < 0 then "pernaE" else "pernaD"
+		juntar(m.pecas, {
+			-- ombreira grande: domo de ferro, aba de ouro, dois espinhos e uma caveira
+			P(braco, "elipse", V(1.5, 0.95, 1.6), V(lado * 1.25, 5.05, 0), ferro, { mat = METAL }),
+			P(braco, "elipse", V(1.2, 0.5, 1.3), V(lado * 1.32, 5.45, 0), ouro, { mat = METAL }),
+			P(braco, "cunha", V(0.3, 1.15, 0.3), V(lado * 1.35, 6.05, -0.2), ferroClaro, { mat = METAL, rot = R(0, 0, -lado * 12) }),
+			P(braco, "cunha", V(0.26, 0.9, 0.26), V(lado * 1.7, 5.75, 0.35), ferroClaro, { mat = METAL, rot = R(0, 0, -lado * 30) }),
+			P(braco, "bola", V(0.5, 0.55, 0.5), V(lado * 1.95, 4.95, -0.2), OSSO),
+			P(braco, "bola", V(0.13, 0.13, 0.13), V(lado * 1.88, 5, -0.44), alma, { neon = true, olho = true }),
+			P(braco, "bola", V(0.13, 0.13, 0.13), V(lado * 2.04, 5, -0.4), alma, { neon = true, olho = true }),
+			-- manopla e punho de ferro
+			P(braco, "cilindro", V(1, 0.48, 0.48), V(lado * 1.05, 3.05, 0), ferro, { rot = EM_PE, mat = METAL }),
+			P(braco, "cilindro", V(0.18, 0.56, 0.56), V(lado * 1.05, 3.5, 0), ouro, { rot = EM_PE, mat = METAL }),
+			P(braco, "bola", V(0.62, 0.62, 0.62), V(lado * 1.05, 2.5, 0), ferro, { mat = METAL }),
+			-- grevas, joelheira com espinho e botas de ferro
+			P(perna, "cilindro", V(1.05, 0.46, 0.46), V(lado * 0.45, 0.85, 0), ferro, { rot = EM_PE, mat = METAL }),
+			P(perna, "cunha", V(0.22, 0.6, 0.3), V(lado * 0.45, 1.75, -0.3), ferroClaro, { mat = METAL, rot = R(0, 180, 0) }),
+			P(perna, "bloco", V(0.62, 0.32, 1.05), V(lado * 0.45, 0.16, -0.2), ferro, { mat = METAL }),
+		})
+	end
+	juntar(m.pecas, {
+		-- espadão rúnico: lâmina escura com runas verdes, guarda de ouro com caveira
+		P("bracoD", "bloco", V(0.26, 0.95, 5.2), V(1.05, 2.5, -2.95), aco, { mat = METAL }),
+		P("bracoD", "bloco", V(0.28, 0.22, 4.4), V(1.05, 2.5, -3.05), alma, { neon = true }),
+		P("bracoD", "cunha", V(0.26, 0.95, 0.7), V(1.05, 2.5, -5.9), aco, { mat = METAL, rot = R(90, 0, 0) }),
+		P("bracoD", "bloco", V(1.9, 0.3, 0.38), V(1.05, 2.5, -0.3), ouro, { mat = METAL }),
+		P("bracoD", "bola", V(0.5, 0.55, 0.5), V(1.05, 2.5, -0.5), OSSO),
+		P("bracoD", "cilindro", V(1.1, 0.26, 0.26), V(1.05, 2.5, 0.35), pele, { rot = R(0, 90, 0), mat = TECIDO }),
+		P("bracoD", "bola", V(0.34, 0.34, 0.34), V(1.05, 2.5, 0.95), alma, { neon = true }),
+	})
+	m.efeitos = {}
+	m.luzes[1].alcance = 16
+	m.luzes[1].brilho = 1.5
+	-- efeitos prontos dos pacotes, presos nos ossos (na fúria trocam pela versão "furia")
+	m.prefabs = {
+		{ osso = "cabeca", pos = V(-0.28, 5.75, -0.62), nome = "ChamaEspectral", furia = "ChamaFuria", escala = 0.22 },
+		{ osso = "cabeca", pos = V(0.28, 5.75, -0.62), nome = "ChamaEspectral", furia = "ChamaFuria", escala = 0.22 },
+		{ osso = "cabeca", pos = V(0, 7.1, 0), nome = "ChamaEspectral", furia = "ChamaFuria", escala = 0.45 },
+		{ osso = "bracoD", pos = V(1.05, 2.5, -1.9), nome = "ChamaEspectral", furia = "ChamaFuria", escala = 0.3 },
+		{ osso = "bracoD", pos = V(1.05, 2.5, -4.1), nome = "ChamaEspectral", furia = "ChamaFuria", escala = 0.3 },
+		{ osso = "corpo", pos = V(0, 0.3, 0), nome = "NevoaRei", escala = 1.1 },
+	}
+	-- entrada: o chão racha e ele sobe; ao terminar de subir, ruge. Na fúria, ruge vermelho.
+	m.entrada = { tumulo = "TumuloRei", rugido = "RugidoRei" }
+	m.furia = { rugido = "RugidoFuria" }
 	return m
 end
 

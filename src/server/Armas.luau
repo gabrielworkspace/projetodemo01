@@ -8,6 +8,7 @@
 --   Arco:   "Arco" com os anexos "CordaCima", "CordaBaixo" e "Encaixe" (corda que estica)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Classes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Classes"))
 
@@ -71,8 +72,46 @@ end
 -- Construção (cada arma é montada na origem; depois é movida para a mão ou o altar)
 ------------------------------------------------------------------------
 
+-- Espada pronta, feita no Studio (ServerStorage > ModelosArmas > EspadaCavaleiro, que vem do
+-- arquivo modelos/EspadaCavaleiro.rbxmx): uma peça com a lâmina na direção +Z e o cabo no -Z,
+-- com as partículas e o brilho dela. O cabo fica no meio da mão, em z = -1.8.
+local function espadaPronta(): (Model?, BasePart?, CFrame?)
+	local pasta = ServerStorage:FindFirstChild("ModelosArmas")
+	local molde = if pasta then pasta:FindFirstChild("EspadaCavaleiro") else nil
+	if not molde or not molde:IsA("BasePart") then
+		return nil, nil, nil
+	end
+	local modelo = Instance.new("Model")
+	modelo.Name = "Espada"
+	local lamina = molde:Clone()
+	lamina.Name = "Lamina"
+	for _, objeto in lamina:GetDescendants() do
+		if objeto:IsA("JointInstance") or objeto:IsA("WeldConstraint") or objeto:IsA("LuaSourceContainer") then
+			objeto:Destroy()
+		end
+	end
+	lamina.Anchored = false
+	lamina.CanCollide = false
+	lamina.CanQuery = false
+	lamina.CanTouch = false
+	lamina.Massless = true
+	lamina.CastShadow = false
+	lamina.CFrame = CFrame.new()
+	lamina.Parent = modelo
+	anexo(lamina, "TrilhaBase", Vector3.new(0, 0, -0.9))
+	anexo(lamina, "TrilhaPonta", Vector3.new(0, 0, 2.3))
+	modelo.PrimaryPart = lamina
+	-- a "pegada" fica 0,15 abaixo do centro da mão; sobe de volta para o cabo passar pelo meio dela
+	local naMao = CFrame.new(0, 0.15, 0) * CFrame.Angles(math.rad(-20), 0, 0) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, 1.8)
+	return modelo, lamina, naMao
+end
+
 -- Espada: a lâmina vai na direção +Z e a mão segura em z = -1.6
 local function construirEspada(cor: Color3): (Model, BasePart, CFrame)
+	local pronta, laminaPronta, naMaoPronta = espadaPronta()
+	if pronta and laminaPronta and naMaoPronta then
+		return pronta, laminaPronta, naMaoPronta
+	end
 	local modelo = Instance.new("Model")
 	modelo.Name = "Espada"
 	local lamina = novaPeca("Lamina", Vector3.new(0.32, 0.16, 4.4), Color3.fromRGB(214, 222, 236), Enum.Material.Metal)
@@ -240,7 +279,11 @@ function Armas.vestir(personagem: Model, classe: string)
 	if dados.id == "cavaleiro" then
 		local braco = parteDoCorpo(personagem, { "LeftLowerArm", "Left Arm" })
 		if braco then
-			local desloc = if braco.Name == "Left Arm" then CFrame.new(-0.62, -0.3, 0) else CFrame.new(-0.6, 0, 0)
+			-- preso na parte de fora do antebraço: a frente do escudo (lado -X dele, com o emblema)
+			-- fica no +Z do antebraço e o "para cima" do escudo aponta para a mão. Assim, com o
+			-- antebraço em pé na frente do rosto (pose de defesa), o escudo fica erguido e de frente.
+			local giro = CFrame.fromMatrix(Vector3.zero, Vector3.new(0, 0, -1), Vector3.new(0, -1, 0))
+			local desloc = (if braco.Name == "Left Arm" then CFrame.new(0, -0.3, 0.62) else CFrame.new(0, 0, 0.62)) * giro
 			local escudo = prender(braco, novaPeca("Escudo", Vector3.new(0.3, 2.9, 2.3), Color3.fromRGB(46, 78, 150), Enum.Material.Metal), desloc, pasta)
 			prender(escudo, novaPeca("Borda", Vector3.new(0.36, 0.22, 2.4), OURO, Enum.Material.Metal), CFrame.new(0, 1.42, 0), pasta)
 			prender(escudo, novaPeca("Borda", Vector3.new(0.36, 0.22, 2.4), OURO, Enum.Material.Metal), CFrame.new(0, -1.42, 0), pasta)

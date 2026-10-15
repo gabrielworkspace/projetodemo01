@@ -466,7 +466,7 @@ local function ataqueGolpe(run, inimigo, ataque, alvoPos: Vector3, agora: number
 			end
 			definirAcao(inimigo, if giro then "giro" else "golpe")
 			local centro = inimigo.raiz.Position
-			Vfx.partida(run, "golpeInimigo", { pos = centro, dir = direcao, alcance = alcance, arco = arco, cor = corDoEfeito(ataque.efeito) })
+			Vfx.partida(run, "golpeInimigo", { pos = centro, dir = direcao, alcance = alcance, arco = arco, cor = corDoEfeito(ataque.efeito), tipo = inimigo.tipo })
 			acertarJogadores(run, inimigo, centro, direcao, alcance, arco, ataque.mult or 1, ataque.efeito)
 			if i < acertos then
 				task.wait(entre)
@@ -645,7 +645,7 @@ local function ataqueSalto(run, inimigo, ataque, alvoPos: Vector3, agora: number
 			end
 			local olhar = unidade(destino - inimigo.raiz.Position, inimigo.raiz.CFrame.LookVector)
 			inimigo.modelo:PivotTo(CFrame.lookAt(chegada, chegada + olhar))
-			Vfx.partida(run, "impacto", { pos = destino, raio = raio, cor = corDoEfeito(ataque.efeito), forte = inimigo.chefe })
+			Vfx.partida(run, "impacto", { pos = destino, raio = raio, cor = corDoEfeito(ataque.efeito), forte = inimigo.chefe, tipo = inimigo.tipo })
 			acertarJogadores(run, inimigo, destino, nil, raio, 360, ataque.mult or 1, ataque.efeito)
 			definirAcao(inimigo, "")
 		end)
@@ -687,6 +687,10 @@ local function ataqueInvocar(run, inimigo, ataque, agora: number): boolean
 			local pos = noChao(run, inimigo.raiz.Position + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (inimigo.raio + 5))
 			pos = limitarNaSala(run, pos, 2)
 			if Masmorra.posicaoValida(run.sala, pos, 1.5) then
+				if inimigo.chefe then
+					-- o chão racha onde cada servo do chefe sobe
+					Vfx.partida(run, "invocacao", { pos = pos, tipo = inimigo.tipo })
+				end
 				run:invocar(ataque.invocado, pos, nil)
 			end
 		end
@@ -886,7 +890,7 @@ local function entrarNaFase2(run, inimigo)
 	end
 	inimigo.modelo:SetAttribute("Furioso", true)
 	run:anunciar("🔥 " .. (fase2.anuncio or (inimigo.def.nome .. " se enfurece!")), Color3.fromRGB(255, 90, 60))
-	Vfx.partida(run, "furia", { pos = inimigo.raiz.Position })
+	Vfx.partida(run, "furia", { pos = inimigo.raiz.Position, tipo = inimigo.tipo })
 end
 
 local function decidir(run, inimigo, agora: number)

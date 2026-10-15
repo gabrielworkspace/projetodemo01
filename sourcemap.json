@@ -54,6 +54,563 @@
               ]
             }
           ]
+        },
+        {
+          "name": "EfeitosVFX",
+          "className": "Folder",
+          "children": [
+            {
+              "name": "BarreiraArcana",
+              "className": "Part",
+              "filePaths": [
+                "vfx/BarreiraArcana.rbxmx"
+              ]
+            },
+            {
+              "name": "BarreiraArcanaQuebra",
+              "className": "Part",
+              "filePaths": [
+                "vfx/BarreiraArcanaQuebra.rbxmx"
+              ]
+            },
+            {
+              "name": "BloqueioEscudo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/BloqueioEscudo.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaArqueiro",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaArqueiro.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaArqueiroFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaArqueiroFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaAssassino",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaAssassino.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaAura",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaAura.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaBrilhoCheia",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaBrilhoCheia.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaCavaleiro",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaCavaleiro.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaCheia",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaCheia.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaCheiaArqueiro",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaCheiaArqueiro.rbxmx"
+              ]
+            },
+            {
+              "name": "CargaCheiaAssassino",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CargaCheiaAssassino.rbxmx"
+              ]
+            },
+            {
+              "name": "ChamaEspectral",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ChamaEspectral.rbxmx"
+              ]
+            },
+            {
+              "name": "ChamaFuria",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ChamaFuria.rbxmx"
+              ]
+            },
+            {
+              "name": "CorteAdaga",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CorteAdaga.rbxmx"
+              ]
+            },
+            {
+              "name": "CorteCavaleiro",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CorteCavaleiro.rbxmx"
+              ]
+            },
+            {
+              "name": "CorteCavaleiroFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CorteCavaleiroFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "CorteFinalAdaga",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CorteFinalAdaga.rbxmx"
+              ]
+            },
+            {
+              "name": "CorteGiratorio",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CorteGiratorio.rbxmx"
+              ]
+            },
+            {
+              "name": "CorteGiratorioFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CorteGiratorioFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "DefesaPerfeita",
+              "className": "Part",
+              "filePaths": [
+                "vfx/DefesaPerfeita.rbxmx"
+              ]
+            },
+            {
+              "name": "DisparoArco",
+              "className": "Part",
+              "filePaths": [
+                "vfx/DisparoArco.rbxmx"
+              ]
+            },
+            {
+              "name": "DisparoArcoFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/DisparoArcoFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "DisparoForte",
+              "className": "Model",
+              "filePaths": [
+                "vfx/DisparoForte.rbxmx"
+              ]
+            },
+            {
+              "name": "DisparoForteFogo",
+              "className": "Model",
+              "filePaths": [
+                "vfx/DisparoForteFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "EscudoAtivado",
+              "className": "Part",
+              "filePaths": [
+                "vfx/EscudoAtivado.rbxmx"
+              ]
+            },
+            {
+              "name": "EscudoErguido",
+              "className": "Part",
+              "filePaths": [
+                "vfx/EscudoErguido.rbxmx"
+              ]
+            },
+            {
+              "name": "ExplosaoArcana",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ExplosaoArcana.rbxmx"
+              ]
+            },
+            {
+              "name": "ExplosaoFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ExplosaoFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "ExplosaoVazio",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ExplosaoVazio.rbxmx"
+              ]
+            },
+            {
+              "name": "FlechaCarregada",
+              "className": "Part",
+              "filePaths": [
+                "vfx/FlechaCarregada.rbxmx"
+              ]
+            },
+            {
+              "name": "FlechaCarregadaFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/FlechaCarregadaFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "FlechaFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/FlechaFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "FlechaVento",
+              "className": "Part",
+              "filePaths": [
+                "vfx/FlechaVento.rbxmx"
+              ]
+            },
+            {
+              "name": "FumacaSombria",
+              "className": "Part",
+              "filePaths": [
+                "vfx/FumacaSombria.rbxmx"
+              ]
+            },
+            {
+              "name": "GiroRei",
+              "className": "Part",
+              "filePaths": [
+                "vfx/GiroRei.rbxmx"
+              ]
+            },
+            {
+              "name": "GolpeRei",
+              "className": "Part",
+              "filePaths": [
+                "vfx/GolpeRei.rbxmx"
+              ]
+            },
+            {
+              "name": "ImpactoAdaga",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ImpactoAdaga.rbxmx"
+              ]
+            },
+            {
+              "name": "ImpactoCorte",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ImpactoCorte.rbxmx"
+              ]
+            },
+            {
+              "name": "ImpactoCorteFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ImpactoCorteFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "ImpactoCostas",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ImpactoCostas.rbxmx"
+              ]
+            },
+            {
+              "name": "ImpactoFlecha",
+              "className": "Model",
+              "filePaths": [
+                "vfx/ImpactoFlecha.rbxmx"
+              ]
+            },
+            {
+              "name": "ImpactoFlechaFogo",
+              "className": "Model",
+              "filePaths": [
+                "vfx/ImpactoFlechaFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "InvestidaFim",
+              "className": "Part",
+              "filePaths": [
+                "vfx/InvestidaFim.rbxmx"
+              ]
+            },
+            {
+              "name": "Julgamento",
+              "className": "Model",
+              "filePaths": [
+                "vfx/Julgamento.rbxmx"
+              ]
+            },
+            {
+              "name": "JulgamentoRaio",
+              "className": "Part",
+              "filePaths": [
+                "vfx/JulgamentoRaio.rbxmx"
+              ]
+            },
+            {
+              "name": "LaminaFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/LaminaFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "LancamentoTornado",
+              "className": "Part",
+              "filePaths": [
+                "vfx/LancamentoTornado.rbxmx"
+              ]
+            },
+            {
+              "name": "LevitacaoMago",
+              "className": "Part",
+              "filePaths": [
+                "vfx/LevitacaoMago.rbxmx"
+              ]
+            },
+            {
+              "name": "MeteoroExplosao",
+              "className": "Part",
+              "filePaths": [
+                "vfx/MeteoroExplosao.rbxmx"
+              ]
+            },
+            {
+              "name": "MeteoroImpacto",
+              "className": "Part",
+              "filePaths": [
+                "vfx/MeteoroImpacto.rbxmx"
+              ]
+            },
+            {
+              "name": "NevoaRei",
+              "className": "Part",
+              "filePaths": [
+                "vfx/NevoaRei.rbxmx"
+              ]
+            },
+            {
+              "name": "OlhosVermelhos",
+              "className": "Part",
+              "filePaths": [
+                "vfx/OlhosVermelhos.rbxmx"
+              ]
+            },
+            {
+              "name": "PassoArqueiro",
+              "className": "Part",
+              "filePaths": [
+                "vfx/PassoArqueiro.rbxmx"
+              ]
+            },
+            {
+              "name": "PortalChuva",
+              "className": "Part",
+              "filePaths": [
+                "vfx/PortalChuva.rbxmx"
+              ]
+            },
+            {
+              "name": "PortalMago",
+              "className": "Part",
+              "filePaths": [
+                "vfx/PortalMago.rbxmx"
+              ]
+            },
+            {
+              "name": "ProjetilArcano",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ProjetilArcano.rbxmx"
+              ]
+            },
+            {
+              "name": "ProjetilFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ProjetilFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "ProjetilGelo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ProjetilGelo.rbxmx"
+              ]
+            },
+            {
+              "name": "ProjetilVazio",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ProjetilVazio.rbxmx"
+              ]
+            },
+            {
+              "name": "RaioTempestade",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RaioTempestade.rbxmx"
+              ]
+            },
+            {
+              "name": "RastroSombra",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RastroSombra.rbxmx"
+              ]
+            },
+            {
+              "name": "Redemoinho",
+              "className": "Part",
+              "filePaths": [
+                "vfx/Redemoinho.rbxmx"
+              ]
+            },
+            {
+              "name": "RedemoinhoFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RedemoinhoFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "Rolamento",
+              "className": "Part",
+              "filePaths": [
+                "vfx/Rolamento.rbxmx"
+              ]
+            },
+            {
+              "name": "RugidoFuria",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RugidoFuria.rbxmx"
+              ]
+            },
+            {
+              "name": "RugidoRei",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RugidoRei.rbxmx"
+              ]
+            },
+            {
+              "name": "SaltoArqueiro",
+              "className": "Part",
+              "filePaths": [
+                "vfx/SaltoArqueiro.rbxmx"
+              ]
+            },
+            {
+              "name": "SaltoRei",
+              "className": "Part",
+              "filePaths": [
+                "vfx/SaltoRei.rbxmx"
+              ]
+            },
+            {
+              "name": "SangueGota",
+              "className": "Part",
+              "filePaths": [
+                "vfx/SangueGota.rbxmx"
+              ]
+            },
+            {
+              "name": "SaraivadaInicio",
+              "className": "Part",
+              "filePaths": [
+                "vfx/SaraivadaInicio.rbxmx"
+              ]
+            },
+            {
+              "name": "Tornado",
+              "className": "Part",
+              "filePaths": [
+                "vfx/Tornado.rbxmx"
+              ]
+            },
+            {
+              "name": "TornadoChamas",
+              "className": "Part",
+              "filePaths": [
+                "vfx/TornadoChamas.rbxmx"
+              ]
+            },
+            {
+              "name": "TornadoFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/TornadoFogo.rbxmx"
+              ]
+            },
+            {
+              "name": "TumuloRei",
+              "className": "Part",
+              "filePaths": [
+                "vfx/TumuloRei.rbxmx"
+              ]
+            },
+            {
+              "name": "VendavalArqueiro",
+              "className": "Part",
+              "filePaths": [
+                "vfx/VendavalArqueiro.rbxmx"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ServerStorage",
+      "className": "ServerStorage",
+      "children": [
+        {
+          "name": "ModelosArmas",
+          "className": "Folder",
+          "children": [
+            {
+              "name": "EspadaCavaleiro",
+              "className": "Part",
+              "filePaths": [
+                "modelos/EspadaCavaleiro.rbxmx"
+              ]
+            }
+          ]
         }
       ]
     },

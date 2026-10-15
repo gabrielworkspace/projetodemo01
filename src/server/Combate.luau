@@ -19,11 +19,19 @@ local Armas = require(servidor.Armas)
 local Combate = {}
 
 local COR_FOGO = Color3.fromRGB(255, 130, 40)
+local DURACAO_AURA_SUPREMO = 10 -- segundos do bônus do Julgamento
+local DEFESA_SUPREMO = 0.1 -- dano a menos durante o bônus (10%)
 local COR_RAIO = Color3.fromRGB(255, 236, 110)
 local COR_OURO = Color3.fromRGB(255, 205, 90)
 
 local function planar(v: Vector3): Vector3
 	return Vector3.new(v.X, 0, v.Z)
+end
+
+-- O jogador tem algum poder de fogo? (Fúria do Dragão ou Redemoinho Flamejante): os golpes e as
+-- habilidades do Cavaleiro ficam com efeitos de fogo e queimam
+local function temFogo(stats): boolean
+	return stats.dragao > 0 or stats.redemoinhoFogo == true or stats.queimadura > 0
 end
 
 local function humanoidDe(estado): Humanoid?
@@ -87,6 +95,7 @@ function Combate.calcularStats(estado)
 		alcance = classe.alcance * (1 + e("alcancePct")) * (1 + 0.2 * e("gigante")),
 		critico = math.min((classe.critico or 0) + e("critico"), 0.75),
 		multCritico = 3 + e("multCritico"),
+		multArea = classe.danoEmArea or 1, -- dano em área (explosões, meteoro, tempestade...)
 		rouboVida = e("rouboVida"),
 		regen = e("regen"),
 		multOuro = (1 + e("ouroPct")) * (if e("ouroMult") > 0 then 2 else 1),
@@ -134,6 +143,8 @@ function Combate.calcularStats(estado)
 	}
 	-- mana: começa cheia e nunca passa do máximo
 	estado.mana = math.min(estado.mana or estado.stats.manaMax, estado.stats.manaMax)
+	-- todos veem a lâmina pegando fogo quando o jogador tem uma carta de fogo
+	estado.player:SetAttribute("PoderFogo", temFogo(estado.stats))
 	return estado.stats
 end
 
@@ -154,6 +165,7 @@ function Combate.enviarStats(estado)
 		manaMax = stats.manaMax,
 		manaRegen = stats.manaRegen,
 		custoMana = stats.custoMana,
+		fogo = temFogo(stats),
 	})
 end
 
@@ -384,6 +396,8 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		cor = opcoes.cor,
 		autor = estado and estado.player,
 		dot = opcoes.dot, -- dano contínuo (fogo, sangramento): sem som de golpe
+		principal = opcoes.principal == true, -- golpe da arma (o Cavaleiro mostra o impacto do corte)
+		fogo = opcoes.fogo == true, -- golpe com poder de fogo (impacto de fogo)
 		sangue = opcoes.sangue or (estado ~= nil and opcoes.principal == true and estado.stats.sangueMax > 0),
 	})
 
@@ -432,6 +446,10 @@ end
 
 function Combate.danoEmArea(run, centro: Vector3, raio: number, dano: number, estado, opcoes)
 	opcoes = opcoes or {}
+	-- bônus de dano em área da classe (o Mago causa 15% a mais)
+	if estado and estado.stats then
+		dano *= estado.stats.multArea or 1
+	end
 	for _, inimigo in inimigosVivos(run) do
 		if inimigo ~= opcoes.exceto and planar(inimigo.raiz.Position - centro).Magnitude <= raio + inimigo.raio then
 			local opcoesDeste = table.clone(opcoes)
@@ -561,6 +579,10 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 			end
 		end
 	end
+	-- bônus do supremo do Cavaleiro: 10% menos dano enquanto a aura dura
+	if agora < (estado.protecaoSupremoAte or 0) then
+		dano *= 1 - DEFESA_SUPREMO
+	end
 	if agora < (estado.resistenteAte or 0) then
 		dano *= 0.6
 	end
@@ -578,7 +600,7 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 				local perfeita = agora - estado.defendendoDesde <= Config.DEFESA_PERFEITA
 				local direcaoEscudo = if frente.Magnitude > 0.1 then frente.Unit else Vector3.new(0, 0, -1)
 				Vfx.partida(run, "defesa", { jogador = estado.player, perfeita = perfeita, pos = raiz.Position + direcaoEscudo * 1.8, dir = direcaoEscudo })
-				animar(run, estado, "bloqueou", nil)
+				animar(run, estado, "bloqueou", { perfeita = perfeita })
 				if perfeita then
 					if fonte and fonte.vivo then
 						Combate.atordoar(fonte, 1.2)
@@ -662,9 +684,15 @@ local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vecto
 		arco = arco,
 		cor = classe.cor,
 		combo = combo,
+		giro = final and classe.id == "cavaleiro",
+		cavaleiro = classe.id == "cavaleiro",
+		assassino = classe.id == "assassino",
+		fogo = temFogo(stats),
 	}, estado.player)
 
-	local limite = math.cos(math.rad(arco / 2))
+	-- o golpe final do Cavaleiro é um giro: acerta tudo em volta
+	local giro = final and classe.id == "cavaleiro"
+	local limite = if giro then -1 else math.cos(math.rad(arco / 2))
 	local alvos = {}
 	for _, inimigo in inimigosVivos(run) do
 		local delta = planar(inimigo.raiz.Position - raiz.Position)
@@ -686,11 +714,17 @@ local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vecto
 		if costas and stats.costas > 0 then
 			dano *= 1 + stats.costas
 		end
+		local empurrar = direcao
+		if giro then
+			local fora = planar(inimigo.raiz.Position - raiz.Position)
+			empurrar = if fora.Magnitude > 0.1 then fora.Unit else direcao
+		end
 		Combate.danoAoInimigo(run, inimigo, dano, estado, {
 			critico = critico,
 			principal = true,
+			fogo = temFogo(stats),
 			cor = if costas and stats.costas > 0 then COR_COSTAS else nil,
-			empurrar = direcao * (if final then 50 else 25),
+			empurrar = empurrar * (if final then 50 else 25),
 		})
 	end
 
@@ -763,6 +797,7 @@ local function disparoDeClasse(run, estado, classe, raiz: BasePart, direcao: Vec
 
 	local quantidade = stats.projeteis
 	local abertura = if classe.id == "arqueiro" then 9 else 13
+	local fogo = classe.id == "arqueiro" and temFogo(stats)
 	local origem = raiz.Position + direcao * 1.5 + Vector3.new(0, 0.6, 0)
 	local lista = {}
 	for i = 1, quantidade do
@@ -781,6 +816,7 @@ local function disparoDeClasse(run, estado, classe, raiz: BasePart, direcao: Vec
 			perfuracao = perfuracao,
 			ricochete = stats.ricochete,
 			explosao = if explosao > 0 then explosao else nil,
+			fogo = fogo,
 			aoAcertar = function(inimigo, _, projetil)
 				local danoAqui = danoFinal
 				-- Arqueiro: flecha disparada colada no inimigo perde força
@@ -794,6 +830,7 @@ local function disparoDeClasse(run, estado, classe, raiz: BasePart, direcao: Vec
 					critico = critico,
 					principal = true,
 					empurrar = projetil.dir * 18,
+					fogo = fogo,
 				})
 			end,
 			aoExplodir = function(pos: Vector3, principal)
@@ -848,7 +885,7 @@ feiticoDoMago = function(run, estado, classe, raiz: BasePart, direcao: Vector3, 
 				Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, empurrar = projetil.dir * 14 })
 			end
 			magia.aoExplodir = function(pos: Vector3, principal)
-				Vfx.partida(run, "explosao", { pos = pos, raio = magia.explosao, cor = COR_ARCANA, leve = true })
+				Vfx.partida(run, "explosao", { pos = pos, raio = magia.explosao, cor = COR_ARCANA, leve = true, magia = "dardoArcano" })
 				Combate.danoEmArea(run, pos, magia.explosao, dano * 0.5, estado, { semEfeitos = true, exceto = principal, cor = COR_ARCANA })
 			end
 		elseif tipo == "lancaGelo" then
@@ -867,7 +904,7 @@ feiticoDoMago = function(run, estado, classe, raiz: BasePart, direcao: Vector3, 
 				Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, queimar = true, cor = COR_FOGO, empurrar = projetil.dir * 30 })
 			end
 			magia.aoExplodir = function(pos: Vector3, principal)
-				Vfx.partida(run, "explosao", { pos = pos, raio = magia.explosao, cor = COR_FOGO, forte = true })
+				Vfx.partida(run, "explosao", { pos = pos, raio = magia.explosao, cor = COR_FOGO, forte = true, magia = "bolaFogo" })
 				Combate.danoEmArea(run, pos, magia.explosao, dano * 0.6, estado, { semEfeitos = true, exceto = principal, queimar = true, cor = COR_FOGO, empurrarForca = 30 })
 			end
 		end
@@ -971,47 +1008,105 @@ function Combate.cancelarCarga(run, estado)
 	animar(run, estado, "cancelar", nil, estado.player)
 end
 
+-- Cavaleiro: a espada girando acima da cabeça vira um tornado. Ao soltar, o corte para baixo
+-- acerta quem está na frente e lança o tornado, que anda reto puxando e ferindo os inimigos
+-- (para na parede). Com a carga cheia, ele explode no fim e atordoa.
+local pontoLivre
+local function tornadoDoCavaleiro(run, estado, classe, raiz: BasePart, direcao: Vector3, fracao: number, mult: number)
+	local stats = estado.stats
+	local perfeito = fracao >= 0.99
+	local raio = (5 + 3 * fracao) * (stats.alcance / 9.5)
+	local velocidade = 15 + 7 * fracao
+	local duracao = 1.4 + 1.0 * fracao
+	local inicio = noChao(run, raiz.Position + direcao * 3)
+	local fim = noChao(run, pontoLivre(estado.player.Character, inicio + Vector3.new(0, 3, 0), inicio + Vector3.new(0, 3, 0) + direcao * velocidade * duracao))
+	duracao = math.max(0.5, (fim - inicio).Magnitude / velocidade)
+	local saida = 0.14 -- a espada chega no chão na animação "soltar"
+	Vfx.partida(run, "tornado", {
+		jogador = estado.player,
+		de = inicio,
+		ate = fim,
+		duracao = duracao,
+		saida = saida,
+		raio = raio,
+		cor = classe.cor,
+		perfeito = perfeito,
+		fogo = temFogo(stats),
+	})
+
+	task.delay(saida, function()
+		if not run.ativa then
+			return
+		end
+		-- o corte que lança o tornado: acerta quem está na frente
+		local origem = raiz.Position
+		for _, inimigo in inimigosVivos(run) do
+			local delta = planar(inimigo.raiz.Position - origem)
+			if delta.Magnitude <= stats.alcance * 1.1 + inimigo.raio and (delta.Magnitude < 2 or delta.Unit:Dot(direcao) > 0.35) then
+				local critico = math.random() < stats.critico
+				Combate.danoAoInimigo(run, inimigo, stats.dano * mult * 0.6 * (if critico then stats.multCritico else 1), estado, {
+					critico = critico,
+					principal = true,
+					empurrar = direcao * 30,
+				})
+			end
+		end
+		if stats.dragao > 0 then
+			rajadaDoDragao(run, estado, raiz, direcao)
+		end
+
+		-- o tornado anda, puxa para o centro e fere a cada 0,25s
+		local comeco = os.clock()
+		local proximoDano = 0
+		local danoTique = stats.dano * (0.35 + 0.25 * fracao)
+		while run.ativa do
+			local agora = os.clock()
+			local k = math.min(1, (agora - comeco) / duracao)
+			local centro = inicio:Lerp(fim, k)
+			local ferir = agora >= proximoDano
+			if ferir then
+				proximoDano = agora + 0.25
+			end
+			for _, inimigo in inimigosVivos(run) do
+				local delta = planar(centro - inimigo.raiz.Position)
+				local distancia = delta.Magnitude
+				if distancia <= raio + inimigo.raio then
+					if not inimigo.pesado then
+						-- gira em volta e é sugado para o meio, flutuando um pouco
+						local lado = Vector3.new(-delta.Z, 0, delta.X)
+						local puxao = if distancia > 0.5 then delta.Unit * 22 + lado.Unit * 14 else Vector3.zero
+						inimigo.raiz.AssemblyLinearVelocity = puxao + direcao * velocidade + Vector3.new(0, 7, 0)
+					end
+					if ferir then
+						local fogo = temFogo(stats)
+						Combate.danoAoInimigo(run, inimigo, danoTique, estado, { semEfeitos = true, queimar = fogo, cor = if fogo then COR_FOGO else classe.cor })
+					end
+				end
+			end
+			if k >= 1 then
+				break
+			end
+			task.wait(0.05)
+		end
+		if perfeito and run.ativa then
+			Vfx.partida(run, "explosao", { pos = fim, raio = raio * 1.6, cor = classe.cor, forte = true })
+			for _, inimigo in inimigosVivos(run) do
+				if planar(inimigo.raiz.Position - fim).Magnitude <= raio * 1.6 + inimigo.raio then
+					Combate.atordoar(inimigo, 1.2)
+				end
+			end
+			Combate.danoEmArea(run, fim, raio * 1.6, stats.dano * 1.5, estado, { semEfeitos = true, cor = classe.cor, empurrarForca = 55 })
+		end
+	end)
+end
+
 local function golpeCarregado(run, estado, classe, raiz: BasePart, direcao: Vector3, fracao: number)
 	local stats = estado.stats
 	local mult = Config.DANO_CARGA_MIN + (Config.DANO_CARGA_MAX - Config.DANO_CARGA_MIN) * fracao
 	local perfeito = fracao >= 0.99
 
 	if classe.id == "cavaleiro" then
-		-- Giro completo com a espada, empurrando todos para longe
-		local raio = stats.alcance * (1.25 + 0.3 * fracao)
-		Vfx.partida(run, "giroCarregado", { jogador = estado.player, raio = raio, cor = classe.cor, perfeito = perfeito }, estado.player)
-		local alvos = {}
-		for _, inimigo in inimigosVivos(run) do
-			if planar(inimigo.raiz.Position - raiz.Position).Magnitude <= raio + inimigo.raio then
-				table.insert(alvos, inimigo)
-			end
-		end
-		for _, inimigo in alvos do
-			local critico = math.random() < stats.critico
-			local fora = planar(inimigo.raiz.Position - raiz.Position)
-			fora = if fora.Magnitude > 0.1 then fora.Unit else direcao
-			Combate.danoAoInimigo(run, inimigo, stats.dano * mult * (if critico then stats.multCritico else 1), estado, {
-				critico = critico,
-				principal = true,
-				empurrar = fora * (40 + 40 * fracao),
-			})
-			if perfeito and inimigo.vivo then
-				Combate.atordoar(inimigo, 1.2)
-			end
-		end
-		if perfeito then
-			local centro = raiz.Position
-			task.delay(0.15, function()
-				if not run.ativa then
-					return
-				end
-				Vfx.partida(run, "explosao", { pos = centro, raio = raio * 1.8, cor = classe.cor, forte = true })
-				Combate.danoEmArea(run, centro, raio * 1.8, stats.dano * 1.2, estado, { semEfeitos = true, cor = classe.cor, empurrarForca = 50 })
-			end)
-		end
-		if stats.dragao > 0 then
-			rajadaDoDragao(run, estado, raiz, direcao)
-		end
+		tornadoDoCavaleiro(run, estado, classe, raiz, direcao, fracao, mult)
 	elseif classe.id == "mago" then
 		-- Orbe do Vazio: lento, puxa os inimigos em volta enquanto voa e explode forte
 		-- (atravessa tudo com a carga cheia)
@@ -1096,8 +1191,9 @@ local function golpeCarregado(run, estado, classe, raiz: BasePart, direcao: Vect
 				raio = 1.5,
 				tamanho = 1.5 + 0.8 * fracao,
 				perfuracao = 999,
+				fogo = temFogo(stats),
 				aoAcertar = function(inimigo, _, projetil)
-					Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, empurrar = projetil.dir * 35 })
+					Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, empurrar = projetil.dir * 35, fogo = temFogo(stats) })
 				end,
 			},
 		})
@@ -1182,7 +1278,7 @@ local function redemoinho(run, estado, classe)
 	local stats = estado.stats
 	local duracao = 2 * (if stats.redemoinhoFogo then 1.5 else 1)
 	local raio = stats.alcance * 1.1
-	Vfx.partida(run, "redemoinho", { jogador = estado.player, duracao = duracao, raio = raio, cor = classe.cor, fogo = stats.redemoinhoFogo })
+	Vfx.partida(run, "redemoinho", { jogador = estado.player, duracao = duracao, raio = raio, cor = classe.cor, fogo = temFogo(stats) })
 	animar(run, estado, "habilidade", { duracao = duracao })
 	estado.resistenteAte = os.clock() + duracao
 	task.spawn(function()
@@ -1193,7 +1289,7 @@ local function redemoinho(run, estado, classe)
 				break
 			end
 			-- empurrar negativo puxa os inimigos para o centro do giro
-			Combate.danoEmArea(run, raiz.Position, raio, stats.dano * 0.55, estado, { queimar = stats.redemoinhoFogo, empurrarForca = -18 })
+			Combate.danoEmArea(run, raiz.Position, raio, stats.dano * 0.55, estado, { queimar = temFogo(stats), empurrarForca = -18 })
 			task.wait(0.22)
 		end
 		estado.resistenteAte = nil
@@ -1228,7 +1324,7 @@ local function meteoro(run, estado, raiz: BasePart, direcao: Vector3)
 			if not run.ativa then
 				return
 			end
-			Vfx.partida(run, "meteoro", { pos = ponto, duracao = 0.75, raio = 11, amigo = true })
+			Vfx.partida(run, "meteoro", { pos = ponto, duracao = 0.75, raio = 11, amigo = true, arcano = true })
 			task.delay(0.75, function()
 				if not run.ativa then
 					return
@@ -1255,7 +1351,7 @@ local function chuvaDeFlechas(run, estado, classe, raiz: BasePart, direcao: Vect
 	local duracao = 3 * stats.chuva
 	local alvo = alvoNaMira(raiz.Position, direcao, run, 60)
 	local centro = noChao(run, if alvo then alvo.raiz.Position else raiz.Position + direcao * 20)
-	Vfx.partida(run, "chuvaFlechas", { pos = centro, raio = raio, duracao = duracao, cor = classe.cor })
+	Vfx.partida(run, "chuvaFlechas", { pos = centro, raio = raio, duracao = duracao, cor = classe.cor, fogo = temFogo(stats) })
 	task.spawn(function()
 		local fim = os.clock() + duracao
 		task.wait(0.35)
@@ -1267,7 +1363,7 @@ local function chuvaDeFlechas(run, estado, classe, raiz: BasePart, direcao: Vect
 end
 
 -- Ponto livre entre "de" e "ate" (não atravessa paredes)
-local function pontoLivre(personagem: Model?, de: Vector3, ate: Vector3): Vector3
+function pontoLivre(personagem: Model?, de: Vector3, ate: Vector3): Vector3
 	local parametros = RaycastParams.new()
 	parametros.FilterType = Enum.RaycastFilterType.Exclude
 	local ignorar = {}
@@ -1442,6 +1538,9 @@ function Combate.supremo(run, estado)
 
 	if classe.supremo.id == "julgamento" then
 		animar(run, estado, "supremo", { duracao = 0.75 })
+		-- aura do supremo: por 10s o Cavaleiro recebe 10% menos dano
+		estado.protecaoSupremoAte = os.clock() + DURACAO_AURA_SUPREMO
+		Vfx.partida(run, "auraSupremo", { jogador = estado.player, duracao = DURACAO_AURA_SUPREMO, cor = classe.cor })
 		local centro = noChao(run, raiz.Position)
 		Vfx.partida(run, "julgamento", { pos = centro, raio = 18, cor = classe.cor })
 		task.delay(0.35, function()
@@ -1507,6 +1606,7 @@ function Combate.supremo(run, estado)
 						alcance = 45,
 						raio = 1,
 						perfuracao = 1,
+						fogo = temFogo(stats),
 						aoAcertar = function(inimigo)
 							Combate.danoAoInimigo(run, inimigo, stats.dano * 0.7, estado, { semEfeitos = true })
 						end,
@@ -1533,7 +1633,9 @@ function Combate.esquiva(run, estado, direcao: any)
 		return
 	end
 	estado.esquivaProntaEm = agora + estado.stats.recargaEsquiva
-	estado.invulneravelAte = math.max(estado.invulneravelAte or 0, agora + Config.ESQUIVA_INVULNERAVEL)
+	local dash = Classes.obter(estado.classe).esquiva
+	local duracaoDash = if dash then dash.duracao else Config.ESQUIVA_DURACAO
+	estado.invulneravelAte = math.max(estado.invulneravelAte or 0, agora + math.max(Config.ESQUIVA_INVULNERAVEL, duracaoDash + 0.05))
 	animar(run, estado, "esquiva", nil, estado.player)
 	if estado.stats.contraAtaque then
 		estado.criticoGarantido = true
@@ -1544,7 +1646,7 @@ function Combate.esquiva(run, estado, direcao: any)
 	if stats.investida > 0 then
 		local raiz = raizDe(estado) :: BasePart
 		local inicio = raiz.Position
-		task.delay(Config.ESQUIVA_DURACAO + 0.05, function()
+		task.delay(duracaoDash + 0.05, function()
 			local raizAgora = raizDe(estado)
 			if not raizAgora or not run.ativa then
 				return
@@ -1627,6 +1729,11 @@ function Combate.tick(run, dt: number)
 	end
 
 	for _, estado in run.jogadores do
+		-- barreira ativa (Barreira Arcana / Escudo Abençoado): todos veem a bolha em volta do jogador
+		local barreira = estado.vivo and not estado.caido and estado.escudoAtivo == true
+		if estado.player:GetAttribute("BarreiraArcana") ~= barreira then
+			estado.player:SetAttribute("BarreiraArcana", barreira)
+		end
 		if estado.vivo then
 			if estado.caido then
 				processarCaido(run, estado, dt, agora)

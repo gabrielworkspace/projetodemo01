@@ -4,8 +4,10 @@
 
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
 
 local UI = require(script.Parent.UI)
 local Sons = require(script.Parent.Sons)
@@ -273,6 +275,398 @@ local function arcoDeCorte(origem: CFrame, raio: number, arcoGraus: number, cor:
 	end)
 end
 
+------------------------------------------------------------------------
+-- Efeitos prontos montados no Studio (plugin VFX Studio ou qualquer outro)
+------------------------------------------------------------------------
+--[[ Coloque o efeito em ReplicatedStorage > EfeitosVFX com um destes nomes e ele toca sozinho
+	na hora certa (veja "Efeitos do plugin" em COMO_USAR.md):
+	  CorteCavaleiro, CorteGiratorio, Tornado, CargaCavaleiro, EscudoErguido, DefesaPerfeita, Julgamento
+	  (a lista completa de cada classe está em vfx/LEIA-ME.md)
+	Pode ser uma Part, um Model ou um Attachment com ParticleEmitters, Beams e Trails dentro.
+	Atributos opcionais:
+	  no efeito:            Duracao (segundos), Substituir (true = esconde o efeito feito por código)
+	  em cada ParticleEmitter: EmitCount (solta essa quantidade de uma vez) e EmitDelay (espera antes);
+	                        sem EmitCount, o emissor fica ligado enquanto o efeito durar ]]
+
+local function prefabDe(nome: string): Instance?
+	local efeitos = ReplicatedStorage:FindFirstChild("EfeitosVFX")
+	return if efeitos then efeitos:FindFirstChild(nome) else nil
+end
+
+-- Existe um efeito pronto com esse nome que substitui o feito por código?
+function Vfx.temPrefab(nome: string): boolean
+	local modelo = prefabDe(nome)
+	return modelo ~= nil and modelo:GetAttribute("Substituir") == true
+end
+
+--[[ Toca um efeito pronto. "onde" é um CFrame fixo ou uma função que devolve o CFrame a cada
+	quadro (para acompanhar algo; devolver nil termina o efeito). "duracao" 0 = até alguém parar.
+	"escala" aumenta o tamanho das partículas (para combinar com o alcance do golpe).
+	Devolve a função que para o efeito, ou nil se ele não existe. ]]
+function Vfx.prefab(nome: string, onde: any, duracao: number?, escala: number?): (() -> ())?
+	local modelo = prefabDe(nome)
+	if not modelo then
+		return nil
+	end
+	local seguir = if type(onde) == "function" then onde else nil
+	local cframeInicial: CFrame? = if seguir then seguir() else onde
+	if typeof(cframeInicial) ~= "CFrame" then
+		return nil
+	end
+	local copia = modelo:Clone()
+	local todos = copia:GetDescendants()
+	table.insert(todos, copia)
+
+	-- peças de dentro (ex.: rachadura no chão) acompanham a peça principal na mesma posição relativa
+	local filhas = {}
+	if copia:IsA("BasePart") then
+		for _, objeto in todos do
+			if objeto ~= copia and objeto:IsA("BasePart") then
+				table.insert(filhas, { objeto, copia.CFrame:ToObjectSpace(objeto.CFrame) })
+			end
+		end
+	end
+	local function posicionar(cf: CFrame)
+		if copia:IsA("Attachment") then
+			copia.WorldCFrame = cf
+		elseif copia:IsA("BasePart") then
+			copia.CFrame = cf
+			for _, filha in filhas do
+				filha[1].CFrame = cf * filha[2]
+			end
+		elseif copia:IsA("Model") then
+			copia:PivotTo(cf)
+		end
+	end
+
+	local ligados = {}
+	local maiorVida = 0
+	for _, objeto in todos do
+		if objeto:IsA("BasePart") then
+			objeto.Anchored = true
+			objeto.CanCollide = false
+			objeto.CanQuery = false
+			objeto.CanTouch = false
+		elseif objeto:IsA("ParticleEmitter") then
+			if escala and escala ~= 1 then
+				local chaves = {}
+				for _, chave in objeto.Size.Keypoints do
+					table.insert(chaves, NumberSequenceKeypoint.new(chave.Time, chave.Value * escala, chave.Envelope * escala))
+				end
+				objeto.Size = NumberSequence.new(chaves)
+				objeto.Speed = NumberRange.new(objeto.Speed.Min * escala, objeto.Speed.Max * escala)
+			end
+			maiorVida = math.max(maiorVida, objeto.Lifetime.Max)
+			local quantidade = objeto:GetAttribute("EmitCount")
+			local espera = objeto:GetAttribute("EmitDelay")
+			local janela = objeto:GetAttribute("EmitDuration")
+			espera = if type(espera) == "number" then espera else 0
+			if type(janela) == "number" and janela > 0 then
+				-- liga por um tempo e desliga
+				objeto.Enabled = false
+				task.delay(espera, function()
+					if objeto.Parent then
+						objeto.Enabled = true
+						task.delay(janela, function()
+							objeto.Enabled = false
+						end)
+					end
+				end)
+			elseif type(quantidade) == "number" then
+				objeto.Enabled = false
+				if quantidade > 0 then
+					task.delay(espera, function()
+						if objeto.Parent then
+							objeto:Emit(quantidade)
+						end
+					end)
+				end
+			elseif objeto.Enabled then
+				table.insert(ligados, objeto)
+			end
+		elseif objeto:IsA("Beam") or objeto:IsA("Trail") then
+			table.insert(ligados, objeto)
+		end
+	end
+	copia.Parent = if copia:IsA("Attachment") then terreno else pasta
+	posicionar(cframeInicial :: CFrame)
+	-- sons que vêm dentro do efeito (alguns pacotes trazem o próprio som) tocam junto
+	for _, objeto in todos do
+		if objeto:IsA("Sound") then
+			objeto.SoundGroup = nil
+			objeto:Play()
+		end
+	end
+
+	local parado = false
+	local function parar()
+		if parado then
+			return
+		end
+		parado = true
+		for _, objeto in ligados do
+			(objeto :: any).Enabled = false
+		end
+		Debris:AddItem(copia, maiorVida + 0.5)
+	end
+	if seguir then
+		local conexao
+		conexao = RunService.RenderStepped:Connect(function()
+			if parado or not copia.Parent then
+				conexao:Disconnect()
+				return
+			end
+			local cf = seguir()
+			if cf then
+				posicionar(cf)
+			else
+				conexao:Disconnect()
+				parar()
+			end
+		end)
+	end
+	local tempo = duracao or modelo:GetAttribute("Duracao") or 1.5
+	if type(tempo) == "number" and tempo > 0 then
+		task.delay(tempo, parar)
+	end
+	return parar
+end
+
+------------------------------------------------------------------------
+-- Cavaleiro: cortes em meia-lua, giro de 360° e funil de vento
+------------------------------------------------------------------------
+
+local OURO = Color3.fromRGB(255, 214, 90)
+local POEIRA = Color3.fromRGB(205, 190, 165)
+local TEXTURA_FUMACA = "rbxasset://textures/particles/smoke_main.dds"
+
+-- Altura do chão embaixo do personagem
+local function chaoDe(raiz: BasePart, humanoid: Humanoid?): number
+	local altura = if humanoid then humanoid.HipHeight + raiz.Size.Y / 2 else 3
+	return raiz.Position.Y - altura
+end
+
+--[[ Funil de vento (tornado): faixas curvas em vários andares, mais largas em cima, cada uma
+	girando numa velocidade, com a ponta grossa e brilhante na frente do giro.
+	"atualizar(centro, t, escala)" põe o funil no lugar a cada quadro (centro = no chão). ]]
+local function funil(raio: number, altura: number, cor: Color3, andares: number, transparencia: number, corExtra: Color3?)
+	local faixas = {}
+	for i = 1, andares do
+		local k = if andares > 1 then (i - 1) / (andares - 1) else 0
+		for lado = 0, 2 do
+			local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
+			a0.Parent = terreno
+			a1.Parent = terreno
+			local corFaixa = if lado == 0 then cor:Lerp(BRANCO, 0.6) elseif lado == 1 then cor else (corExtra or cor:Lerp(BRANCO, 0.25))
+			local largura = (0.5 + 1.5 * k) * (if lado == 0 then 0.7 else 1.2)
+			local feixe = novoFeixe(a0, a1, corFaixa, largura)
+			feixe.Width0 = largura
+			feixe.Width1 = largura * 0.15
+			local base = transparencia + (if lado == 0 then 0 else 0.15)
+			feixe.Transparency = sequencia({ { 0, base }, { 0.45, base + 0.15 }, { 1, 1 } })
+			table.insert(faixas, {
+				a0 = a0,
+				a1 = a1,
+				feixes = { feixe },
+				raio = raio * (0.28 + 0.72 * k ^ 0.85),
+				altura = altura * (0.04 + 0.96 * k),
+				velocidade = 15 - 6 * k + lado * 0.7,
+				fase = lado * math.pi * 2 / 3 + i * 1.3,
+				arco = 150 - 40 * k,
+				inclinacao = math.rad(if lado == 2 then -10 else 7),
+			})
+		end
+	end
+	local objeto = {}
+	function objeto.atualizar(centro: Vector3, t: number, escala: number)
+		for _, f in faixas do
+			local origem = CFrame.new(centro + Vector3.new(0, f.altura * escala, 0))
+				* CFrame.Angles(0, f.fase + t * f.velocidade, 0)
+				* CFrame.Angles(f.inclinacao, 0, 0)
+			posicionarArco(f.a0, f.a1, f.feixes, origem, math.max(0.3, f.raio * escala), f.arco)
+		end
+	end
+	function objeto.parar(duracao: number)
+		for _, f in faixas do
+			for _, feixe in f.feixes do
+				local inicio = feixe.Transparency
+				local tempo = os.clock()
+				local conexao
+				conexao = RunService.RenderStepped:Connect(function()
+					local k = math.clamp((os.clock() - tempo) / duracao, 0, 1)
+					local chaves = {}
+					for _, chave in inicio.Keypoints do
+						table.insert(chaves, NumberSequenceKeypoint.new(chave.Time, chave.Value + (1 - chave.Value) * k))
+					end
+					feixe.Transparency = NumberSequence.new(chaves)
+					if k >= 1 then
+						conexao:Disconnect()
+					end
+				end)
+			end
+			Debris:AddItem(f.a0, duracao + 0.1)
+			Debris:AddItem(f.a1, duracao + 0.1)
+		end
+	end
+	return objeto
+end
+
+-- Riscos de faísca: partículas esticadas na direção em que voam
+local function riscos(posicao: Vector3, cor: Color3, quantidade: number, velocidade: number, direcao: Vector3?)
+	local a = ancora(posicao)
+	if direcao and direcao.Magnitude > 0.01 then
+		a.WorldCFrame = CFrame.lookAt(posicao, posicao + direcao) * CFrame.Angles(math.rad(-90), 0, 0)
+	end
+	local e = Instance.new("ParticleEmitter")
+	e.Color = ColorSequence.new(BRANCO, cor)
+	e.LightEmission = 1
+	e.LightInfluence = 0
+	e.Orientation = Enum.ParticleOrientation.VelocityParallel
+	e.Squash = sequencia({ { 0, 2.6 }, { 1, 1.2 } })
+	e.Size = sequencia({ { 0, 0.22 }, { 1, 0 } })
+	e.Lifetime = NumberRange.new(0.18, 0.35)
+	e.Speed = NumberRange.new(velocidade * 0.5, velocidade)
+	e.SpreadAngle = if direcao then Vector2.new(35, 35) else Vector2.new(180, 180)
+	e.Drag = 4
+	e.Rate = 0
+	e.Parent = a
+	e:Emit(quantidade)
+	Debris:AddItem(a, 0.5)
+end
+
+-- Poeira subindo e se espalhando pelo chão (fumaça do próprio Roblox)
+local function poeiraNoChao(posicao: Vector3, raio: number, quantidade: number)
+	local a = ancora(posicao)
+	local e = Instance.new("ParticleEmitter")
+	e.Texture = TEXTURA_FUMACA
+	e.Color = ColorSequence.new(POEIRA)
+	e.LightInfluence = 1
+	e.Transparency = sequencia({ { 0, 0.45 }, { 1, 1 } })
+	e.Size = sequencia({ { 0, raio * 0.25 }, { 1, raio * 0.55 } })
+	e.Lifetime = NumberRange.new(0.5, 0.9)
+	e.Speed = NumberRange.new(raio * 1.5, raio * 2.6)
+	e.Drag = 5
+	e.SpreadAngle = Vector2.new(8, 180)
+	e.EmissionDirection = Enum.NormalId.Right
+	e.Rotation = NumberRange.new(0, 360)
+	e.RotSpeed = NumberRange.new(-60, 60)
+	e.Rate = 0
+	e.Parent = a
+	e:Emit(quantidade)
+	Debris:AddItem(a, 1.1)
+end
+
+-- Meia-lua de corte: o arco é dividido em duas metades, finas nas pontas e grossas no meio,
+-- com núcleo claro, corpo na cor da classe e um brilho largo por fora
+local function crescente(origem: CFrame, raio: number, arcoGraus: number, cor: Color3, opcoes)
+	opcoes = opcoes or {}
+	local espessura = opcoes.espessura or 1
+	local duracao = opcoes.duracao or 0.14
+	if opcoes.reverso then
+		origem = origem * CFrame.Angles(0, 0, math.pi)
+	end
+	local a0, am, a1 = Instance.new("Attachment"), Instance.new("Attachment"), Instance.new("Attachment")
+	a0.Parent = terreno
+	am.Parent = terreno
+	a1.Parent = terreno
+	local camadas = {
+		{ cor = cor:Lerp(BRANCO, 0.8), largura = 0.8, minima = 0 },
+		{ cor = cor:Lerp(BRANCO, 0.25), largura = 2.2, minima = 0.05 },
+		{ cor = cor, largura = 4.6, minima = 0.45 },
+	}
+	local metade1, metade2 = {}, {}
+	for _, c in camadas do
+		local f1 = novoFeixe(a0, am, c.cor, c.largura * espessura)
+		f1.Width0 = c.largura * espessura * 0.08
+		local f2 = novoFeixe(am, a1, c.cor, c.largura * espessura)
+		f2.Width1 = c.largura * espessura * 0.08
+		table.insert(metade1, { f1, c.minima })
+		table.insert(metade2, { f2, c.minima })
+	end
+	local quarto = math.rad(arcoGraus) / 4
+	local function feixesDe(lista)
+		local saida = {}
+		for _, item in lista do
+			table.insert(saida, item[1])
+		end
+		return saida
+	end
+	posicionarArco(a0, am, feixesDe(metade1), origem * CFrame.Angles(0, quarto, 0), raio, arcoGraus / 2)
+	posicionarArco(am, a1, feixesDe(metade2), origem * CFrame.Angles(0, -quarto, 0), raio, arcoGraus / 2)
+
+	local inicio = os.clock()
+	local conexao
+	conexao = RunService.RenderStepped:Connect(function()
+		local cabeca = (os.clock() - inicio) / duracao * 1.5
+		for _, item in metade1 do
+			item[1].Transparency = transparenciaDeVarredura(cabeca * 2, 1.1, item[2])
+		end
+		for _, item in metade2 do
+			item[1].Transparency = transparenciaDeVarredura(cabeca * 2 - 1, 1.1, item[2])
+		end
+		if cabeca > 1.75 then
+			conexao:Disconnect()
+			a0:Destroy()
+			am:Destroy()
+			a1:Destroy()
+		end
+	end)
+	-- faíscas saindo da ponta do corte, na direção em que a lâmina ia
+	local fimLocal = Vector3.new(raio * math.sin(math.rad(arcoGraus) / 2), 0, -raio * math.cos(math.rad(arcoGraus) / 2))
+	local tangente = Vector3.new(math.cos(math.rad(arcoGraus) / 2), 0, math.sin(math.rad(arcoGraus) / 2))
+	task.delay(duracao * 0.7, function()
+		riscos(origem:PointToWorldSpace(fimLocal), cor, 8, 34, origem:VectorToWorldSpace(tangente))
+	end)
+end
+
+-- Cortes 1 e 2 do Cavaleiro: meia-lua larga + eco por dentro + clarão na frente
+local function corteCavaleiro(origem: CFrame, raio: number, arcoGraus: number, cor: Color3, reverso: boolean, fogo: boolean?)
+	-- o corte do pacote, visto de cima, varre ao contrário do nosso arco: espelha no golpe que
+	-- não é "reverso" para acompanhar a lâmina. Com poder de fogo, o corte é de fogo.
+	local espelho = if reverso then CFrame.identity else CFrame.Angles(0, 0, math.pi)
+	local nome = if fogo and Vfx.temPrefab("CorteCavaleiroFogo") then "CorteCavaleiroFogo" else "CorteCavaleiro"
+	if fogo then
+		cor = FOGO
+	end
+	local substituir = Vfx.temPrefab(nome)
+	Vfx.prefab(nome, origem * espelho, nil, raio / 5)
+	if substituir then
+		return
+	end
+	crescente(origem, raio, arcoGraus, cor, { espessura = 1.6, duracao = 0.17, reverso = reverso })
+	task.delay(0.03, function()
+		crescente(origem * CFrame.new(0, -0.4, 0), raio * 0.72, arcoGraus * 0.85, cor, { espessura = 0.9, duracao = 0.19, reverso = reverso })
+	end)
+	clarao(origem.Position + origem.LookVector * raio * 0.6, cor, 12, 0.15, 3)
+end
+
+-- Golpe final do Cavaleiro: corte de 360° em quatro partes seguidas, onda no chão e poeira
+local function corteGiratorio(base: Vector3, direcao: Vector3, raio: number, cor: Color3, chao: number, fogo: boolean?)
+	Vfx.tremerEm(base, 0.9, 0.18)
+	local nome = if fogo and Vfx.temPrefab("CorteGiratorioFogo") then "CorteGiratorioFogo" else "CorteGiratorio"
+	if fogo then
+		cor = FOGO
+	end
+	local substituir = Vfx.temPrefab(nome)
+	Vfx.prefab(nome, CFrame.lookAt(base, base + direcao), nil, raio / 4)
+	if substituir then
+		return
+	end
+	local origem = CFrame.lookAt(base, base + direcao) * CFrame.Angles(0, 0, math.rad(-6))
+	for k = 0, 3 do
+		task.delay(k * 0.04, function()
+			crescente(origem * CFrame.Angles(0, k * math.pi / 2, 0), raio, 105, cor, { espessura = 1.9, duracao = 0.11, reverso = true })
+		end)
+	end
+	local centroChao = Vector3.new(base.X, chao + 0.15, base.Z)
+	local onda = disco(centroChao, 2, cor:Lerp(BRANCO, 0.3), 0.35)
+	animar(onda, 0.35, { Size = Vector3.new(0.12, raio * 2.3, raio * 2.3), Transparency = 1 })
+	Debris:AddItem(onda, 0.4)
+	poeiraNoChao(centroChao + Vector3.new(0, 0.4, 0), raio, 18)
+	riscos(base, cor, 18, 40)
+	clarao(base, cor, raio * 2.5, 0.3, 4)
+end
+
 function Vfx.corte(dados)
 	local raiz = raizDoJogador(dados.jogador)
 	local base = if raiz then raiz.Position else dados.pos
@@ -281,7 +675,29 @@ function Vfx.corte(dados)
 	local combo = dados.combo or 1
 	local final = combo == 3
 	local raio = dados.alcance * 0.8
-	if final then
+	if dados.cavaleiro then
+		if dados.giro then
+			local chao = if raiz then raiz.Position.Y - 3 else base.Y - 3
+			corteGiratorio(base, direcao, raio, dados.cor, chao, dados.fogo)
+		else
+			local inclinacao = if combo == 2 then CFrame.Angles(0, 0, math.rad(10)) else CFrame.Angles(0, 0, math.rad(-8))
+			corteCavaleiro(origem * inclinacao, raio, dados.arco, dados.cor, combo ~= 2, dados.fogo)
+		end
+		if dados.jogador == jogador then
+			Vfx.tremer(if dados.giro then 0.9 else 0.35, 0.1)
+		end
+	elseif dados.assassino and Vfx.temPrefab("CorteAdaga") then
+		if final then
+			-- X de cortes e faíscas no chão à frente, onde as duas adagas descem
+			local chao = (if raiz then raiz.Position.Y else base.Y) - 2.6
+			local frente = base + direcao * raio * 0.6
+			Vfx.prefab("CorteFinalAdaga", CFrame.new(frente.X, chao + 0.3, frente.Z), nil, 0.45)
+			Vfx.tremerEm(base, 0.6, 0.12)
+		else
+			-- rajada de cortes no ar, onde a adaga passou
+			Vfx.prefab("CorteAdaga", CFrame.new(base + direcao * raio * 0.55 + Vector3.new(0, 0.3, 0)), nil, 0.55)
+		end
+	elseif final then
 		arcoDeCorte(origem * CFrame.Angles(0, 0, math.rad(-12)), raio, dados.arco, dados.cor, { espessura = 1.6, duracao = 0.2 })
 		arcoDeCorte(origem * CFrame.new(0, -0.6, 0), raio * 0.75, dados.arco, dados.cor, { espessura = 1, duracao = 0.22 })
 		local frente = base + direcao * raio * 0.8
@@ -296,7 +712,64 @@ function Vfx.corte(dados)
 	end
 end
 
+------------------------------------------------------------------------
+-- Chefes com efeitos prontos dos pacotes (o servidor manda o "tipo" do chefe)
+------------------------------------------------------------------------
+
+local EFEITOS_CHEFE = {
+	reiEsqueleto = { giro = "GiroRei", golpe = "GolpeRei", salto = "SaltoRei", invocacao = "TumuloRei", furia = "RugidoFuria" },
+}
+
+-- Chão logo abaixo de um ponto (ignora jogadores, inimigos e efeitos)
+local function chaoAbaixo(posicao: Vector3): Vector3
+	local parametros = RaycastParams.new()
+	parametros.FilterType = Enum.RaycastFilterType.Exclude
+	local ignorar: { Instance } = { pasta }
+	local visuais = workspace:FindFirstChild("InimigosVisuais")
+	if visuais then
+		table.insert(ignorar, visuais)
+	end
+	for _, player in Players:GetPlayers() do
+		if player.Character then
+			table.insert(ignorar, player.Character)
+		end
+	end
+	for _, inimigo in game:GetService("CollectionService"):GetTagged("Inimigo") do
+		table.insert(ignorar, inimigo)
+	end
+	parametros.FilterDescendantsInstances = ignorar
+	local acerto = workspace:Raycast(posicao + Vector3.new(0, 2, 0), Vector3.new(0, -25, 0), parametros)
+	return if acerto then acerto.Position else posicao - Vector3.new(0, 3, 0)
+end
+
+-- Servos do chefe subindo: o chão racha e sobe névoa
+function Vfx.invocacao(dados)
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	if efeitos and Vfx.temPrefab(efeitos.invocacao) then
+		Vfx.prefab(efeitos.invocacao, CFrame.new(dados.pos), nil, 1.2)
+		Sons.tocar("pouso", { pos = dados.pos, tom = 0.55, volume = 0.8 })
+	end
+end
+
 function Vfx.golpeInimigo(dados)
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	if efeitos then
+		if dados.arco >= 360 and Vfx.temPrefab(efeitos.giro) then
+			-- giro com o espadão: anel de cortes em volta, rente ao chão
+			local chao = chaoAbaixo(dados.pos)
+			Vfx.prefab(efeitos.giro, CFrame.new(chao + Vector3.new(0, 1.5, 0)), nil, dados.alcance * 0.9)
+			Sons.tocar("giro", { pos = dados.pos, tom = 0.7, volume = 1.2 })
+			Vfx.tremerEm(dados.pos, 1.2, 0.15)
+			return
+		elseif dados.arco < 360 and Vfx.temPrefab(efeitos.golpe) then
+			-- golpe de cima: onda de choque onde a lâmina bate no chão
+			local chao = chaoAbaixo(dados.pos + dados.dir * dados.alcance * 0.6)
+			Vfx.prefab(efeitos.golpe, CFrame.new(chao + Vector3.new(0, 0.2, 0)), nil, 0.55)
+			Sons.tocar("espadaPesada", { pos = chao, tom = 0.6, volume = 1.3 })
+			Vfx.tremerEm(chao, 1.8, 0.25)
+			return
+		end
+	end
 	local base = dados.pos
 	if dados.arco >= 360 then
 		local chao = Vector3.new(base.X, base.Y - 1.5, base.Z)
@@ -344,7 +817,7 @@ local ESTILOS_PROJETIL = {
 	gelo = { cor = Color3.fromRGB(140, 220, 255), formato = "cristal", tamanho = 1.3 },
 	fogo = { cor = Color3.fromRGB(255, 120, 40), formato = "bola", tamanho = 1.4, fogo = true },
 	orbeCarregado = { cor = Color3.fromRGB(225, 150, 255), formato = "bola", tamanho = 1.2 },
-	flechaCarregada = { cor = Color3.fromRGB(255, 230, 120), formato = "flecha", tamanho = 1 },
+	flechaCarregada = { cor = Color3.fromRGB(120, 255, 150), formato = "flecha", tamanho = 1 },
 	adaga = { cor = Color3.fromRGB(255, 90, 120), formato = "flecha", tamanho = 0.7 },
 }
 
@@ -612,13 +1085,14 @@ MAGIAS.flechaGrande = function(escala: number)
 	return haste, cor, extras
 end
 
--- Flecha carregada: dourada, com duas espirais de vento girando em volta
+-- Flecha carregada: verde forte, com duas espirais de vento girando em volta (as espirais e as
+-- partículas só aparecem sem o efeito pronto "FlechaCarregada")
 MAGIAS.flechaCarregada = function(escala: number)
-	local cor = Color3.fromRGB(255, 225, 110)
+	local cor = Color3.fromRGB(120, 255, 150)
 	local haste, extras = construirFlecha(escala, cor, cor, true)
 	for i = 0, 1 do
 		local espiral = anelDeMagia(0.7 * escala, 0.08, if i == 0 then BRANCO else cor, 0.25)
-		table.insert(extras, { parte = espiral, cf = function(t)
+		table.insert(extras, { parte = espiral, efeito = true, cf = function(t)
 			return CFrame.new(0, 0, (0.2 - i * 0.9) * escala) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles((t * 20) + i * math.pi, 0, 0)
 		end })
 	end
@@ -664,6 +1138,51 @@ local function somDeDisparo(lista)
 	end
 end
 
+-- Magias com efeito pronto do pacote de VFX (segue o projétil) e o tamanho de cada uma.
+-- Nas flechas (corpo = true) a flecha de madeira continua aparecendo: o efeito pronto só
+-- substitui o rastro feito por código. "fogo" é o efeito usado com a carta Flechas de Fogo.
+local PROJETIL_PRONTO = {
+	dardoArcano = { "ProjetilArcano", 0.35 },
+	lancaGelo = { "ProjetilGelo", 0.35 },
+	bolaFogo = { "ProjetilFogo", 0.55 },
+	orbeCarregado = { "ProjetilVazio", 0.22 },
+	flecha = { "FlechaVento", 1, corpo = true, fogo = "FlechaFogo" },
+	flechaGrande = { "FlechaVento", 1.3, corpo = true, fogo = "FlechaFogo" },
+	flechaCarregada = { "FlechaCarregada", 0.6, corpo = true, fogo = "FlechaCarregadaFogo" },
+	fantasma = { "FlechaCarregada", 0.8, corpo = true },
+}
+local TIPOS_FLECHA = { flecha = true, flechaGrande = true, flechaCarregada = true, fantasma = true }
+
+-- Flecha com efeito pronto: apaga só o rastro e as partículas feitas por código (a madeira, a
+-- ponta e a luz ficam) e as peças extras marcadas como efeito
+local function apagarRastro(visual: BasePart, extras)
+	for _, objeto in visual:GetDescendants() do
+		if objeto:IsA("ParticleEmitter") or objeto:IsA("Trail") or objeto:IsA("Beam") then
+			(objeto :: any).Enabled = false
+		end
+	end
+	for _, extra in extras or {} do
+		if extra.efeito then
+			extra.parte.Transparency = 1
+		end
+	end
+end
+
+-- Deixa o visual feito por código invisível (a luz continua) quando o efeito pronto o substitui
+local function esconderVisual(visual: BasePart, extras)
+	visual.Transparency = 1
+	for _, objeto in visual:GetDescendants() do
+		if objeto:IsA("BasePart") then
+			objeto.Transparency = 1
+		elseif objeto:IsA("ParticleEmitter") or objeto:IsA("Trail") or objeto:IsA("Beam") or objeto:IsA("Fire") then
+			(objeto :: any).Enabled = false
+		end
+	end
+	for _, extra in extras or {} do
+		extra.parte.Transparency = 1
+	end
+end
+
 function Vfx.projeteis(dados)
 	somDeDisparo(dados.lista)
 	for _, info in dados.lista do
@@ -688,6 +1207,35 @@ function Vfx.projeteis(dados)
 			tipo = info.tipo,
 			girar = info.tipo == "gelo" or girar == true,
 		}
+		local pronto = PROJETIL_PRONTO[info.tipo]
+		if pronto then
+			local nomePronto = if info.fogo and pronto.fogo and prefabDe(pronto.fogo) then pronto.fogo else pronto[1]
+			if prefabDe(nomePronto) then
+				if pronto.corpo then
+					apagarRastro(visual, extras)
+				elseif Vfx.temPrefab(nomePronto) then
+					esconderVisual(visual, extras)
+				end
+			end
+			if info.fogo and TIPOS_FLECHA[info.tipo] then
+				-- ponta em brasa
+				projeteis[info.id].cor = FOGO
+				for _, extra in extras or {} do
+					if not extra.efeito and extra.parte.Material == Enum.Material.Neon then
+						extra.parte.Color = FOGO
+					end
+				end
+				local luz = visual:FindFirstChildOfClass("PointLight")
+				if luz then
+					luz.Color = FOGO
+				end
+			end
+			local id = info.id
+			Vfx.prefab(nomePronto, function()
+				local p = projeteis[id]
+				return if p then CFrame.lookAt(p.pos, p.pos + p.dir) else nil
+			end, 0, pronto[2] * (info.tamanho or 1))
+		end
 	end
 end
 
@@ -715,6 +1263,9 @@ local function removerProjetil(id: number, impacto: boolean, pos: Vector3?)
 			Sons.tocar("geloQuebra", { pos = onde })
 		elseif string.find(tipo, "flecha") or tipo == "adaga" or tipo == "fantasma" then
 			Sons.tocar("flechaImpacto", { pos = onde })
+		end
+		if TIPOS_FLECHA[tipo] and prefabDe("ImpactoFlecha") then
+			return -- o impacto da flecha é o efeito pronto, que sai em Vfx.dano
 		end
 		if p.tipo == "lancaGelo" then
 			-- o cristal estilhaça
@@ -780,6 +1331,13 @@ function Vfx.explosao(dados)
 	local forte = dados.forte == true
 	local leve = dados.leve == true
 	Sons.tocar("explosao", { pos = pos, volume = if leve then 0.5 elseif forte then 1.15 else 0.9, tom = if leve then 1.3 else 1, alcance = 220 })
+	-- magias do Mago: explosão pronta do pacote de VFX (arcana roxa ou de fogo)
+	local pronta = if dados.magia == "dardoArcano" then "ExplosaoArcana" elseif dados.magia == "bolaFogo" then "ExplosaoFogo" else nil
+	if pronta and Vfx.temPrefab(pronta) then
+		Vfx.prefab(pronta, CFrame.new(pos), nil, raio / 12)
+		Vfx.tremerEm(pos, if forte then 0.8 else 0.3, 0.15)
+		return
+	end
 	local nucleo = parte(Vector3.one * 1.5, CFrame.new(pos), cor:Lerp(BRANCO, 0.5), 0, Enum.PartType.Ball)
 	animar(nucleo, if leve then 0.22 else 0.35, { Size = Vector3.one * raio * 2, Transparency = 1, Color = cor })
 	Debris:AddItem(nucleo, 0.4)
@@ -806,6 +1364,11 @@ end
 function Vfx.vazio(dados)
 	Sons.tocar("vazioExplode", { pos = dados.pos, alcance = 220 })
 	local pos, raio = dados.pos, dados.raio or 8
+	if Vfx.temPrefab("ExplosaoVazio") then
+		Vfx.prefab("ExplosaoVazio", CFrame.new(pos), nil, raio / 10)
+		Vfx.tremerEm(pos, 1.2, 0.25)
+		return
+	end
 	local cor = Color3.fromRGB(170, 70, 255)
 	local escuro = Color3.fromRGB(18, 6, 30)
 	-- esfera que encolhe (implosão)
@@ -836,6 +1399,14 @@ end
 
 function Vfx.impacto(dados)
 	local pos, raio = dados.pos, dados.raio or 6
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	if efeitos and Vfx.temPrefab(efeitos.salto) then
+		-- chefe caindo do salto: pancada no chão e rachadura
+		Vfx.prefab(efeitos.salto, CFrame.new(pos + Vector3.new(0, 0.2, 0)), nil, raio / 18)
+		Sons.tocar("pouso", { pos = pos, tom = 0.5, volume = 1.5 })
+		Vfx.tremerEm(pos, 2.8, 0.4)
+		return
+	end
 	local poeira = disco(pos + Vector3.new(0, 0.2, 0), 2, Color3.fromRGB(200, 180, 160), 0.35)
 	animar(poeira, 0.45, { Size = Vector3.new(0.15, raio * 2.4, raio * 2.4), Transparency = 1 })
 	Debris:AddItem(poeira, 0.5)
@@ -910,6 +1481,13 @@ function Vfx.teleporte(dados)
 end
 
 function Vfx.furia(dados)
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	if efeitos and Vfx.temPrefab(efeitos.furia) then
+		-- o rugido vermelho sai do próprio chefe (VisualInimigos); aqui só o tremor
+		Sons.tocar("supremo", { pos = dados.pos, tom = 0.6, alcance = 220 })
+		Vfx.tremer(2.5, 0.6)
+		return
+	end
 	local onda = disco(dados.pos - Vector3.new(0, 2, 0), 4, VERMELHO, 0.1)
 	animar(onda, 0.7, { Size = Vector3.new(0.15, 70, 70), Transparency = 1 })
 	Debris:AddItem(onda, 0.75)
@@ -1126,7 +1704,12 @@ function Vfx.dano(dados)
 	local critico = dados.critico
 	-- som do golpe (dano contínuo de fogo/sangramento não faz barulho a cada tique)
 	if dados.impacto and not dados.dot then
-		Sons.tocar(if critico then "critico" else "impacto", { pos = dados.impacto })
+		local autorSom = dados.autor
+		if dados.principal and typeof(autorSom) == "Instance" and autorSom:GetAttribute("Classe") == "cavaleiro" then
+			Sons.tocar("golpeEspada", { pos = dados.impacto, tom = if critico then 0.9 else 1.08 })
+		else
+			Sons.tocar(if critico then "critico" else "impacto", { pos = dados.impacto })
+		end
 		if dados.sangue == true then
 			Sons.tocar("sangue", { pos = dados.impacto })
 		end
@@ -1137,10 +1720,38 @@ function Vfx.dano(dados)
 	end
 	local cor = dados.cor or (if critico then Color3.fromRGB(255, 214, 70) else Color3.fromRGB(255, 250, 240))
 	textoFlutuante(dados.pos, if critico then dados.valor .. "!" else tostring(dados.valor), cor, if critico then 46 else 30, { pop = if critico then 2.2 else 1.5 })
+	local autor = dados.autor
+	local doAssassino = typeof(autor) == "Instance" and autor:GetAttribute("Classe") == "assassino"
 	if dados.sangue and dados.impacto then
-		respingoDeSangue(dados.impacto, if critico then 1.6 else 1, dados.sangue == "gota")
+		if dados.sangue == "gota" and Vfx.temPrefab("SangueGota") then
+			Vfx.prefab("SangueGota", CFrame.new(dados.impacto), nil, 1)
+		elseif dados.sangue == "gota" or not (doAssassino and Vfx.temPrefab("ImpactoAdaga")) then
+			respingoDeSangue(dados.impacto, if critico then 1.6 else 1, dados.sangue == "gota")
+		end
+		-- (golpe do Assassino: o sangue já vem no impacto do pacote, logo abaixo)
 	end
-	if dados.impacto then
+	local impactoPronto = false
+	if dados.principal and dados.impacto and typeof(autor) == "Instance" and autor:GetAttribute("Classe") == "cavaleiro" then
+		local nomeImpacto = if dados.fogo and Vfx.temPrefab("ImpactoCorteFogo") then "ImpactoCorteFogo" else "ImpactoCorte"
+		impactoPronto = Vfx.temPrefab(nomeImpacto)
+		Vfx.prefab(nomeImpacto, CFrame.new(dados.impacto + Vector3.new(0, 1, 0)), nil, if critico then 1.3 else 0.9)
+	elseif dados.principal and dados.impacto and doAssassino then
+		local nomeImpacto = if critico then "ImpactoCostas" else "ImpactoAdaga"
+		impactoPronto = Vfx.temPrefab(nomeImpacto)
+		Vfx.prefab(nomeImpacto, CFrame.new(dados.impacto + Vector3.new(0, 0.5, 0)), nil, 0.6)
+	elseif dados.principal and dados.impacto and typeof(autor) == "Instance" and autor:GetAttribute("Classe") == "arqueiro" then
+		-- flecha: estouro verde (ou de fogo) que volta na direção de quem atirou
+		local nomeImpacto = if dados.fogo and prefabDe("ImpactoFlechaFogo") then "ImpactoFlechaFogo" else "ImpactoFlecha"
+		impactoPronto = Vfx.temPrefab(nomeImpacto)
+		local raizAutor = raizDoJogador(autor)
+		local volta = if raizAutor then raizAutor.Position - dados.impacto else Vector3.zero
+		volta = Vector3.new(volta.X, 0, volta.Z)
+		local onde = if volta.Magnitude > 0.1
+			then CFrame.lookAt(dados.impacto, dados.impacto + volta.Unit) * CFrame.Angles(-math.pi / 2, 0, 0)
+			else CFrame.new(dados.impacto)
+		Vfx.prefab(nomeImpacto, onde, nil, if critico then 0.45 else 0.3)
+	end
+	if dados.impacto and not impactoPronto then
 		particulas(dados.impacto, {
 			cor = if critico then Color3.fromRGB(255, 230, 120) else Color3.fromRGB(255, 240, 220),
 			cor2 = dados.cor or Color3.fromRGB(255, 160, 80),
@@ -1244,6 +1855,14 @@ end
 function Vfx.bloqueio(dados)
 	local raiz = raizDoJogador(dados.jogador)
 	Sons.tocar("escudo", { pos = raiz and raiz.Position })
+	-- Barreira Arcana do Mago: a bolha roxa estoura
+	local jogadorDados = dados.jogador
+	if raiz and typeof(jogadorDados) == "Instance" and jogadorDados:GetAttribute("Classe") == "mago" and Vfx.temPrefab("BarreiraArcanaQuebra") then
+		local tronco = (raiz.Parent :: Model):FindFirstChild("UpperTorso") or raiz
+		Vfx.prefab("BarreiraArcanaQuebra", CFrame.new((tronco :: BasePart).Position), nil, 1.9)
+		textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "BLOQUEADO", Color3.fromRGB(190, 110, 255), 30)
+		return
+	end
 	if raiz then
 		local cor = Color3.fromRGB(110, 190, 255)
 		local bolha = parte(Vector3.one * 5, CFrame.new(raiz.Position), cor, 0.4, Enum.PartType.Ball, Enum.Material.ForceField)
@@ -1251,6 +1870,21 @@ function Vfx.bloqueio(dados)
 		Debris:AddItem(bolha, 0.45)
 		textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "BLOQUEADO", cor, 30)
 	end
+end
+
+--[[ Efeito pronto que acompanha o corpo por "duracao" segundos, virado para trás do movimento
+	(os riscos e linhas do pacote saem para o -Z dele, então ficam para trás) ]]
+local function rastroNoCorpo(raiz: BasePart, nome: string, duracao: number, escala: number)
+	local inicio = os.clock()
+	Vfx.prefab(nome, function()
+		if not raiz.Parent or os.clock() - inicio > duracao then
+			return nil
+		end
+		local v = raiz.AssemblyLinearVelocity
+		local plano = Vector3.new(v.X, 0, v.Z)
+		local tras = if plano.Magnitude > 1 then -plano.Unit else -raiz.CFrame.LookVector
+		return CFrame.lookAt(raiz.Position, raiz.Position + tras)
+	end, 0, escala)
 end
 
 local COR_ESQUIVA = {
@@ -1268,6 +1902,40 @@ function Vfx.esquiva(dados)
 	Sons.tocar("esquiva", { pai = raiz })
 	local personagem = raiz.Parent
 	local cor = COR_ESQUIVA[dados.classe] or Color3.fromRGB(200, 230, 255)
+	if dados.classe == "mago" and Vfx.temPrefab("PortalMago") then
+		Vfx.prefab("PortalMago", CFrame.new(raiz.Position), nil, 0.7)
+		task.delay(0.17, function()
+			if raiz.Parent then
+				Vfx.prefab("PortalMago", CFrame.new(raiz.Position), nil, 0.7)
+			end
+		end)
+		return
+	end
+	if dados.classe == "assassino" and Vfx.temPrefab("RastroSombra") then
+		-- passo de sombra: riscos escuros e linhas vermelhas atrás dele e uma lufada de fumaça
+		rastroNoCorpo(raiz, "RastroSombra", 0.3, 1.8)
+		return
+	end
+	if dados.classe == "arqueiro" and Vfx.temPrefab("PassoArqueiro") then
+		rastroNoCorpo(raiz, "PassoArqueiro", 0.38, 1.8)
+		task.delay(0.32, function()
+			if raiz.Parent then
+				Sons.tocar("pouso", { pai = raiz, tom = 1.2, volume = 0.6 })
+			end
+		end)
+		return
+	end
+	if dados.classe == "cavaleiro" and Vfx.temPrefab("Rolamento") then
+		-- rolamento do Cavaleiro: só o efeito pronto (vento e fumaça no chão) e o baque ao levantar
+		local chao = raiz.Position - Vector3.new(0, 2.6, 0)
+		Vfx.prefab("Rolamento", CFrame.lookAt(chao, chao + raiz.CFrame.LookVector))
+		task.delay(0.3, function()
+			if raiz.Parent then
+				Sons.tocar("pouso", { pai = raiz, tom = 0.85 })
+			end
+		end)
+		return
+	end
 	-- "fantasmas" do personagem que ficam para trás
 	for i = 0, 2 do
 		task.delay(i * 0.05, function()
@@ -1284,6 +1952,18 @@ function Vfx.esquiva(dados)
 		end)
 	end
 	particulas(raiz.Position - Vector3.new(0, 2, 0), { cor = Color3.fromRGB(230, 240, 255), quantidade = 10, velocidade = 10, vida = 0.35, luz = 0.5 })
+	if dados.classe == "cavaleiro" then
+		local chao = raiz.Position - Vector3.new(0, 2.6, 0)
+		Vfx.prefab("Rolamento", CFrame.lookAt(chao, chao + raiz.CFrame.LookVector))
+		-- rolamento: poeira ao mergulhar e ao levantar
+		poeiraNoChao(raiz.Position - Vector3.new(0, 2.6, 0), 3, 8)
+		task.delay(0.3, function()
+			if raiz.Parent then
+				poeiraNoChao(raiz.Position - Vector3.new(0, 2.6, 0), 3.5, 12)
+				Sons.tocar("pouso", { pai = raiz, tom = 0.85 })
+			end
+		end)
+	end
 	-- risco de vento que acompanha o corpo durante o impulso
 	local a0 = Instance.new("Attachment")
 	a0.Position = Vector3.new(0, 1, 0)
@@ -1316,6 +1996,20 @@ end
 -- Carga cheia: clarão dourado na ponta da arma
 function Vfx.cargaCheia(dados)
 	Sons.tocar("cargaCheia", { pos = dados.pos, volume = if dados.local_ then 1 else 0.5 })
+	if dados.classe == "assassino" and Vfx.temPrefab("CargaCheiaAssassino") then
+		Vfx.prefab("CargaCheiaAssassino", CFrame.new(dados.pos), nil, 0.6)
+		if dados.local_ then
+			Vfx.tremer(0.25, 0.08)
+		end
+		return
+	end
+	if dados.classe == "arqueiro" and Vfx.temPrefab("CargaCheiaArqueiro") then
+		Vfx.prefab("CargaCheiaArqueiro", CFrame.new(dados.pos), nil, 0.6)
+		if dados.local_ then
+			Vfx.tremer(0.25, 0.08)
+		end
+		return
+	end
 	local ouro = Color3.fromRGB(255, 214, 90)
 	local bola = parte(Vector3.one * 0.6, CFrame.new(dados.pos), ouro:Lerp(BRANCO, 0.4), 0.1, Enum.PartType.Ball, Enum.Material.Neon)
 	animar(bola, 0.25, { Size = Vector3.one * 4, Transparency = 1 })
@@ -1343,6 +2037,15 @@ function Vfx.passoSombrio(dados)
 	end
 	local de, ate = dados.de, dados.ate
 	local cor = dados.cor
+	if Vfx.temPrefab("FumacaSombria") then
+		local escala = if dados.leve then 0.6 else 1
+		Vfx.prefab("FumacaSombria", CFrame.new(de), nil, escala)
+		Vfx.prefab("FumacaSombria", CFrame.new(ate), nil, escala * 0.8)
+		if dados.jogador == jogador and not dados.leve then
+			Vfx.tremer(0.4, 0.1)
+		end
+		return
+	end
 	fumaca(de, cor, if dados.leve then 6 else 12)
 	fumaca(ate, cor, if dados.leve then 4 else 8)
 	-- silhueta escura que fica onde o Assassino estava
@@ -1387,6 +2090,23 @@ function Vfx.investidaLetal(dados)
 		return
 	end
 	local direcao = (ate - de).Unit
+	if Vfx.temPrefab("InvestidaFim") then
+		for i = 0, 2 do
+			task.delay(i * 0.05, function()
+				Vfx.prefab("CorteAdaga", CFrame.new(de + direcao * distancia * (0.3 + 0.3 * i) + Vector3.new(0, 0.4, 0)), nil, 0.6)
+			end)
+		end
+		local raiz = raizDoJogador(dados.jogador)
+		if raiz then
+			rastroNoCorpo(raiz, "RastroSombra", 0.25, 1.8)
+		end
+		-- no fim do avanço, a explosão vermelha e preta sai para a frente
+		task.delay(0.2, function()
+			Vfx.prefab("InvestidaFim", CFrame.lookAt(ate, ate + direcao), nil, if dados.perfeito then 0.24 else 0.16)
+		end)
+		Vfx.tremerEm(ate, if dados.perfeito then 1 else 0.6, 0.12)
+		return
+	end
 	for i = 0, 2 do
 		task.delay(i * 0.04, function()
 			local lado = if i % 2 == 0 then 1 else -1
@@ -1440,6 +2160,23 @@ function Vfx.defesa(dados)
 	local pos = dados.pos + Vector3.new(0, 0.6, 0)
 	local dir = dados.dir or Vector3.new(0, 0, -1)
 	local cor = if dados.perfeita then Color3.fromRGB(255, 214, 90) else Color3.fromRGB(150, 200, 255)
+	if not dados.perfeita and Vfx.temPrefab("BloqueioEscudo") then
+		-- golpe bloqueado: estouro azul no escudo
+		Vfx.prefab("BloqueioEscudo", CFrame.lookAt(pos, pos + dir), nil, 1.2)
+		if dados.jogador == jogador then
+			Vfx.tremer(0.45, 0.12)
+		end
+		return
+	end
+	if dados.perfeita and Vfx.temPrefab("DefesaPerfeita") then
+		Vfx.prefab("DefesaPerfeita", CFrame.lookAt(pos, pos + dir), nil, 1.5)
+		local raiz = raizDoJogador(dados.jogador)
+		textoFlutuante((if raiz then raiz.Position else pos) + Vector3.new(0, 3.5, 0), "DEFESA PERFEITA!", cor, 34, { pop = 2 })
+		if dados.jogador == jogador then
+			Vfx.tremer(0.9, 0.12)
+		end
+		return
+	end
 	-- anel que sai do escudo para a frente
 	local anelEscudo = parte(Vector3.new(0.2, 2.5, 2.5), CFrame.lookAt(pos, pos + dir) * CFrame.Angles(0, math.rad(90), 0), cor, 0.2, Enum.PartType.Cylinder)
 	animar(anelEscudo, 0.25, { Size = Vector3.new(0.05, if dados.perfeita then 9 else 5, if dados.perfeita then 9 else 5), Transparency = 1 })
@@ -1455,7 +2192,28 @@ function Vfx.defesa(dados)
 		espalhar = Vector2.new(70, 70),
 	})
 	clarao(pos, cor, if dados.perfeita then 22 else 12, 0.2, if dados.perfeita then 6 else 3)
+	riscos(pos, cor, if dados.perfeita then 22 else 10, if dados.perfeita then 45 else 30, dir)
 	if dados.perfeita then
+		local substituir = Vfx.temPrefab("DefesaPerfeita")
+		Vfx.prefab("DefesaPerfeita", CFrame.lookAt(pos, pos + dir))
+		if not substituir then
+			-- estrela: raios de luz saindo do escudo, de frente para quem atacou
+			local plano = CFrame.lookAt(pos, pos + dir)
+			for i = 1, 10 do
+				local angulo = i / 10 * math.pi * 2 + math.random() * 0.2
+				local comprimento = if i % 2 == 0 then 7 else 4.5
+				local raio = parte(Vector3.new(0.18, 0.18, 0.4), plano * CFrame.Angles(0, 0, angulo), BRANCO, 0)
+				local destino = plano * CFrame.Angles(0, 0, angulo) * CFrame.new(0, comprimento / 2, 0)
+				animar(raio, 0.12, { Size = Vector3.new(0.16, comprimento, 0.16), CFrame = destino, Color = cor })
+				task.delay(0.12, function()
+					animar(raio, 0.2, { Size = Vector3.new(0.02, comprimento * 1.2, 0.02), Transparency = 1 })
+				end)
+				Debris:AddItem(raio, 0.4)
+			end
+			local bolha = parte(Vector3.one * 2, CFrame.new(pos), cor, 0.3, Enum.PartType.Ball, Enum.Material.ForceField)
+			animar(bolha, 0.3, { Size = Vector3.one * 8, Transparency = 1 })
+			Debris:AddItem(bolha, 0.35)
+		end
 		local raiz = raizDoJogador(dados.jogador)
 		textoFlutuante((if raiz then raiz.Position else pos) + Vector3.new(0, 3.5, 0), "DEFESA PERFEITA!", cor, 34, { pop = 2 })
 	end
@@ -1475,32 +2233,6 @@ function Vfx.escudoGanho(dados)
 	animar(bolha, 0.5, { Size = Vector3.one * 7, Transparency = 1 })
 	Debris:AddItem(bolha, 0.55)
 	textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "🛡️ ESCUDO", dados.cor:Lerp(BRANCO, 0.4), 26)
-end
-
--- Giro do Cavaleiro com a espada carregada
-function Vfx.giroCarregado(dados)
-	local raiz = raizDoJogador(dados.jogador)
-	if not raiz then
-		return
-	end
-	Sons.tocar("espadaPesada", { pos = raiz.Position, tom = 0.85, volume = 1.2 })
-	local base = raiz.Position
-	local raio = dados.raio
-	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.6) else dados.cor
-	local origem = CFrame.lookAt(base, base + raiz.CFrame.LookVector)
-	arcoDeCorte(origem, raio * 0.85, 180, cor, { espessura = 1.8, duracao = 0.16 })
-	task.delay(0.08, function()
-		arcoDeCorte(origem * CFrame.Angles(0, math.pi, 0), raio * 0.85, 180, cor, { espessura = 1.8, duracao = 0.16 })
-	end)
-	local chao = Vector3.new(base.X, base.Y - 2.6, base.Z)
-	local onda = disco(chao, 2, cor, 0.3)
-	animar(onda, 0.35, { Size = Vector3.new(0.15, raio * 2.2, raio * 2.2), Transparency = 1 })
-	Debris:AddItem(onda, 0.4)
-	particulas(chao + Vector3.new(0, 0.5, 0), { cor = cor, cor2 = BRANCO, quantidade = 20, tamanho = 0.5, velocidade = 26, vida = 0.4 })
-	Vfx.tremerEm(base, if dados.perfeito then 1.6 else 1, 0.2)
-	if dados.perfeito then
-		clarao(base, cor, 30, 0.4, 6)
-	end
 end
 
 function Vfx.supremo(dados)
@@ -1641,6 +2373,19 @@ function Vfx.redemoinho(dados)
 	local cor = if dados.fogo then FOGO else dados.cor
 	local raio = dados.raio
 	Sons.tocar("giro", { pai = raiz })
+	-- efeito pronto do pacote de VFX: uma tempestade de cortes girando em volta do Cavaleiro
+	-- (diferente do tornado do ataque carregado); com poder de fogo, os cortes são de fogo
+	local nome = if dados.fogo and Vfx.temPrefab("RedemoinhoFogo") then "RedemoinhoFogo" else "Redemoinho"
+	local substituir = Vfx.temPrefab(nome)
+	Vfx.prefab(nome, function()
+		if not raiz.Parent then
+			return nil
+		end
+		return CFrame.new(raiz.Position)
+	end, dados.duracao, raio / 9)
+	if substituir then
+		return
+	end
 	-- arcos da espada (dois, girando)
 	local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
 	local b0, b1 = Instance.new("Attachment"), Instance.new("Attachment")
@@ -1652,13 +2397,10 @@ function Vfx.redemoinho(dados)
 	for i, feixe in { feixesA[1], feixesA[2], feixesB[1], feixesB[2] } do
 		feixe.Transparency = sequencia({ { 0, 1 }, { 0.5, if i % 2 == 1 then 0 else 0.5 }, { 1, 0.1 } })
 	end
-	-- tornado: anéis que alargam para cima, cada um girando numa velocidade
+	-- tornado: funil de vento em volta do Cavaleiro
 	local itens = {}
-	for i = 0, 3 do
-		local largura = raio * (0.55 + i * 0.17) * 2
-		local anelVento = parte(Vector3.new(0.12, largura, largura), CFrame.new(), if i % 2 == 0 then BRANCO else cor, 0.55 + i * 0.08, Enum.PartType.Cylinder)
-		table.insert(itens, { parte = anelVento, anel = true, altura = -2 + i * 1.5, velocidade = 10 - i * 1.5, fase = i, inclinacao = math.rad(8 + i * 4) })
-	end
+	local vento = funil(raio * 0.85, 7, cor, 4, 0.3)
+	local humanoid = if raiz.Parent then raiz.Parent:FindFirstChildOfClass("Humanoid") else nil
 	-- detritos girando
 	for i = 1, 8 do
 		local pedra = parte(Vector3.one * (0.3 + math.random() * 0.4), CFrame.new(), Color3.fromRGB(120, 110, 100), 0, nil, Enum.Material.Slate)
@@ -1686,6 +2428,7 @@ function Vfx.redemoinho(dados)
 			for _, a in { a0, a1, b0, b1 } do
 				a:Destroy()
 			end
+			vento.parar(0.25)
 			emissorPoeira.Enabled = false
 			Debris:AddItem(poeira, 1)
 			return
@@ -1693,6 +2436,7 @@ function Vfx.redemoinho(dados)
 		local centro = CFrame.new(raiz.Position) * CFrame.Angles(0, -t * 14, 0)
 		posicionarArco(a0, a1, feixesA, centro, raio * 0.8, 150)
 		posicionarArco(b0, b1, feixesB, centro * CFrame.Angles(0, math.pi, 0), raio * 0.8, 150)
+		vento.atualizar(Vector3.new(raiz.Position.X, chaoDe(raiz, humanoid), raiz.Position.Z), t, math.min(1, t / 0.2))
 		poeira.WorldCFrame = CFrame.new(raiz.Position - Vector3.new(0, 2.6, 0)) * CFrame.Angles(0, t * 9, 0)
 	end)
 	orbitar(function()
@@ -1702,8 +2446,38 @@ end
 
 -- Julgamento: uma espada de luz gigante cai do céu e crava no chão; o chão racha,
 -- pilares de luz sobem em volta e pedras voam
+-- Clarão na tela inteira de quem está perto: o brilho sobe de uma vez e volta devagar
+local function clarearTela(posicao: Vector3, cor: Color3, forca: number, duracao: number)
+	local raiz = raizDoJogador(jogador)
+	if raiz and (raiz.Position - posicao).Magnitude > 120 then
+		return
+	end
+	local efeito = Instance.new("ColorCorrectionEffect")
+	efeito.Name = "ClaraoTela"
+	efeito.Brightness = forca
+	efeito.Contrast = forca * 0.6
+	efeito.TintColor = BRANCO:Lerp(cor, 0.35)
+	efeito.Parent = Lighting
+	animar(efeito, duracao, { Brightness = 0, Contrast = 0, TintColor = BRANCO })
+	Debris:AddItem(efeito, duracao + 0.1)
+end
+
 function Vfx.julgamento(dados)
 	Sons.tocar("julgamento", { pos = dados.pos, alcance = 260 })
+	local escala = math.max(1, (dados.raio or 15) / 15)
+	if Vfx.temPrefab("Julgamento") then
+		-- efeitos do pacote: quando o golpe acontece (0,35s, igual ao servidor) cai um raio azul
+		-- e o chão explode em luz dourada; a tela dá um clarão e treme forte
+		task.delay(0.33, function()
+			Vfx.prefab("JulgamentoRaio", CFrame.new(dados.pos + Vector3.new(0, 12, 0)), nil, escala)
+			Vfx.prefab("Julgamento", CFrame.new(dados.pos), nil, escala * 0.9)
+			Sons.tocar("trovao", { pos = dados.pos, alcance = 300, volume = 1.3 })
+			clarearTela(dados.pos, OURO, 0.55, 0.6)
+			Vfx.tremerEm(dados.pos, 4, 0.6)
+		end)
+		return
+	end
+	Vfx.prefab("Julgamento", CFrame.new(dados.pos), nil, escala)
 	local pos, raio = dados.pos, dados.raio
 	local cor = Color3.fromRGB(255, 220, 120)
 	local corClasse = dados.cor or cor
@@ -1764,6 +2538,8 @@ end
 -- Meteoro: rocha em brasa girando, com fumaça e fogo, que cai e abre uma cratera
 function Vfx.meteoro(dados)
 	Sons.tocar("meteoro", { pos = dados.pos, alcance = 200 })
+	-- meteoro do Mago: roxo arcano (o do chefe continua de fogo)
+	local FOGO = if dados.arcano then Color3.fromRGB(190, 110, 255) else FOGO
 	local alvo = dados.pos
 	local inicio = alvo + Vector3.new(-16, 55, -16)
 	local rocha = parte(Vector3.one * 3.2, CFrame.new(inicio), Color3.fromRGB(60, 40, 35), 0, Enum.PartType.Ball, Enum.Material.Basalt)
@@ -1802,6 +2578,12 @@ function Vfx.meteoro(dados)
 		sumir(partes, 0.2, dados.duracao)
 	end
 	task.delay(dados.duracao, function()
+		if dados.arcano and Vfx.temPrefab("MeteoroImpacto") then
+			Vfx.prefab("MeteoroImpacto", CFrame.new(alvo + Vector3.new(0, 0.2, 0)), nil, (dados.raio or 10) / 12)
+			Vfx.prefab("MeteoroExplosao", CFrame.new(alvo + Vector3.new(0, 3, 0)), nil, (dados.raio or 10) / 16)
+			Vfx.tremerEm(alvo, 2, 0.4)
+			return
+		end
 		-- cratera: pedras que se erguem em volta do impacto
 		local raioCratera = (dados.raio or 10) * 0.55
 		for i = 1, 12 do
@@ -1863,6 +2645,12 @@ end
 -- Raio que vem do céu, com galhos que se abrem e marca queimada no chão
 function Vfx.raioCeu(dados)
 	Sons.tocar("raio", { pos = dados.pos, volume = 0.7, alcance = 220 })
+	if Vfx.temPrefab("RaioTempestade") then
+		-- raio roxo do pacote de VFX (o desenho é um raio em pé: o centro fica no meio da altura)
+		Vfx.prefab("RaioTempestade", CFrame.new(dados.pos + Vector3.new(0, 12, 0)))
+		Vfx.tremerEm(dados.pos, 0.5, 0.12)
+		return
+	end
 	local cor = dados.cor or Color3.fromRGB(200, 150, 255)
 	local topo = dados.pos + Vector3.new(math.random(-3, 3), 34, math.random(-3, 3))
 	zigueZague(topo, dados.pos, cor:Lerp(BRANCO, 0.6), 0.6, 4, 8)
@@ -1883,37 +2671,109 @@ function Vfx.raioCeu(dados)
 	Vfx.tremerEm(dados.pos, 0.6, 0.15)
 end
 
--- Chuva de Flechas: um círculo mágico abre no céu e despeja flechas com rastro
+------------------------------------------------------------------------
+-- Arqueiro: disparo, carga, salto, Chuva de Flechas e Saraivada. Os efeitos vêm dos pacotes,
+-- em verde; com a carta Flechas de Fogo, as versões "...Fogo" (quando existem)
+------------------------------------------------------------------------
+
+local MADEIRA_FLECHA = Color3.fromRGB(150, 110, 70)
+
+-- Nome do efeito na versão de fogo, se ela existir
+local function comFogo(nome: string, fogo: boolean?): string
+	if fogo and prefabDe(nome .. "Fogo") then
+		return nome .. "Fogo"
+	end
+	return nome
+end
+
+--[[ Disparo do arco: anel de vento na corda (tiro normal) ou rajada para a frente (tiro forte).
+	"origem" é o arco e "direcao" para onde a flecha vai. ]]
+function Vfx.disparoArqueiro(origem: Vector3, direcao: Vector3, forte: boolean, escala: number, fogo: boolean?)
+	if direcao.Magnitude < 0.01 then
+		return
+	end
+	local frente = CFrame.lookAt(origem, origem + direcao.Unit)
+	if forte then
+		-- a rajada do pacote sopra para o -X dela: gira para soprar na direção do tiro
+		Vfx.prefab(comFogo("DisparoForte", fogo), frente * CFrame.Angles(0, -math.pi / 2, 0), nil, escala)
+	else
+		-- o anel fica de pé, de frente para o alvo
+		Vfx.prefab(comFogo("DisparoArco", fogo), frente, nil, escala)
+	end
+end
+
+-- Carregando o tiro: arcos de energia na ponta da flecha ("ponto" devolve onde ela está a cada
+-- quadro). Devolve a função que apaga o efeito, ou nil se ele não existe.
+function Vfx.cargaArqueiro(ponto: () -> Vector3?, fogo: boolean?): (() -> ())?
+	return Vfx.prefab(comFogo("CargaArqueiro", fogo), function()
+		local p = ponto()
+		return if p then CFrame.new(p) else nil
+	end, 0, 0.7)
+end
+
+-- Salto para trás da Chuva de Flechas: lufada de vento no chão de onde ele saiu
+function Vfx.saltoArqueiro(raiz: BasePart)
+	local chao = raiz.Position - Vector3.new(0, 2.6, 0)
+	Vfx.prefab("SaltoArqueiro", CFrame.lookAt(chao, chao + raiz.CFrame.LookVector), nil, 1.6)
+end
+
+-- Flecha que cai do céu: madeira com a ponta colorida; fica cravada no chão um instante e some.
+-- Uma a cada três levanta o estouro do impacto (o efeito pronto).
+local function flechaCaindo(topo: Vector3, chao: Vector3, corPonta: Color3, impacto: string?)
+	local direcao = (chao - topo).Unit
+	local inicio = CFrame.lookAt(topo, topo + direcao)
+	local haste = parte(Vector3.new(0.16, 0.16, 2.4), inicio, MADEIRA_FLECHA, 0, nil, Enum.Material.Wood)
+	local ponta = parte(Vector3.new(0.3, 0.3, 0.5), inicio * CFrame.new(0, 0, -1.3), corPonta, 0, nil, Enum.Material.Neon)
+	-- cravada: a ponta entra um pouco no chão
+	local final = CFrame.lookAt(chao - direcao, chao)
+	local tempo = 0.26
+	animar(haste, tempo, { CFrame = final }, Enum.EasingStyle.Linear)
+	local tween = animar(ponta, tempo, { CFrame = final * CFrame.new(0, 0, -1.3) }, Enum.EasingStyle.Linear)
+	tween.Completed:Once(function()
+		if impacto then
+			Vfx.prefab(impacto, CFrame.new(chao), nil, 0.13)
+		end
+		sumir({ haste, ponta }, 0.25, 0.35)
+	end)
+end
+
+-- Chuva de Flechas: um portal verde abre no céu e despeja flechas na área marcada no chão
 function Vfx.chuvaFlechas(dados)
 	Sons.tocar("chuvaFlechas", { pos = dados.pos })
 	local centro, raio, duracao, cor = dados.pos, dados.raio, dados.duracao, dados.cor
-	local partes = anel(centro + Vector3.new(0, 0.15, 0), raio, cor, 0.35, 28, 0.45)
-	local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
-	table.insert(partes, fundo)
+	local corPonta = if dados.fogo then FOGO else cor
+	local nomeImpacto = comFogo("ImpactoFlecha", dados.fogo)
+	if not prefabDe(nomeImpacto) then
+		nomeImpacto = nil
+	end
+	-- círculo fino no chão: mostra onde as flechas caem
+	local partes = anel(centro + Vector3.new(0, 0.15, 0), raio, corPonta, 0.45, 28, 0.3)
 	sumir(partes, 0.4, duracao)
-	-- portal no céu
-	local ceu = centro + Vector3.new(4, 24, 4)
-	local portal = disco(ceu, 0.5, cor:Lerp(BRANCO, 0.3), 0.3)
-	animar(portal, 0.3, { Size = Vector3.new(0.2, raio * 2.2, raio * 2.2) }, Enum.EasingStyle.Back)
-	local runas = anel(ceu, raio * 1.15, cor, 0.2, 20, 0.3)
-	sumir(runas, 0.4, duracao)
-	orbitar(function()
-		return ceu
-	end, { { parte = portal, anel = true, altura = 0, velocidade = 2, fase = 0 } }, duracao)
+	local ceu = centro + Vector3.new(0, 22, 0)
+	if Vfx.temPrefab("PortalChuva") then
+		-- de frente para baixo: as linhas do portal descem junto com as flechas
+		Vfx.prefab("PortalChuva", CFrame.new(ceu) * CFrame.Angles(-math.pi / 2, 0, 0), duracao, raio * 0.42)
+	else
+		local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
+		sumir({ fundo }, 0.4, duracao)
+		local portal = disco(ceu, 0.5, cor:Lerp(BRANCO, 0.3), 0.3)
+		animar(portal, 0.3, { Size = Vector3.new(0.2, raio * 2.2, raio * 2.2) }, Enum.EasingStyle.Back)
+		local runas = anel(ceu, raio * 1.15, cor, 0.2, 20, 0.3)
+		sumir(runas, 0.4, duracao)
+		orbitar(function()
+			return ceu
+		end, { { parte = portal, anel = true, altura = 0, velocidade = 2, fase = 0 } }, duracao)
+	end
 	task.spawn(function()
 		local fim = os.clock() + duracao
+		local contagem = 0
 		while os.clock() < fim do
+			contagem += 1
 			local angulo = math.random() * math.pi * 2
 			local distancia = math.sqrt(math.random()) * raio
 			local chao = centro + Vector3.new(math.cos(angulo) * distancia, 0, math.sin(angulo) * distancia)
-			local topo = ceu + Vector3.new(math.cos(angulo) * distancia * 0.8, 0, math.sin(angulo) * distancia * 0.8)
-			local flecha = parte(Vector3.new(0.15, 0.15, 2.4), CFrame.lookAt(topo, chao), cor:Lerp(BRANCO, 0.3), 0)
-			rastro(flecha, cor, 0.25, 0.12)
-			local tween = animar(flecha, 0.22, { CFrame = CFrame.lookAt(chao + Vector3.new(0, 0.8, 0), chao + (chao - topo).Unit) }, Enum.EasingStyle.Linear)
-			tween.Completed:Once(function()
-				particulas(chao + Vector3.new(0, 0.3, 0), { cor = Color3.fromRGB(200, 185, 160), cor2 = cor, quantidade = 4, tamanho = 0.3, velocidade = 7, vida = 0.25, luz = 0 })
-				sumir({ flecha }, 0.3, 0.5)
-			end)
+			local topo = ceu + Vector3.new(math.cos(angulo) * distancia * 0.5, 0, math.sin(angulo) * distancia * 0.5)
+			flechaCaindo(topo, chao, corPonta, if contagem % 3 == 0 then nomeImpacto else nil)
 			task.wait(0.035)
 		end
 	end)
@@ -1950,7 +2810,26 @@ function Vfx.supremo(dados)
 		nuvemDeTempestade(raiz, dados.cor, 5)
 		Sons.tocar("tempestade", { pos = raiz.Position + Vector3.new(0, 20, 0), alcance = 260 })
 	elseif dados.nome == "Saraivada" then
-		vendaval(raiz, dados.cor, 4)
+		if Vfx.temPrefab("VendavalArqueiro") then
+			-- estouro verde em volta e um redemoinho de vento que acompanha o Arqueiro
+			Sons.tocar("giro", { pai = raiz, tom = 1.3, volume = 0.6 })
+			Vfx.prefab("SaraivadaInicio", CFrame.new(raiz.Position - Vector3.new(0, 1, 0)), nil, 0.25)
+			Vfx.prefab("VendavalArqueiro", function()
+				return if raiz.Parent then CFrame.new(raiz.Position - Vector3.new(0, 1.5, 0)) else nil
+			end, 4, 1.4)
+		else
+			vendaval(raiz, dados.cor, 4)
+		end
+	elseif dados.nome == "Lâminas da Noite" and Vfx.temPrefab("OlhosVermelhos") then
+		-- explosão vermelha e preta subindo do chão e os olhos acendem enquanto ele caça
+		local chao = raiz.Position - Vector3.new(0, 2.5, 0)
+		Vfx.prefab("InvestidaFim", CFrame.new(chao) * CFrame.Angles(math.pi / 2, 0, 0), nil, 0.3)
+		local cabeca = raiz.Parent and raiz.Parent:FindFirstChild("Head")
+		if cabeca and cabeca:IsA("BasePart") then
+			Vfx.prefab("OlhosVermelhos", function()
+				return if cabeca.Parent then cabeca.CFrame else nil
+			end, 10 * 0.28 + 0.3, 1)
+		end
 	elseif dados.nome == "Lâminas da Noite" then
 		-- uma lua vermelha aparece no alto
 		local lua = parte(Vector3.one * 6, CFrame.new(raiz.Position + Vector3.new(0, 30, 0)), Color3.fromRGB(255, 70, 90), 0.2, Enum.PartType.Ball)
@@ -1958,6 +2837,483 @@ function Vfx.supremo(dados)
 		animar(lua, 0.5, { Size = Vector3.one * 12 }, Enum.EasingStyle.Back)
 		sumir({ lua }, 0.6, 3)
 	end
+end
+
+------------------------------------------------------------------------
+-- Cavaleiro: tornado, vento da carga e barreira do escudo
+------------------------------------------------------------------------
+
+--[[ Tornado do ataque carregado: nasce na frente do Cavaleiro quando a espada desce (saida)
+	e anda de "de" até "ate" (no chão) em "duracao" segundos ]]
+function Vfx.tornado(dados)
+	local de: Vector3, ate: Vector3 = dados.de, dados.ate
+	local raio = dados.raio or 6
+	local perfeito = dados.perfeito == true
+	local cor = if perfeito then dados.cor:Lerp(OURO, 0.35) else dados.cor
+	if dados.fogo then
+		cor = if perfeito then FOGO:Lerp(OURO, 0.3) else FOGO
+	end
+	local altura = raio * 2.3
+	task.delay(dados.saida or 0, function()
+		Sons.tocar("espadaPesada", { pos = de, tom = 0.8, volume = 1.2 })
+		Sons.tocar("giro", { pos = de, tom = 0.75, volume = 1 })
+		-- o vento acompanha o tornado enquanto ele anda (som que já vem com o Roblox)
+		local ventoAncora = ancora(de)
+		Sons.tocar("vento", { pai = ventoAncora, duracao = dados.duracao, tom = 0.8 })
+		Debris:AddItem(ventoAncora, dados.duracao + 1)
+		task.spawn(function()
+			local inicioVento = os.clock()
+			while ventoAncora.Parent and os.clock() - inicioVento < dados.duracao do
+				ventoAncora.WorldPosition = de:Lerp(ate, (os.clock() - inicioVento) / dados.duracao)
+				task.wait(0.05)
+			end
+		end)
+		Vfx.tremerEm(de, if perfeito then 1.6 else 1.1, 0.25)
+		local substituir = Vfx.temPrefab("Tornado")
+		-- a espada bate no chão: pancada do pacote de VFX no ponto de saída (no lugar da onda feita por código)
+		local lancamento = Vfx.prefab("LancamentoTornado", CFrame.new(de + Vector3.new(0, 0.3, 0)), nil, 0.4) ~= nil
+		if not substituir and not lancamento then
+			-- a espada bate no chão: onda e poeira no ponto de saída
+			local onda = disco(de + Vector3.new(0, 0.15, 0), 2, cor:Lerp(BRANCO, 0.4), 0.2)
+			animar(onda, 0.3, { Size = Vector3.new(0.12, raio * 3, raio * 3), Transparency = 1 })
+			Debris:AddItem(onda, 0.35)
+			poeiraNoChao(de + Vector3.new(0, 0.4, 0), raio, 16)
+			riscos(de + Vector3.new(0, 1, 0), cor, 20, 45)
+		end
+
+		local centroAtual = de
+		local terminou = false
+		if dados.fogo then
+			-- tornado de fogo: chamas fortes acompanham o funil enquanto ele anda
+			Vfx.prefab("TornadoFogo", function()
+				return if terminou then nil else CFrame.new(centroAtual + Vector3.new(0, 1, 0))
+			end, dados.duracao + 0.4, raio / 3)
+		end
+		-- o tornado do pacote de VFX (azul; de fogo com uma carta de fogo)
+		local nomeTornado = if dados.fogo and Vfx.temPrefab("TornadoChamas") then "TornadoChamas" else "Tornado"
+		substituir = Vfx.temPrefab(nomeTornado)
+		local pararPrefab = Vfx.prefab(nomeTornado, function()
+			return if terminou then nil else CFrame.lookAt(centroAtual, centroAtual + (ate - de) + Vector3.new(0, 0, 0.001))
+		end, dados.duracao + 0.4, raio / 6)
+		if substituir then
+			local inicio = os.clock()
+			local conexao
+			conexao = RunService.RenderStepped:Connect(function()
+				local k = math.min(1, (os.clock() - inicio) / dados.duracao)
+				centroAtual = de:Lerp(ate, k)
+				if k >= 1 then
+					conexao:Disconnect()
+					terminou = true
+				end
+			end)
+			return
+		end
+
+		local funilFora = funil(raio, altura, cor, 6, 0.2, if perfeito then OURO else nil)
+		local funilDentro = funil(raio * 0.55, altura * 0.85, cor:Lerp(BRANCO, 0.5), 4, 0.35)
+		-- miolo do tornado: colunas com material de campo de força (brilho que se mexe sozinho)
+		local miolo1 = parte(Vector3.new(altura * 0.55, raio * 0.55, raio * 0.55), CFrame.new(de), cor:Lerp(BRANCO, 0.35), 0.35, Enum.PartType.Cylinder, Enum.Material.ForceField)
+		local miolo2 = parte(Vector3.new(altura * 0.5, raio * 1.1, raio * 1.1), CFrame.new(de), cor, 0.45, Enum.PartType.Cylinder, Enum.Material.ForceField)
+		local brilhoChao = disco(de, raio * 2.2, cor, 0.72)
+		-- pedras e faíscas girando em espiral
+		local detritos = {}
+		for i = 1, 12 do
+			local pedra = parte(Vector3.one * (0.35 + math.random() * 0.45), CFrame.new(de), Color3.fromRGB(125, 115, 105), 0, nil, Enum.Material.Slate)
+			table.insert(detritos, { parte = pedra, fase = i * 0.52, velocidade = 8 + math.random() * 5, subida = 1.2 + math.random() * 1.6, raioK = 0.35 + math.random() * 0.6 })
+		end
+		-- base: poeira girando, faíscas subindo e luz
+		local base = ancora(de)
+		local poeira = emissorEm(base, {
+			Texture = TEXTURA_FUMACA,
+			Color = ColorSequence.new(POEIRA),
+			LightInfluence = 1,
+			Transparency = sequencia({ { 0, 0.4 }, { 1, 1 } }),
+			Size = sequencia({ { 0, raio * 0.3 }, { 1, raio * 0.7 } }),
+			Lifetime = NumberRange.new(0.5, 0.8),
+			Speed = NumberRange.new(raio * 1.4, raio * 2.2),
+			Drag = 4,
+			SpreadAngle = Vector2.new(10, 180),
+			EmissionDirection = Enum.NormalId.Right,
+			Rotation = NumberRange.new(0, 360),
+			RotSpeed = NumberRange.new(-90, 90),
+			Rate = 45,
+		})
+		local brilhos = emissorEm(base, {
+			Color = ColorSequence.new(BRANCO, cor),
+			LightEmission = 1,
+			Size = sequencia({ { 0, 0.45 }, { 1, 0 } }),
+			Lifetime = NumberRange.new(0.6, 1),
+			Speed = NumberRange.new(8, 16),
+			Acceleration = Vector3.new(0, 10, 0),
+			SpreadAngle = Vector2.new(30, 30),
+			Rate = 45,
+		})
+		luzEm(base, cor, raio * 3, 3)
+
+		local inicio = os.clock()
+		local conexao
+		conexao = RunService.RenderStepped:Connect(function()
+			local t = os.clock() - inicio
+			local k = math.min(1, t / dados.duracao)
+			local centro = de:Lerp(ate, k)
+			centroAtual = centro
+			-- nasce rápido, balança um pouco enquanto anda
+			local escala = math.min(1, 0.3 + t / 0.2 * 0.7)
+			local balanco = Vector3.new(math.sin(t * 7) * 0.4, 0, math.cos(t * 5.3) * 0.4)
+			local c = centro + balanco
+			funilFora.atualizar(c, t, escala)
+			funilDentro.atualizar(c, t * 1.3 + 2, escala)
+			miolo1.CFrame = CFrame.new(c + Vector3.new(0, altura * 0.28 * escala, 0)) * CFrame.Angles(0, -t * 9, 0) * EM_PE
+			miolo2.CFrame = CFrame.new(c + Vector3.new(0, altura * 0.62 * escala, 0)) * CFrame.Angles(0, t * 7, 0) * EM_PE
+			brilhoChao.CFrame = CFrame.new(centro + Vector3.new(0, 0.12, 0)) * EM_PE
+			base.WorldCFrame = CFrame.new(centro + Vector3.new(0, 0.3, 0)) * CFrame.Angles(0, t * 8, 0)
+			for _, d in detritos do
+				local a = d.fase + t * d.velocidade
+				local h = (d.fase + t * d.subida) % 1
+				local r = raio * escala * d.raioK * (0.4 + 0.8 * h)
+				d.parte.CFrame = CFrame.new(c + Vector3.new(math.cos(a) * r, h * altura * 0.9, math.sin(a) * r)) * CFrame.Angles(a, a * 1.4, 0)
+			end
+			if k >= 1 then
+				conexao:Disconnect()
+				terminou = true
+				-- desfaz: o funil abre, sobe e some
+				funilFora.parar(0.35)
+				funilDentro.parar(0.3)
+				for _, p in { miolo1, miolo2, brilhoChao } do
+					animar(p, 0.35, { Transparency = 1, Size = p.Size * Vector3.new(1.2, 1.3, 1.3) })
+					Debris:AddItem(p, 0.4)
+				end
+				for _, d in detritos do
+					d.parte.Anchored = false
+					d.parte.AssemblyLinearVelocity = Vector3.new(math.random(-20, 20), math.random(15, 30), math.random(-20, 20))
+					sumir({ d.parte }, 0.3, 0.5)
+				end
+				poeira.Enabled = false
+				brilhos.Enabled = false
+				poeiraNoChao(centro + Vector3.new(0, 0.4, 0), raio, 12)
+				Debris:AddItem(base, 1)
+				if pararPrefab then
+					pararPrefab()
+				end
+			end
+		end)
+	end)
+end
+
+--[[ Vento da carga do Cavaleiro: círculo mágico girando no chão, funil de vento em volta e
+	brilhos sendo sugados para o corpo. "carga()" diz de 0 a 1 o quanto já carregou.
+	Devolve a função que apaga o efeito. ]]
+function Vfx.ventoCarga(personagem: Model, cor: Color3, carga: (() -> number)?): () -> ()
+	local raiz = personagem:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local humanoid = personagem:FindFirstChildOfClass("Humanoid")
+	if not raiz then
+		return function() end
+	end
+	local function ondeEsta(): CFrame?
+		if not raiz.Parent then
+			return nil
+		end
+		return CFrame.new(raiz.Position.X, chaoDe(raiz, humanoid), raiz.Position.Z)
+	end
+	local substituir = Vfx.temPrefab("CargaCavaleiro")
+	local apagado = false
+	-- o anel de energia do pacote fica na altura da espada girando acima da cabeça
+	local ALTURA_ESPADA = Vector3.new(0, 2.3, 0)
+	local pararPrefab = Vfx.prefab("CargaCavaleiro", function()
+		return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position + ALTURA_ESPADA)
+	end, 0, 1.4)
+	if substituir then
+		-- partículas do pacote de VFX: energia azul subindo em volta do corpo enquanto carrega;
+		-- quando a carga enche, um estouro dourado e um brilho dourado na espada
+		local pararAura = Vfx.prefab("CargaAura", function()
+			return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position)
+		end, 0, 1.3)
+		local pararBrilho: (() -> ())? = nil
+		local luz = Instance.new("PointLight")
+		luz.Color = cor
+		luz.Range = 14
+		luz.Brightness = 0
+		luz.Parent = raiz
+		local cheio = false
+		local conexao
+		conexao = RunService.RenderStepped:Connect(function()
+			if apagado or not raiz.Parent then
+				conexao:Disconnect()
+				if pararAura then
+					pararAura()
+				end
+				if pararBrilho then
+					pararBrilho()
+				end
+				animar(luz, 0.2, { Brightness = 0 })
+				Debris:AddItem(luz, 0.3)
+				return
+			end
+			local nivel = if carga then carga() else 1
+			luz.Brightness = 0.6 + 2 * nivel
+			if nivel >= 1 and not cheio then
+				cheio = true
+				luz.Color = OURO
+				Vfx.prefab("CargaCheia", CFrame.new(raiz.Position + ALTURA_ESPADA), nil, 0.8)
+				pararBrilho = Vfx.prefab("CargaBrilhoCheia", function()
+					return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position + ALTURA_ESPADA)
+				end, 0, 1.6)
+			end
+		end)
+		return function()
+			apagado = true
+			if pararPrefab then
+				pararPrefab()
+			end
+		end
+	end
+
+	-- círculo mágico: dois anéis, um hexagrama e runas, girando em sentidos opostos
+	local RAIO_FORA, RAIO_DENTRO = 4.6, 3.3
+	local pecas = {} -- { parte, raio, angulo, giro (sentido), comprimento?, tipo }
+	local function anelDePecas(r: number, n: number, giro: number, largura: number)
+		for i = 1, n do
+			local p = parte(Vector3.new(largura, 0.08, 2 * math.pi * r / n * 1.08), CFrame.new(), cor, 1)
+			table.insert(pecas, { parte = p, raio = r, angulo = i / n * math.pi * 2, giro = giro, tipo = "anel" })
+		end
+	end
+	anelDePecas(RAIO_FORA, 24, 0.7, 0.22)
+	anelDePecas(RAIO_FORA - 0.45, 24, 0.7, 0.08)
+	anelDePecas(RAIO_DENTRO, 18, -1.1, 0.14)
+	-- hexagrama: 6 linhas entre pontos do anel de dentro (dois triângulos)
+	local lado = RAIO_DENTRO * math.sqrt(3)
+	for i = 0, 5 do
+		local p = parte(Vector3.new(0.12, 0.08, lado), CFrame.new(), cor, 1)
+		table.insert(pecas, { parte = p, raio = RAIO_DENTRO / 2, angulo = i * math.pi / 3 + math.pi / 6, giro = -1.1, tipo = "linha" })
+	end
+	for i = 0, 5 do
+		local runa = parte(Vector3.new(0.5, 0.1, 0.5), CFrame.new(), cor:Lerp(BRANCO, 0.4), 1)
+		table.insert(pecas, { parte = runa, raio = RAIO_FORA - 0.22, angulo = i * math.pi / 3, giro = 0.7, tipo = "runa" })
+	end
+	local vento = funil(3.4, 5.5, cor, 3, 0.5)
+	-- brilhos vindo de fora para dentro (esfera invisível que emite para o centro)
+	local esfera = parte(Vector3.one * 10, CFrame.new(raiz.Position), cor, 1, Enum.PartType.Ball)
+	local sugados = emissorEm(esfera, {
+		Color = ColorSequence.new(BRANCO, cor),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0 }, { 0.3, 0.35 }, { 1, 0.1 } }),
+		Lifetime = NumberRange.new(0.45, 0.55),
+		Speed = NumberRange.new(9, 11),
+		Shape = Enum.ParticleEmitterShape.Sphere,
+		ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface,
+		ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward,
+		Rate = 30,
+	})
+	local luz = Instance.new("PointLight")
+	luz.Color = cor
+	luz.Range = 14
+	luz.Brightness = 0
+	luz.Parent = esfera
+
+	local inicio = os.clock()
+	local cheio = false
+	local sumindo: number? = nil
+	local conexao
+	conexao = RunService.RenderStepped:Connect(function()
+		local agora = os.clock()
+		local t = agora - inicio
+		local onde = ondeEsta()
+		local fim = if sumindo then math.clamp((agora - sumindo) / 0.25, 0, 1) else 0
+		if not onde or fim >= 1 then
+			conexao:Disconnect()
+			vento.parar(0.15)
+			for _, item in pecas do
+				item.parte:Destroy()
+			end
+			sugados.Enabled = false
+			Debris:AddItem(esfera, 0.6)
+			return
+		end
+		local nivel = if carga then carga() else math.min(1, t / 1.1)
+		if nivel >= 1 and not cheio then
+			-- carga cheia: o círculo fica dourado e dá um pulso
+			cheio = true
+			local pulso = disco(onde.Position + Vector3.new(0, 0.2, 0), RAIO_FORA * 2, OURO, 0.2)
+			animar(pulso, 0.35, { Size = Vector3.new(0.12, RAIO_FORA * 3.2, RAIO_FORA * 3.2), Transparency = 1 })
+			Debris:AddItem(pulso, 0.4)
+			for _, item in pecas do
+				item.parte.Color = if item.tipo == "runa" then BRANCO else OURO
+			end
+			sugados.Color = ColorSequence.new(BRANCO, OURO)
+			luz.Color = OURO
+		end
+		local abrir = math.min(1, t / 0.3)
+		abrir = 1 - (1 - abrir) ^ 3
+		local escala = abrir * (1 - 0.4 * fim)
+		local transparencia = 1 - (0.25 + 0.55 * nivel) * abrir * (1 - fim)
+		if cheio then
+			transparencia = math.max(0, transparencia - 0.15 - 0.1 * math.sin(t * 16))
+		end
+		local centro = onde.Position + Vector3.new(0, 0.12, 0)
+		for _, item in pecas do
+			local a = item.angulo + t * item.giro * (1 + nivel)
+			local r = item.raio * escala
+			local pos = centro + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
+			if item.tipo == "linha" then
+				-- linha tangente ao círculo de raio r (forma o hexagrama)
+				item.parte.CFrame = CFrame.lookAt(pos, pos + Vector3.new(-math.sin(a), 0, math.cos(a)))
+				item.parte.Size = Vector3.new(0.12, 0.08, RAIO_DENTRO * math.sqrt(3) * escala)
+			elseif item.tipo == "runa" then
+				item.parte.CFrame = CFrame.new(pos) * CFrame.Angles(0, a + t * 3, 0)
+			else
+				item.parte.CFrame = CFrame.lookAt(pos, centro) * CFrame.Angles(0, math.rad(90), 0)
+			end
+			item.parte.Transparency = transparencia
+		end
+		vento.atualizar(onde.Position, t, (0.6 + 0.4 * nivel) * escala)
+		esfera.CFrame = CFrame.new(raiz.Position)
+		sugados.Rate = if sumindo then 0 else 15 + 45 * nivel
+		luz.Brightness = (1 + 2.5 * nivel) * (1 - fim)
+	end)
+	return function()
+		if not sumindo then
+			sumindo = os.clock()
+		end
+		apagado = true
+		if pararPrefab then
+			pararPrefab()
+		end
+	end
+end
+
+--[[ Barreira do escudo: enquanto o Cavaleiro defende, uma parede de energia aparece na frente
+	do escudo e acompanha o braço. Devolve a função que apaga a barreira. ]]
+function Vfx.barreiraEscudo(personagem: Model, cor: Color3): () -> ()
+	local acessorios = personagem:FindFirstChild("AcessoriosDeClasse")
+	local escudo = if acessorios then acessorios:FindFirstChild("Escudo") :: BasePart? else nil
+	if not escudo then
+		return function() end
+	end
+	-- estouro de energia quando o escudo chega na frente (mostra que a defesa ligou)
+	task.delay(0.1, function()
+		if escudo.Parent then
+			Vfx.prefab("EscudoAtivado", escudo.CFrame * CFrame.new(-0.5, 0, 0), nil, 1.2)
+		end
+	end)
+	local substituir = Vfx.temPrefab("EscudoErguido")
+	local apagado = false
+	local pararPrefab = Vfx.prefab("EscudoErguido", function()
+		return if apagado or not escudo.Parent then nil else escudo.CFrame * CFrame.new(-0.4, 0, 0)
+	end, 0)
+	if substituir then
+		return function()
+			apagado = true
+			if pararPrefab then
+				pararPrefab()
+			end
+		end
+	end
+	local TAMANHO = 4.6
+	local clara = cor:Lerp(BRANCO, 0.35)
+	-- o cilindro tem o eixo no X, igual à "frente" do escudo
+	local barreira = parte(Vector3.new(0.06, 1, 1), escudo.CFrame, clara, 0.1, Enum.PartType.Cylinder, Enum.Material.ForceField)
+	local borda = parte(Vector3.new(0.04, 1, 1), escudo.CFrame, cor, 0.7, Enum.PartType.Cylinder)
+	local faiscas = emissorEm(barreira, {
+		Color = ColorSequence.new(BRANCO, cor),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.25 }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.3, 0.5),
+		Speed = NumberRange.new(1, 3),
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 14,
+	})
+	local luz = Instance.new("PointLight")
+	luz.Color = cor
+	luz.Range = 9
+	luz.Brightness = 1.6
+	luz.Parent = barreira
+	-- clarão ao erguer
+	local anelErguer = parte(Vector3.new(0.05, 2, 2), escudo.CFrame * CFrame.new(-0.4, 0, 0), BRANCO, 0.2, Enum.PartType.Cylinder)
+	animar(anelErguer, 0.22, { Size = Vector3.new(0.05, 7, 7), Transparency = 1 })
+	Debris:AddItem(anelErguer, 0.25)
+
+	local inicio = os.clock()
+	local sumindo: number? = nil
+	local conexao
+	conexao = RunService.RenderStepped:Connect(function()
+		local agora = os.clock()
+		local t = agora - inicio
+		local fim = if sumindo then math.clamp((agora - sumindo) / 0.15, 0, 1) else 0
+		if not escudo.Parent or fim >= 1 then
+			conexao:Disconnect()
+			barreira:Destroy()
+			borda:Destroy()
+			return
+		end
+		-- abre com um "estalo" (passa um pouco do tamanho e volta) e pulsa de leve
+		local abrir = math.min(1, t / 0.12)
+		local estalo = if abrir < 1 then abrir * 1.15 else 1 + math.max(0, 0.15 - (t - 0.12) * 1.2)
+		local d = TAMANHO * estalo * (1 - 0.5 * fim) + math.sin(t * 6) * 0.08
+		barreira.Size = Vector3.new(0.06, d, d)
+		borda.Size = Vector3.new(0.04, d + 0.35, d + 0.35)
+		barreira.CFrame = escudo.CFrame * CFrame.new(-0.42, 0, 0)
+		borda.CFrame = escudo.CFrame * CFrame.new(-0.36, 0, 0)
+		barreira.Transparency = 0.1 + 0.9 * fim
+		borda.Transparency = 0.7 + 0.3 * fim + math.sin(t * 9) * 0.06
+	end)
+	return function()
+		if not sumindo then
+			sumindo = os.clock()
+			faiscas.Enabled = false
+		end
+		apagado = true
+		if pararPrefab then
+			pararPrefab()
+		end
+	end
+end
+------------------------------------------------------------------------
+-- Brilho do supremo do Cavaleiro: enquanto dura o bônus (recebe menos dano), o corpo fica com
+-- um contorno brilhante azul e dourado que pulsa de leve, e uma luz em volta
+------------------------------------------------------------------------
+
+function Vfx.auraSupremo(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	local personagem = raiz.Parent :: Model
+	local duracao = dados.duracao or 10
+	local cor = dados.cor or Color3.fromRGB(86, 156, 255)
+	local brilho = Instance.new("Highlight")
+	brilho.Name = "BrilhoSupremo"
+	brilho.Adornee = personagem
+	brilho.DepthMode = Enum.HighlightDepthMode.Occluded
+	brilho.FillColor = cor:Lerp(BRANCO, 0.25)
+	brilho.OutlineColor = OURO
+	brilho.FillTransparency = 1
+	brilho.OutlineTransparency = 1
+	brilho.Parent = personagem
+	local luz = Instance.new("PointLight")
+	luz.Color = cor:Lerp(OURO, 0.3)
+	luz.Range = 14
+	luz.Brightness = 0
+	luz.Parent = raiz
+	clarearTela(raiz.Position, cor, 0.2, 0.4)
+	local inicio = os.clock()
+	local conexao
+	conexao = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - inicio
+		if t > duracao or not brilho.Parent then
+			conexao:Disconnect()
+			animar(brilho, 0.5, { FillTransparency = 1, OutlineTransparency = 1 })
+			animar(luz, 0.5, { Brightness = 0 })
+			Debris:AddItem(brilho, 0.6)
+			Debris:AddItem(luz, 0.6)
+			return
+		end
+		-- entra em 0,3s e pulsa devagar
+		local entrar = math.min(1, t / 0.3)
+		local pulso = (math.sin(t * 4) + 1) / 2
+		brilho.FillTransparency = 1 - entrar * (0.12 + 0.1 * pulso)
+		brilho.OutlineTransparency = 1 - entrar * (0.55 + 0.35 * pulso)
+		luz.Brightness = entrar * (1.6 + 0.8 * pulso)
+	end)
 end
 
 ------------------------------------------------------------------------

@@ -193,6 +193,10 @@ local function tentarAtacar()
 					arco = stats.arco * (if final then 1.25 else 1),
 					cor = classe.cor,
 					combo = combo,
+					giro = final and classe.id == "cavaleiro",
+					cavaleiro = classe.id == "cavaleiro",
+					assassino = classe.id == "assassino",
+					fogo = stats.fogo == true,
 				})
 			end)
 		end
@@ -257,12 +261,10 @@ local function soltarCarga()
 	if Estado.modo == "partida" and stats then
 		local classe = Classes.obter(stats.classe)
 		if classe.id == "cavaleiro" then
-			Vfx.giroCarregado({
-				jogador = jogador,
-				raio = stats.alcance * (1.25 + 0.3 * fracao),
-				cor = classe.cor,
-				perfeito = fracao >= 0.99,
-			})
+			-- o tornado vem do servidor (sai junto com o corte, em 0,14s); aqui só o tranco
+			task.delay(0.14, function()
+				Vfx.tremer(0.5 + 0.7 * fracao, 0.2)
+			end)
 		elseif classe.id == "assassino" then
 			-- Investida Letal: dispara para frente (mesma distância que o servidor usa)
 			local distancia = 12 + 6 * fracao
@@ -362,20 +364,25 @@ local function esquivar()
 	end
 	direcao = if direcao.Magnitude > 0.01 then direcao.Unit else Vector3.new(0, 0, -1)
 
+	-- cada classe pode ter a própria esquiva (o rolamento do Cavaleiro é mais longo)
+	local dash = Classes.obter(minhaClasse()).esquiva
+	local velocidade = if dash then dash.velocidade else Config.ESQUIVA_VELOCIDADE
+	local duracaoDash = if dash then dash.duracao else Config.ESQUIVA_DURACAO
+
 	local anexo = Instance.new("Attachment")
 	anexo.Parent = raiz
 	local impulso = Instance.new("LinearVelocity")
 	impulso.Attachment0 = anexo
 	impulso.MaxForce = 1e7
 	impulso.RelativeTo = Enum.ActuatorRelativeTo.World
-	impulso.VectorVelocity = direcao * Config.ESQUIVA_VELOCIDADE
+	impulso.VectorVelocity = direcao * velocidade
 	impulso.Parent = raiz
-	Debris:AddItem(impulso, Config.ESQUIVA_DURACAO)
-	Debris:AddItem(anexo, Config.ESQUIVA_DURACAO)
+	Debris:AddItem(impulso, duracaoDash)
+	Debris:AddItem(anexo, duracaoDash)
 
 	-- o corpo vira para onde vai, para a animação da esquiva fazer sentido
 	direcaoAtual = direcao
-	mirandoAte = agora + Config.ESQUIVA_DURACAO + 0.1
+	mirandoAte = agora + duracaoDash + 0.1
 	esquivandoAte = mirandoAte
 	if jogador.Character then
 		Animacoes.tocar(jogador.Character, "esquiva", nil)
