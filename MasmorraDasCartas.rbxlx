@@ -283,6 +283,14 @@ Config.ESQUIVA_INVULNERAVEL = 0.35
 Config.ESQUIVA_VELOCIDADE = 78
 Config.ESQUIVA_DURACAO = 0.17
 
+-- Ataque carregado: segure o ataque para carregar e solte para um golpe mais forte
+Config.CARGA_ATAQUE_COMECA = 0.3 -- segurando por este tempo, começa a carregar
+Config.CARGA_ATAQUE_MIN = 0.3 -- carga mínima para o golpe carregado sair
+Config.CARGA_ATAQUE_MAX = 1.2 -- carga cheia (dano máximo e efeito especial)
+Config.DANO_CARGA_MIN = 1.6 -- multiplicador de dano com carga mínima
+Config.DANO_CARGA_MAX = 3.2 -- multiplicador de dano com carga cheia
+Config.VELOCIDADE_CARREGANDO = 0.5 -- anda mais devagar enquanto carrega
+
 -- Supremo: a barra enche causando dano e derrotando inimigos
 Config.CARGA_MAXIMA = 100
 Config.CARGA_POR_ACERTO = 2.5
@@ -426,8 +434,13 @@ return Config
       <Item class="ModuleScript" referent="RBX00000011">
         <Properties>
           <string name="Name">Armas</string>
-          <ProtectedString name="Source"><![CDATA[-- Armas e acessórios de cada classe, montados com peças (não precisam de modelos externos).
--- A arma é uma Tool: assim o Roblox já cuida de colocá-la na mão e de tocar a animação de golpe.
+          <ProtectedString name="Source"><![CDATA[-- Armas e acessórios de cada classe, montados com peças e presos às mãos do personagem.
+-- (Não usamos Tool: as animações de ataque são feitas por código em Client/Animacoes.)
+--
+-- Peças com nome fixo que a animação procura:
+--   Espada: "Lamina" com os anexos "TrilhaBase" e "TrilhaPonta" (rastro do golpe)
+--   Cajado: "Haste" com o anexo "Ponta" (brilho do cristal)
+--   Arco:   "Arco" com os anexos "CordaCima", "CordaBaixo" e "Encaixe" (corda que estica)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -438,7 +451,7 @@ local Armas = {}
 local OURO = Color3.fromRGB(232, 186, 82)
 local COURO = Color3.fromRGB(92, 58, 34)
 local MADEIRA = Color3.fromRGB(96, 64, 40)
-local DEITADO = CFrame.Angles(0, 0, math.rad(90)) -- deixa um cilindro em pé
+local EM_PE = CFrame.Angles(0, 0, math.rad(90)) -- deixa um cilindro em pé
 
 local function novaPeca(nome: string, tamanho: Vector3, cor: Color3, material: Enum.Material, formato: Enum.PartType?): Part
 	local parte = Instance.new("Part")
@@ -458,7 +471,7 @@ local function novaPeca(nome: string, tamanho: Vector3, cor: Color3, material: E
 end
 
 -- Prende uma peça a outra, na posição relativa indicada
-local function prender(base: BasePart, parte: BasePart, deslocamento: CFrame, pai: Instance)
+local function prender(base: BasePart, parte: BasePart, deslocamento: CFrame, pai: Instance): BasePart
 	parte.CFrame = base.CFrame * deslocamento
 	local solda = Instance.new("WeldConstraint")
 	solda.Part0 = base
@@ -466,6 +479,14 @@ local function prender(base: BasePart, parte: BasePart, deslocamento: CFrame, pa
 	solda.Parent = parte
 	parte.Parent = pai
 	return parte
+end
+
+local function anexo(pai: BasePart, nome: string, posicao: Vector3)
+	local a = Instance.new("Attachment")
+	a.Name = nome
+	a.Position = posicao
+	a.Parent = pai
+	return a
 end
 
 local function brilho(parte: BasePart, cor: Color3, alcance: number, intensidade: number)
@@ -476,110 +497,92 @@ local function brilho(parte: BasePart, cor: Color3, alcance: number, intensidade
 	luz.Parent = parte
 end
 
-local function faiscas(parte: BasePart, cor: Color3, taxa: number)
-	local emissor = Instance.new("ParticleEmitter")
-	emissor.Color = ColorSequence.new(cor)
-	emissor.LightEmission = 1
-	emissor.LightInfluence = 0
-	emissor.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0) })
-	emissor.Transparency = NumberSequence.new(0.2)
-	emissor.Lifetime = NumberRange.new(0.4, 0.8)
-	emissor.Speed = NumberRange.new(0.5, 1.5)
-	emissor.SpreadAngle = Vector2.new(180, 180)
-	emissor.Rate = taxa
-	emissor.Parent = parte
-end
-
--- Segmento entre dois pontos (no espaço da base)
 local function segmento(base: BasePart, pai: Instance, nome: string, a: Vector3, b: Vector3, espessura: number, cor: Color3, material: Enum.Material)
-	local comprimento = (b - a).Magnitude
-	local parte = novaPeca(nome, Vector3.new(espessura, espessura, comprimento), cor, material)
+	local parte = novaPeca(nome, Vector3.new(espessura, espessura, (b - a).Magnitude), cor, material)
 	return prender(base, parte, CFrame.lookAt((a + b) / 2, b), pai)
 end
 
-local function novaFerramenta(nome: string, dica: string): Tool
-	local ferramenta = Instance.new("Tool")
-	ferramenta.Name = nome
-	ferramenta.ToolTip = dica
-	ferramenta.CanBeDropped = false
-	ferramenta.RequiresHandle = true
-	ferramenta.ManualActivationOnly = true -- os ataques vêm do nosso sistema de controles
-	return ferramenta
-end
+------------------------------------------------------------------------
+-- Construção (cada arma é montada na origem; depois é movida para a mão ou o altar)
+------------------------------------------------------------------------
 
-local function criarEspada(cor: Color3): Tool
-	local ferramenta = novaFerramenta("Espada", "Espada do Cavaleiro")
-	-- Pegada da espada clássica do Roblox
-	ferramenta.GripForward = Vector3.new(-1, 0, 0)
-	ferramenta.GripPos = Vector3.new(0, 0, -1.6)
-	ferramenta.GripRight = Vector3.new(0, 1, 0)
-	ferramenta.GripUp = Vector3.new(0, 0, 1)
-
-	local lamina = novaPeca("Handle", Vector3.new(0.32, 0.16, 4.4), Color3.fromRGB(214, 222, 236), Enum.Material.Metal)
+-- Espada: a lâmina vai na direção +Z e a mão segura em z = -1.6
+local function construirEspada(cor: Color3): (Model, BasePart, CFrame)
+	local modelo = Instance.new("Model")
+	modelo.Name = "Espada"
+	local lamina = novaPeca("Lamina", Vector3.new(0.32, 0.16, 4.4), Color3.fromRGB(214, 222, 236), Enum.Material.Metal)
 	lamina.CFrame = CFrame.new()
-	lamina.Parent = ferramenta
-	prender(lamina, novaPeca("Sulco", Vector3.new(0.08, 0.18, 2.9), cor, Enum.Material.Neon), CFrame.new(0, 0, 0.55), ferramenta)
-	prender(lamina, novaPeca("Guarda", Vector3.new(1.6, 0.3, 0.34), OURO, Enum.Material.Metal), CFrame.new(0, 0, -1.15), ferramenta)
-	prender(lamina, novaPeca("Cabo", Vector3.new(0.36, 0.36, 1.05), COURO, Enum.Material.Fabric), CFrame.new(0, 0, -1.75), ferramenta)
-	prender(lamina, novaPeca("Pomo", Vector3.one * 0.5, OURO, Enum.Material.Metal, Enum.PartType.Ball), CFrame.new(0, 0, -2.35), ferramenta)
-	return ferramenta
+	lamina.Parent = modelo
+	prender(lamina, novaPeca("Sulco", Vector3.new(0.08, 0.18, 2.9), cor, Enum.Material.Neon), CFrame.new(0, 0, 0.55), modelo)
+	prender(lamina, novaPeca("Guarda", Vector3.new(1.6, 0.3, 0.34), OURO, Enum.Material.Metal), CFrame.new(0, 0, -1.15), modelo)
+	prender(lamina, novaPeca("Cabo", Vector3.new(0.36, 0.36, 1.05), COURO, Enum.Material.Fabric), CFrame.new(0, 0, -1.75), modelo)
+	prender(lamina, novaPeca("Pomo", Vector3.one * 0.5, OURO, Enum.Material.Metal, Enum.PartType.Ball), CFrame.new(0, 0, -2.35), modelo)
+	anexo(lamina, "TrilhaBase", Vector3.new(0, 0, -0.6))
+	anexo(lamina, "TrilhaPonta", Vector3.new(0, 0, 2.2))
+	modelo.PrimaryPart = lamina
+	-- na mão: lâmina para frente e um pouco para baixo
+	local naMao = CFrame.Angles(math.rad(-20), 0, 0) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, 1.6)
+	return modelo, lamina, naMao
 end
 
-local function criarCajado(cor: Color3): Tool
-	local ferramenta = novaFerramenta("Cajado", "Cajado do Mago")
-	ferramenta.GripPos = Vector3.new(0, -1.2, 0)
-
-	local haste = novaPeca("Handle", Vector3.new(0.3, 6.4, 0.3), MADEIRA, Enum.Material.Wood)
+-- Cajado: em pé (eixo Y), a mão segura em y = -1.2
+local function construirCajado(cor: Color3): (Model, BasePart, CFrame)
+	local modelo = Instance.new("Model")
+	modelo.Name = "Cajado"
+	local haste = novaPeca("Haste", Vector3.new(0.3, 6.4, 0.3), MADEIRA, Enum.Material.Wood)
 	haste.CFrame = CFrame.new()
-	haste.Parent = ferramenta
-	prender(haste, novaPeca("Ponteira", Vector3.new(0.4, 0.4, 0.4), OURO, Enum.Material.Metal), CFrame.new(0, -3.2, 0), ferramenta)
-	prender(haste, novaPeca("Garra", Vector3.new(0.9, 0.25, 0.25), OURO, Enum.Material.Metal), CFrame.new(0, 3.05, 0), ferramenta)
-	prender(haste, novaPeca("Garra2", Vector3.new(0.25, 0.25, 0.9), OURO, Enum.Material.Metal), CFrame.new(0, 3.05, 0), ferramenta)
-	local cristal = prender(
-		haste,
-		novaPeca("Cristal", Vector3.new(0.75, 1.2, 0.75), cor, Enum.Material.Neon),
-		CFrame.new(0, 3.75, 0) * CFrame.Angles(0, math.rad(45), 0),
-		ferramenta
-	)
+	haste.Parent = modelo
+	prender(haste, novaPeca("Ponteira", Vector3.new(0.4, 0.4, 0.4), OURO, Enum.Material.Metal), CFrame.new(0, -3.2, 0), modelo)
+	prender(haste, novaPeca("Garra", Vector3.new(0.9, 0.25, 0.25), OURO, Enum.Material.Metal), CFrame.new(0, 3.05, 0), modelo)
+	prender(haste, novaPeca("Garra2", Vector3.new(0.25, 0.25, 0.9), OURO, Enum.Material.Metal), CFrame.new(0, 3.05, 0), modelo)
+	local cristal = prender(haste, novaPeca("Cristal", Vector3.new(0.75, 1.2, 0.75), cor, Enum.Material.Neon), CFrame.new(0, 3.75, 0) * CFrame.Angles(0, math.rad(45), 0), modelo)
 	local anel = novaPeca("Anel", Vector3.new(0.12, 1.7, 1.7), OURO, Enum.Material.Metal, Enum.PartType.Cylinder)
-	anel.Transparency = 0.1
-	prender(haste, anel, CFrame.new(0, 3.75, 0) * CFrame.Angles(math.rad(70), 0, 0), ferramenta)
+	prender(haste, anel, CFrame.new(0, 3.75, 0) * CFrame.Angles(math.rad(70), 0, 0), modelo)
 	brilho(cristal, cor, 12, 2)
-	faiscas(cristal, cor, 8)
-	return ferramenta
+	anexo(haste, "Ponta", Vector3.new(0, 3.75, 0))
+	modelo.PrimaryPart = haste
+	return modelo, haste, CFrame.new(0, 1.2, 0)
 end
 
-local function criarArco(cor: Color3): Tool
-	local ferramenta = novaFerramenta("Arco", "Arco do Arqueiro")
-	ferramenta.GripPos = Vector3.new(0, 0, 0)
-
-	local empunhadura = novaPeca("Handle", Vector3.new(0.34, 1, 0.34), COURO, Enum.Material.Fabric)
+-- Arco: em pé (eixo Y); os braços curvam para +Z (para quem segura). A corda é desenhada
+-- no computador de cada jogador, para poder esticar na animação.
+local function construirArco(cor: Color3): (Model, BasePart, CFrame)
+	local modelo = Instance.new("Model")
+	modelo.Name = "Arco"
+	local empunhadura = novaPeca("Arco", Vector3.new(0.34, 1, 0.34), COURO, Enum.Material.Fabric)
 	empunhadura.CFrame = CFrame.new()
-	empunhadura.Parent = ferramenta
-	-- Os braços do arco curvam para trás (na direção de quem segura); a corda liga as pontas
+	empunhadura.Parent = modelo
 	local pontos = { Vector3.new(0, 0.5, 0), Vector3.new(0, 1.5, 0.18), Vector3.new(0, 2.35, 0.6) }
 	for lado = -1, 1, 2 do
 		for i = 1, #pontos - 1 do
 			local a = Vector3.new(0, pontos[i].Y * lado, pontos[i].Z)
 			local b = Vector3.new(0, pontos[i + 1].Y * lado, pontos[i + 1].Z)
-			segmento(empunhadura, ferramenta, "Braco", a, b, 0.26, MADEIRA, Enum.Material.Wood)
+			segmento(empunhadura, modelo, "Braco", a, b, 0.26, MADEIRA, Enum.Material.Wood)
 		end
-		prender(empunhadura, novaPeca("Ponta", Vector3.one * 0.32, OURO, Enum.Material.Metal), CFrame.new(0, 2.35 * lado, 0.6), ferramenta)
+		prender(empunhadura, novaPeca("Ponta", Vector3.one * 0.32, OURO, Enum.Material.Metal), CFrame.new(0, 2.35 * lado, 0.6), modelo)
 	end
-	local corda = segmento(empunhadura, ferramenta, "Corda", Vector3.new(0, 2.3, 0.62), Vector3.new(0, -2.3, 0.62), 0.07, cor, Enum.Material.Neon)
-	corda.Transparency = 0.2
-	return ferramenta
+	prender(empunhadura, novaPeca("Gema", Vector3.one * 0.3, cor, Enum.Material.Neon, Enum.PartType.Ball), CFrame.new(0, 0, -0.2), modelo)
+	anexo(empunhadura, "CordaCima", Vector3.new(0, 2.32, 0.62))
+	anexo(empunhadura, "CordaBaixo", Vector3.new(0, -2.32, 0.62))
+	anexo(empunhadura, "Encaixe", Vector3.new(0, 0, 0.62))
+	modelo.PrimaryPart = empunhadura
+	-- na mão esquerda: fica em pé quando o braço aponta para frente
+	return modelo, empunhadura, CFrame.Angles(math.rad(-90), 0, 0)
 end
 
-function Armas.criarArma(classe: string): Tool
+local function construir(classe: string): (Model, BasePart, CFrame)
 	local dados = Classes.obter(classe)
 	if dados.id == "mago" then
-		return criarCajado(dados.cor)
+		return construirCajado(dados.cor)
 	elseif dados.id == "arqueiro" then
-		return criarArco(dados.cor)
+		return construirArco(dados.cor)
 	end
-	return criarEspada(dados.cor)
+	return construirEspada(dados.cor)
 end
+
+------------------------------------------------------------------------
+-- Uso
+------------------------------------------------------------------------
 
 local function parteDoCorpo(personagem: Model, nomes: { string }): BasePart?
 	for _, nome in nomes do
@@ -591,7 +594,26 @@ local function parteDoCorpo(personagem: Model, nomes: { string }): BasePart?
 	return nil
 end
 
--- Acessórios fixos no corpo: escudo do Cavaleiro, manto do Mago, aljava do Arqueiro
+-- Ponto onde a mão segura (R15: centro da mão; R6: ponta do braço)
+local function pegada(mao: BasePart): CFrame
+	if mao.Name == "Right Arm" or mao.Name == "Left Arm" then
+		return mao.CFrame * CFrame.new(0, -1, 0)
+	end
+	return mao.CFrame * CFrame.new(0, -0.15, 0)
+end
+
+-- Modelo parado para exibir num altar
+function Armas.modeloExibicao(classe: string): Model
+	local modelo = construir(classe)
+	for _, peca in modelo:GetDescendants() do
+		if peca:IsA("BasePart") then
+			peca.Anchored = true
+		end
+	end
+	return modelo
+end
+
+-- Coloca a arma na mão e os acessórios da classe no corpo
 function Armas.vestir(personagem: Model, classe: string)
 	local antigo = personagem:FindFirstChild("AcessoriosDeClasse")
 	if antigo then
@@ -600,8 +622,22 @@ function Armas.vestir(personagem: Model, classe: string)
 	local pasta = Instance.new("Model")
 	pasta.Name = "AcessoriosDeClasse"
 	local dados = Classes.obter(classe)
-	local tronco = parteDoCorpo(personagem, { "UpperTorso", "Torso" })
 
+	-- Arma (o arqueiro segura o arco na mão esquerda)
+	local nomesMao = if dados.id == "arqueiro" then { "LeftHand", "Left Arm" } else { "RightHand", "Right Arm" }
+	local mao = parteDoCorpo(personagem, nomesMao)
+	if mao then
+		local arma, base, naMao = construir(classe)
+		arma.Name = "ArmaDeClasse"
+		arma:PivotTo(pegada(mao) * naMao)
+		local solda = Instance.new("WeldConstraint")
+		solda.Part0 = mao
+		solda.Part1 = base
+		solda.Parent = base
+		arma.Parent = pasta
+	end
+
+	local tronco = parteDoCorpo(personagem, { "UpperTorso", "Torso" })
 	if dados.id == "cavaleiro" then
 		local braco = parteDoCorpo(personagem, { "LeftLowerArm", "Left Arm" })
 		if braco then
@@ -615,7 +651,6 @@ function Armas.vestir(personagem: Model, classe: string)
 			prender(escudo, novaPeca("Emblema", Vector3.new(0.34, 0.26, 1.2), dados.cor, Enum.Material.Neon), CFrame.new(-0.03, 0.25, 0), pasta)
 		end
 	elseif dados.id == "mago" and tronco then
-		-- Ombreiras com cristais flutuando
 		for lado = -1, 1, 2 do
 			local ombro = prender(tronco, novaPeca("Ombreira", Vector3.new(1.1, 0.5, 1.2), Color3.fromRGB(70, 40, 110), Enum.Material.Fabric), CFrame.new(lado * 1.05, 0.75, 0), pasta)
 			prender(ombro, novaPeca("Gema", Vector3.one * 0.32, dados.cor, Enum.Material.Neon), CFrame.new(0, 0.3, -0.45), pasta)
@@ -624,7 +659,7 @@ function Armas.vestir(personagem: Model, classe: string)
 		local aljava = prender(
 			tronco,
 			novaPeca("Aljava", Vector3.new(2.3, 0.75, 0.75), COURO, Enum.Material.Fabric, Enum.PartType.Cylinder),
-			CFrame.new(0.35, 0.2, 0.75) * DEITADO * CFrame.Angles(math.rad(-20), 0, 0),
+			CFrame.new(0.35, 0.2, 0.75) * EM_PE * CFrame.Angles(math.rad(-20), 0, 0),
 			pasta
 		)
 		for i = -1, 1 do
@@ -643,7 +678,6 @@ return Armas
           <string name="Name">Combate</string>
           <ProtectedString name="Source"><![CDATA[-- Combate: atributos, combos, habilidades, supremos, esquiva, dano e jogador caído.
 
-local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -788,6 +822,9 @@ function Combate.aplicarVelocidade(estado)
 		return
 	end
 	local fator = if os.clock() < (estado.lentoAte or 0) then estado.lentoFator or 1 else 1
+	if estado.carregandoDesde then
+		fator *= Config.VELOCIDADE_CARREGANDO
+	end
 	humanoid.WalkSpeed = estado.stats.velocidade * fator
 end
 
@@ -814,39 +851,20 @@ function Combate.aplicarStats(estado, curarTudo: boolean?)
 end
 
 function Combate.equipar(estado)
-	local player = estado.player
-	local personagem = player.Character
-	local humanoid = humanoidDe(estado)
-	if not personagem or not humanoid then
-		return
+	local personagem = estado.player.Character
+	if personagem then
+		Armas.vestir(personagem, estado.classe)
 	end
-	local mochila = player:FindFirstChildOfClass("Backpack")
-	for _, recipiente in { personagem, mochila } do
-		if recipiente then
-			for _, item in recipiente:GetChildren() do
-				if item:IsA("Tool") then
-					item:Destroy()
-				end
-			end
-		end
-	end
-	local arma = Armas.criarArma(estado.classe)
-	arma.Parent = mochila or personagem
-	humanoid:EquipTool(arma)
-	Armas.vestir(personagem, estado.classe)
-	estado.arma = arma
 end
 
--- O script "Animate" padrão do Roblox toca a animação de golpe quando vê este valor
-local function animarArma(estado, nome: string)
-	local arma = estado.arma
-	if arma and arma.Parent and arma.Parent:IsA("Model") then
-		local valor = Instance.new("StringValue")
-		valor.Name = "toolanim"
-		valor.Value = nome
-		valor.Parent = arma
-		Debris:AddItem(valor, 1)
-	end
+-- Avisa os jogadores para tocarem uma animação no personagem (feita em Client/Animacoes).
+-- "exceto" é quem já tocou a animação no próprio computador, na hora do clique.
+local function animar(run, estado, acao: string, dados, exceto: Player?)
+	dados = dados or {}
+	dados.jogador = estado.player
+	dados.acao = acao
+	dados.classe = estado.classe
+	Vfx.partida(run, "anim", dados, exceto)
 end
 
 local function podeAgir(run, estado): boolean
@@ -947,6 +965,7 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		valor = dano,
 		critico = opcoes.critico == true,
 		cor = opcoes.cor,
+		autor = estado and estado.player,
 	})
 
 	if opcoes.empurrar and not inimigo.pesado and inimigo.vida > 0 then
@@ -1060,7 +1079,7 @@ function Combate.derrubar(run, estado)
 	humanoid.Health = 1
 	humanoid.UseJumpPower = true
 	humanoid.JumpPower = 0
-	humanoid:UnequipTools()
+	estado.carregandoDesde = nil
 	humanoid.Sit = true
 	Combate.aplicarVelocidade(estado)
 	definirCaidoNoPersonagem(estado, true)
@@ -1081,9 +1100,6 @@ function Combate.levantar(run, estado, fracaoVida: number)
 	humanoid.Health = math.max(1, humanoid.MaxHealth * fracaoVida)
 	estado.invulneravelAte = os.clock() + 1.5
 	Combate.aplicarVelocidade(estado)
-	if estado.arma and estado.arma.Parent then
-		humanoid:EquipTool(estado.arma)
-	end
 	Vfx.partida(run, "reviver", { jogador = estado.player })
 	Remotos.enviar(estado.player, "levantou", {})
 end
@@ -1291,7 +1307,7 @@ local function rajadaDoDragao(run, estado, raiz: BasePart, direcao: Vector3)
 end
 
 function Combate.atacar(run, estado, direcao: any)
-	if not podeAgir(run, estado) then
+	if not podeAgir(run, estado) or estado.carregandoDesde then
 		return
 	end
 	local stats = estado.stats
@@ -1312,7 +1328,7 @@ function Combate.atacar(run, estado, direcao: any)
 	local raiz = raizDe(estado) :: BasePart
 	local dir = direcaoValida(direcao, raiz)
 	local mult = classe.ataque.combo[estado.combo] or 1
-	animarArma(estado, if classe.id == "arqueiro" then "Lunge" else "Slash")
+	animar(run, estado, "ataque", { combo = estado.combo }, estado.player)
 
 	if classe.ataque.tipo == "corte" then
 		golpeDeEspada(run, estado, classe, raiz, dir, mult, final)
@@ -1322,6 +1338,144 @@ function Combate.atacar(run, estado, direcao: any)
 	if stats.dragao > 0 then
 		rajadaDoDragao(run, estado, raiz, dir)
 	end
+end
+
+------------------------------------------------------------------------
+-- Ataque carregado: segurar o ataque carrega; soltar dispara um golpe mais forte
+------------------------------------------------------------------------
+
+function Combate.carregar(run, estado)
+	if not podeAgir(run, estado) or estado.carregandoDesde then
+		return
+	end
+	estado.carregandoDesde = os.clock()
+	Combate.aplicarVelocidade(estado)
+	animar(run, estado, "carregar", nil, estado.player)
+end
+
+function Combate.cancelarCarga(run, estado)
+	if not estado.carregandoDesde then
+		return
+	end
+	estado.carregandoDesde = nil
+	Combate.aplicarVelocidade(estado)
+	animar(run, estado, "cancelar", nil, estado.player)
+end
+
+local function golpeCarregado(run, estado, classe, raiz: BasePart, direcao: Vector3, fracao: number)
+	local stats = estado.stats
+	local mult = Config.DANO_CARGA_MIN + (Config.DANO_CARGA_MAX - Config.DANO_CARGA_MIN) * fracao
+	local perfeito = fracao >= 0.99
+
+	if classe.id == "cavaleiro" then
+		-- Giro completo com a espada, empurrando todos para longe
+		local raio = stats.alcance * (1.25 + 0.3 * fracao)
+		Vfx.partida(run, "giroCarregado", { jogador = estado.player, raio = raio, cor = classe.cor, perfeito = perfeito }, estado.player)
+		local alvos = {}
+		for _, inimigo in inimigosVivos(run) do
+			if planar(inimigo.raiz.Position - raiz.Position).Magnitude <= raio + inimigo.raio then
+				table.insert(alvos, inimigo)
+			end
+		end
+		for _, inimigo in alvos do
+			local critico = math.random() < stats.critico
+			local fora = planar(inimigo.raiz.Position - raiz.Position)
+			fora = if fora.Magnitude > 0.1 then fora.Unit else direcao
+			Combate.danoAoInimigo(run, inimigo, stats.dano * mult * (if critico then stats.multCritico else 1), estado, {
+				critico = critico,
+				principal = true,
+				empurrar = fora * (40 + 40 * fracao),
+			})
+			if perfeito and inimigo.vivo then
+				Combate.atordoar(inimigo, 1.2)
+			end
+		end
+		if perfeito then
+			local centro = raiz.Position
+			task.delay(0.15, function()
+				if not run.ativa then
+					return
+				end
+				Vfx.partida(run, "explosao", { pos = centro, raio = raio * 1.8, cor = classe.cor, forte = true })
+				Combate.danoEmArea(run, centro, raio * 1.8, stats.dano * 1.2, estado, { semEfeitos = true, cor = classe.cor, empurrarForca = 50 })
+			end)
+		end
+		if stats.dragao > 0 then
+			rajadaDoDragao(run, estado, raiz, direcao)
+		end
+	elseif classe.id == "mago" then
+		-- Orbe enorme e lento que explode forte (atravessa tudo com a carga cheia)
+		local tamanho = (1.8 + 1.4 * fracao) * stats.tamanho
+		local explosao = math.max(stats.explosao, 4) * (1.6 + 1.4 * fracao)
+		local dano = stats.dano * mult
+		Projeteis.disparar(run, {
+			{
+				lado = "jogador",
+				tipo = "orbeCarregado",
+				pos = raiz.Position + direcao * 2 + Vector3.new(0, 1, 0),
+				dir = direcao,
+				velocidade = 42,
+				alcance = stats.alcance * 1.1,
+				raio = 1.2 * tamanho,
+				tamanho = tamanho,
+				perfuracao = if perfeito then 999 else 2,
+				explosao = explosao,
+				aoAcertar = function(inimigo, _, projetil)
+					Combate.danoAoInimigo(run, inimigo, dano, estado, { principal = true, empurrar = projetil.dir * 30 })
+				end,
+				aoExplodir = function(pos: Vector3, principal)
+					Vfx.partida(run, "explosao", { pos = pos, raio = explosao, cor = classe.cor, forte = true })
+					Combate.danoEmArea(run, pos, explosao, dano * 0.7, estado, { semEfeitos = true, exceto = principal, cor = classe.cor, empurrarForca = 35 })
+				end,
+			},
+		})
+	else
+		-- Flecha perfurante e veloz (crítico garantido com a carga cheia)
+		local critico = perfeito or math.random() < stats.critico
+		local dano = stats.dano * mult * (if critico then stats.multCritico else 1)
+		Projeteis.disparar(run, {
+			{
+				lado = "jogador",
+				tipo = "flechaCarregada",
+				pos = raiz.Position + direcao * 1.5 + Vector3.new(0, 0.6, 0),
+				dir = direcao,
+				velocidade = stats.velProjetil * 1.5,
+				alcance = stats.alcance * 1.4,
+				raio = 1.5,
+				tamanho = 1.5 + 0.8 * fracao,
+				perfuracao = 999,
+				aoAcertar = function(inimigo, _, projetil)
+					Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, empurrar = projetil.dir * 35 })
+				end,
+			},
+		})
+	end
+end
+
+function Combate.soltar(run, estado, direcao: any)
+	local inicio = estado.carregandoDesde
+	if not inicio then
+		return
+	end
+	estado.carregandoDesde = nil
+	Combate.aplicarVelocidade(estado)
+	if not podeAgir(run, estado) then
+		return
+	end
+	local duracao = os.clock() - inicio
+	if duracao < Config.CARGA_ATAQUE_MIN * 0.75 then
+		animar(run, estado, "cancelar", nil, estado.player)
+		return
+	end
+	local fracao = math.clamp((duracao - Config.CARGA_ATAQUE_MIN) / (Config.CARGA_ATAQUE_MAX - Config.CARGA_ATAQUE_MIN), 0, 1)
+	estado.combo = 0
+	estado.ultimoAtaque = os.clock()
+	estado.ultimoFoiFinal = true
+	local raiz = raizDe(estado) :: BasePart
+	local dir = direcaoValida(direcao, raiz)
+	local classe = Classes.obter(estado.classe)
+	animar(run, estado, "soltar", { fracao = fracao }, estado.player)
+	golpeCarregado(run, estado, classe, raiz, dir, fracao)
 end
 
 ------------------------------------------------------------------------
@@ -1352,17 +1506,13 @@ local function redemoinho(run, estado, classe)
 	local duracao = 2 * (if stats.redemoinhoFogo then 1.5 else 1)
 	local raio = stats.alcance * 1.1
 	Vfx.partida(run, "redemoinho", { jogador = estado.player, duracao = duracao, raio = raio, cor = classe.cor, fogo = stats.redemoinhoFogo })
+	animar(run, estado, "habilidade", { duracao = duracao })
 	task.spawn(function()
 		local fim = os.clock() + duracao
-		local proximaAnimacao = 0
 		while os.clock() < fim and run.ativa and estado.vivo and not estado.caido do
 			local raiz = raizDe(estado)
 			if not raiz then
 				break
-			end
-			if os.clock() >= proximaAnimacao then
-				animarArma(estado, "Slash")
-				proximaAnimacao = os.clock() + 0.35
 			end
 			Combate.danoEmArea(run, raiz.Position, raio, stats.dano * 0.55, estado, { queimar = stats.redemoinhoFogo })
 			task.wait(0.22)
@@ -1446,10 +1596,10 @@ function Combate.habilidade(run, estado, direcao: any)
 	if id == "redemoinho" then
 		redemoinho(run, estado, classe)
 	elseif id == "meteoro" then
-		animarArma(estado, "Slash")
+		animar(run, estado, "habilidade", { duracao = 0.5 })
 		meteoro(run, estado, raiz, dir)
 	else
-		animarArma(estado, "Lunge")
+		animar(run, estado, "habilidade", { duracao = 0.45 })
 		chuvaDeFlechas(run, estado, classe, raiz, dir)
 	end
 end
@@ -1479,7 +1629,7 @@ function Combate.supremo(run, estado)
 	Vfx.partida(run, "supremo", { jogador = estado.player, nome = classe.supremo.nome, cor = classe.cor })
 
 	if classe.supremo.id == "julgamento" then
-		animarArma(estado, "Slash")
+		animar(run, estado, "supremo", { duracao = 0.75 })
 		local centro = noChao(run, raiz.Position)
 		Vfx.partida(run, "julgamento", { pos = centro, raio = 18, cor = classe.cor })
 		task.delay(0.35, function()
@@ -1494,6 +1644,7 @@ function Combate.supremo(run, estado)
 			Combate.danoEmArea(run, centro, 18, stats.dano * 5, estado, { semEfeitos = true, cor = COR_OURO, empurrarForca = 60 })
 		end)
 	elseif classe.supremo.id == "tempestade" then
+		animar(run, estado, "supremo", { duracao = 5 })
 		task.spawn(function()
 			local fim = os.clock() + 5
 			while os.clock() < fim and run.ativa do
@@ -1507,6 +1658,7 @@ function Combate.supremo(run, estado)
 			end
 		end)
 	else
+		animar(run, estado, "supremo", { duracao = 4 })
 		task.spawn(function()
 			local fim = os.clock() + 4
 			local giro = 0
@@ -1534,7 +1686,6 @@ function Combate.supremo(run, estado)
 					})
 				end
 				Projeteis.disparar(run, lista)
-				animarArma(estado, "Lunge")
 				giro += 0.13
 				task.wait(0.3)
 			end
@@ -1556,7 +1707,7 @@ function Combate.esquiva(run, estado, direcao: any)
 	end
 	estado.esquivaProntaEm = agora + estado.stats.recargaEsquiva
 	estado.invulneravelAte = math.max(estado.invulneravelAte or 0, agora + Config.ESQUIVA_INVULNERAVEL)
-	Vfx.partida(run, "esquiva", { jogador = estado.player }, estado.player)
+	animar(run, estado, "esquiva", nil, estado.player)
 
 	-- Carta Investida Brutal: atropela quem estiver no caminho
 	local stats = estado.stats
@@ -1666,6 +1817,7 @@ end
 
 -- Ao começar cada sala
 function Combate.novaSala(estado)
+	estado.carregandoDesde = nil
 	estado.escudoAtivo = estado.stats.escudo
 	estado.invulneravelAte = os.clock() + 1.5
 	estado.lentoAte = nil
@@ -3295,23 +3447,14 @@ local function construirAltares()
 		parte("Emblema", Vector3.new(0.35, 2.4, 2.4), estandarte.CFrame * CFrame.new(0.05, 1.5, 0) * CFrame.Angles(math.rad(45), 0, 0), Enum.Material.Neon, classe.cor, { colide = false })
 
 		-- Arma flutuando sobre o altar (gira no computador de cada jogador)
-		local arma = Armas.criarArma(id)
-		local exibicao = Instance.new("Model")
+		local exibicao = Armas.modeloExibicao(id)
 		exibicao.Name = "Arma" .. classe.nome
-		for _, peca in arma:GetChildren() do
-			if peca:IsA("BasePart") then
-				peca.Anchored = true
-				peca.Parent = exibicao
-			end
-		end
-		exibicao.PrimaryPart = exibicao:FindFirstChild("Handle") :: BasePart?
 		local orientacao = if id == "cavaleiro" then CFrame.Angles(math.rad(-90), 0, 0) else CFrame.new()
 		exibicao:PivotTo(CFrame.new(base + Vector3.new(0, 9.5, 0)) * orientacao)
 		exibicao:SetAttribute("Giro", 0.8)
 		exibicao:SetAttribute("Flutuar", 0.6)
 		CollectionService:AddTag(exibicao, "Girar")
 		exibicao.Parent = modelo
-		arma:Destroy()
 
 		luz(runa, classe.cor, 22, 2)
 		particulas(runa, {
@@ -3501,23 +3644,10 @@ end
 -- Coloca a arma e os acessórios da classe no personagem (no lobby, só para exibir)
 function Lobby.vestirClasse(player: Player)
 	local personagem = player.Character
-	local humanoid = personagem and personagem:FindFirstChildOfClass("Humanoid")
 	local perfil = Dados.obter(player)
-	if not personagem or not humanoid or not perfil or Partida.emPartida(player) then
+	if not personagem or not perfil or Partida.emPartida(player) then
 		return
 	end
-	for _, recipiente in { personagem, player:FindFirstChildOfClass("Backpack") } do
-		if recipiente then
-			for _, item in recipiente:GetChildren() do
-				if item:IsA("Tool") then
-					item:Destroy()
-				end
-			end
-		end
-	end
-	local arma = Armas.criarArma(perfil.Classe)
-	arma.Parent = player:FindFirstChildOfClass("Backpack") or personagem
-	humanoid:EquipTool(arma)
 	Armas.vestir(personagem, perfil.Classe)
 end
 
@@ -3691,14 +3821,14 @@ game:BindToClose(function()
 	Dados.salvarTodos()
 end)
 
-local ACOES_DE_COMBATE = { atacar = true, habilidade = true, esquiva = true, supremo = true }
+local ACOES_DE_COMBATE = { atacar = true, carregar = true, soltar = true, cancelar = true, habilidade = true, esquiva = true, supremo = true }
 
-Remotos.Acao.OnServerEvent:Connect(function(player, tipo, dados)
+Remotos.Acao.OnServerEvent:Connect(function(player, tipo, dados, extra)
 	if type(tipo) ~= "string" then
 		return
 	end
 	if ACOES_DE_COMBATE[tipo] then
-		Partida.acaoDeCombate(player, tipo, dados)
+		Partida.acaoDeCombate(player, tipo, dados, extra)
 	elseif tipo == "pronto" then
 		Dados.enviarPerfil(player)
 		if not Partida.emPartida(player) then
@@ -4483,7 +4613,6 @@ return Masmorra
           <string name="Name">Partida</string>
           <ProtectedString name="Source"><![CDATA[-- Controla cada partida: salas, ondas de inimigos, cartas, elevador e fim de jogo.
 
-local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -5262,27 +5391,52 @@ function Partida.removerJogador(player: Player)
 	end
 end
 
+-- No lobby os ataques são só para exibir a classe: os outros jogadores veem a animação
+local cargaNoLobby = {} -- [Player] = momento em que começou a carregar
+
+local function animacaoNoLobby(player: Player, tipo: string, extra: any)
+	local dados = { jogador = player, classe = player:GetAttribute("Classe") or "cavaleiro" }
+	if tipo == "atacar" then
+		dados.acao = "ataque"
+		dados.combo = if type(extra) == "number" then math.clamp(math.floor(extra), 1, 3) else 1
+	elseif tipo == "carregar" then
+		cargaNoLobby[player] = os.clock()
+		dados.acao = "carregar"
+	elseif tipo == "soltar" then
+		local inicio = cargaNoLobby[player]
+		cargaNoLobby[player] = nil
+		if not inicio then
+			return
+		end
+		dados.acao = "soltar"
+		dados.fracao = math.clamp((os.clock() - inicio - Config.CARGA_ATAQUE_MIN) / (Config.CARGA_ATAQUE_MAX - Config.CARGA_ATAQUE_MIN), 0, 1)
+	elseif tipo == "cancelar" then
+		cargaNoLobby[player] = nil
+		dados.acao = "cancelar"
+	elseif tipo == "esquiva" then
+		dados.acao = "esquiva"
+	else
+		return
+	end
+	Vfx.todos("anim", dados)
+end
+
 -- Ações de combate vindas do jogador
-function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any)
+function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any, extra: any)
 	local run = partidaDoJogador[player]
 	local estado = run and run.jogadores[player]
 	if not estado then
-		-- No lobby o ataque só balança a arma, para exibir a classe
-		if tipo == "atacar" then
-			local personagem = player.Character
-			local arma = personagem and personagem:FindFirstChildOfClass("Tool")
-			if arma and not arma:FindFirstChild("toolanim") then
-				local valor = Instance.new("StringValue")
-				valor.Name = "toolanim"
-				valor.Value = "Slash"
-				valor.Parent = arma
-				Debris:AddItem(valor, 0.5)
-			end
-		end
+		animacaoNoLobby(player, tipo, extra)
 		return
 	end
 	if tipo == "atacar" then
 		Combate.atacar(run, estado, direcao)
+	elseif tipo == "carregar" then
+		Combate.carregar(run, estado)
+	elseif tipo == "soltar" then
+		Combate.soltar(run, estado, direcao)
+	elseif tipo == "cancelar" then
+		Combate.cancelarCarga(run, estado)
 	elseif tipo == "habilidade" then
 		Combate.habilidade(run, estado, direcao)
 	elseif tipo == "esquiva" then
@@ -5291,6 +5445,10 @@ function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any)
 		Combate.supremo(run, estado)
 	end
 end
+
+Players.PlayerRemoving:Connect(function(player)
+	cargaNoLobby[player] = nil
+end)
 
 -- Inteligência dos inimigos e projéteis a cada frame; o resto a cada 0,25s
 RunService.Heartbeat:Connect(function(dt)
@@ -5763,9 +5921,1003 @@ return Ambiente
         </Item>
         <Item class="ModuleScript" referent="RBX00000026">
           <Properties>
+            <string name="Name">Animacoes</string>
+            <ProtectedString name="Source"><![CDATA[-- Animações dos personagens feitas por código (não precisam de arquivos de animação).
+--
+-- Cada animação é uma lista de "quadros-chave": em cada tempo, o ângulo de algumas juntas
+-- (ombro, cotovelo, cintura...). Entre os quadros, os ângulos são suavizados. A animação é
+-- aplicada por cima da animação padrão do Roblox (andar, pular), então as pernas continuam
+-- andando enquanto os braços atacam.
+--
+-- Ângulos em radianos, no espaço da peça "pai" (X = direita, Y = cima, Z = trás):
+--   rx > 0 leva o braço/perna para FRENTE (1,57 = esticado para frente; 3,14 = para cima)
+--   ry > 0 gira para a ESQUERDA (visto de cima)   rz > 0 abre o braço direito para o lado
+--   no tronco, rx < 0 inclina para frente
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Classes = require(Shared:WaitForChild("Classes"))
+
+local Vfx = require(script.Parent.Vfx)
+
+local Animacoes = {}
+
+local jogador = Players.LocalPlayer
+local pasta = Instance.new("Folder")
+pasta.Name = "AnimacoesLocais"
+pasta.Parent = workspace
+
+local PESO_POSTURA = 0.75
+local ZERO = { 0, 0, 0, 0, 0, 0 }
+local OURO = Color3.fromRGB(255, 214, 90)
+
+-- Junta lógica -> { peça que contém o Motor6D, nome do Motor6D }
+local JUNTAS_R15 = {
+	raiz = { "LowerTorso", "Root" },
+	cintura = { "UpperTorso", "Waist" },
+	pescoco = { "Head", "Neck" },
+	ombroD = { "RightUpperArm", "RightShoulder" },
+	cotoveloD = { "RightLowerArm", "RightElbow" },
+	pulsoD = { "RightHand", "RightWrist" },
+	ombroE = { "LeftUpperArm", "LeftShoulder" },
+	cotoveloE = { "LeftLowerArm", "LeftElbow" },
+	pulsoE = { "LeftHand", "LeftWrist" },
+	quadrilD = { "RightUpperLeg", "RightHip" },
+	joelhoD = { "RightLowerLeg", "RightKnee" },
+	quadrilE = { "LeftUpperLeg", "LeftHip" },
+	joelhoE = { "LeftLowerLeg", "LeftKnee" },
+}
+local JUNTAS_R6 = {
+	raiz = { "HumanoidRootPart", "RootJoint" },
+	pescoco = { "Torso", "Neck" },
+	ombroD = { "Torso", "Right Shoulder" },
+	ombroE = { "Torso", "Left Shoulder" },
+	quadrilD = { "Torso", "Right Hip" },
+	quadrilE = { "Torso", "Left Hip" },
+}
+
+-- Ângulos (rx, ry, rz) e deslocamento (px, py, pz)
+local function A(rx: number?, ry: number?, rz: number?, px: number?, py: number?, pz: number?)
+	return { rx or 0, ry or 0, rz or 0, px or 0, py or 0, pz or 0 }
+end
+
+local function juntar(base, extra)
+	local resultado = table.clone(base)
+	for chave, valor in extra do
+		resultado[chave] = valor
+	end
+	return resultado
+end
+
+------------------------------------------------------------------------
+-- Posturas (como cada classe segura a arma parada) e animações
+------------------------------------------------------------------------
+
+local POSTURAS = {
+	cavaleiro = { ombroD = A(0.35, 0, 0.12), cotoveloD = A(0.6), ombroE = A(0.55, 0.35, -0.1), cotoveloE = A(1.1) },
+	mago = { ombroD = A(0.25, 0, 0.1), cotoveloD = A(0.8), pulsoD = A(-1.05), ombroE = A(0.15, 0, -0.12) },
+	arqueiro = { ombroE = A(0.45, 0.2, -0.1), cotoveloE = A(0.3), ombroD = A(0.15, 0, 0.1) },
+}
+
+-- Arqueiro mirando: corpo de lado, braço do arco esticado, mão puxando a corda até o rosto
+local MIRA = {
+	cintura = A(0, -0.85),
+	pescoco = A(0, 0.75),
+	ombroE = A(1.57, 0.85),
+	cotoveloE = A(0),
+	pulsoE = A(0),
+	ombroD = A(1.45, 1.1),
+	cotoveloD = A(2.2),
+	puxar = A(1),
+}
+
+local function lancarMago(lado: number)
+	return {
+		duracao = 0.32,
+		quadros = {
+			{ t = 0.07, suave = "forte", pose = { ombroD = A(1.55, -0.15 * lado), cotoveloD = A(0.1), pulsoD = A(-0.2), ombroE = A(1.4, 0.3, -0.1), cotoveloE = A(0.2), cintura = A(0, -0.2 * lado), brilho = A(1) } },
+		},
+	}
+end
+
+local CONJURAR_MAGO = {
+	duracao = 0.5,
+	quadros = {
+		{ t = 0.13, pose = { ombroD = A(2.9, 0, 0.1), cotoveloD = A(0.2), pulsoD = A(0), ombroE = A(2.6, 0, -0.1), cintura = A(0.25), brilho = A(1) } },
+		{ t = 0.24, suave = "forte", pose = { ombroD = A(1.5), cotoveloD = A(0), pulsoD = A(-0.1), ombroE = A(1.5, 0.3), cintura = A(-0.3), raiz = A(-0.12, 0, 0, 0, -0.2, 0), brilho = A(1.5) } },
+	},
+}
+
+local function tiroArqueiro()
+	return {
+		duracao = 0.3,
+		quadros = {
+			{ t = 0.06, pose = MIRA },
+			{ t = 0.09, suave = "forte", pose = { ombroD = A(1.3, 1.5, 0.3), cotoveloD = A(0.9), ombroE = A(1.75, 0.85), puxar = A(0) } },
+		},
+	}
+end
+
+local ACOES = {
+	cavaleiro = {
+		-- corte da direita para a esquerda
+		ataque1 = {
+			duracao = 0.34,
+			trilha = true,
+			quadros = {
+				{ t = 0.07, pose = { ombroD = A(1.25, -1.25, 0.25), cotoveloD = A(0.5), pulsoD = A(-1.1), cintura = A(0, -0.55), raiz = A(0, -0.15) } },
+				{ t = 0.17, suave = "forte", pose = { ombroD = A(1.45, 1.05), cotoveloD = A(0.15), pulsoD = A(-1.2), cintura = A(-0.1, 0.6), raiz = A(-0.12, 0.2) } },
+			},
+		},
+		-- revés, da esquerda para a direita
+		ataque2 = {
+			duracao = 0.34,
+			trilha = true,
+			quadros = {
+				{ t = 0.07, pose = { ombroD = A(1.35, 1, -0.2), cotoveloD = A(1), pulsoD = A(-1.2), cintura = A(0, 0.55), raiz = A(0, 0.12) } },
+				{ t = 0.17, suave = "forte", pose = { ombroD = A(1.35, -1.2, 0.2), cotoveloD = A(0.2), pulsoD = A(-1.2), cintura = A(-0.1, -0.6), raiz = A(-0.1, -0.2) } },
+			},
+		},
+		-- golpe final: espada por cima da cabeça e para baixo
+		ataque3 = {
+			duracao = 0.48,
+			trilha = true,
+			quadros = {
+				{ t = 0.12, pose = { ombroD = A(3, 0.1), cotoveloD = A(0.35), pulsoD = A(0.2), ombroE = A(1.4, 0.4), cintura = A(0.25), raiz = A(0.08, 0, 0, 0, 0.15, 0) } },
+				{
+					t = 0.22,
+					suave = "forte",
+					pose = {
+						ombroD = A(0.75),
+						cotoveloD = A(0.05),
+						pulsoD = A(-0.6),
+						ombroE = A(0.5, 0.3),
+						cintura = A(-0.4),
+						raiz = A(-0.25, 0, 0, 0, -0.35, 0),
+						quadrilD = A(0.6),
+						joelhoD = A(-0.7),
+						quadrilE = A(-0.35),
+						joelhoE = A(-0.3),
+					},
+				},
+			},
+		},
+		-- carregando: espada para trás, corpo torcido, pernas abertas
+		carregar = {
+			manter = true,
+			quadros = {
+				{
+					t = 0.15,
+					pose = {
+						ombroD = A(0.9, -1.7, 0.4),
+						cotoveloD = A(0.4),
+						pulsoD = A(-0.9),
+						ombroE = A(0.8, 0.5),
+						cintura = A(0, -0.9),
+						raiz = A(-0.15, -0.1, 0, 0, -0.3, 0),
+						quadrilD = A(-0.35, 0, 0.2),
+						quadrilE = A(0.45, 0, -0.2),
+						joelhoE = A(-0.5),
+					},
+				},
+			},
+		},
+		-- solta: giro completo com a espada estendida
+		soltar = {
+			duracao = 0.45,
+			trilha = true,
+			quadros = {
+				{ t = 0.05, suave = "forte", pose = { ombroD = A(0.35, 0, 1.45), cotoveloD = A(0), pulsoD = A(-1.2), ombroE = A(0.5, 0, -1), cintura = A(0, 0.4), raiz = A(-0.1, 0, 0, 0, -0.2, 0) } },
+				{ t = 0.33, suave = "linear", pose = { raiz = A(-0.1, math.pi * 2, 0, 0, -0.2, 0) } },
+			},
+		},
+		-- Redemoinho: gira sem parar enquanto durar
+		habilidade = {
+			trilha = true,
+			continuo = function(tau)
+				return { raiz = A(-0.08, tau * 14, 0, 0, -0.15, 0), ombroD = A(0.35, 0, 1.45), cotoveloD = A(0), pulsoD = A(-1.2), ombroE = A(0.5, 0, -1) }
+			end,
+		},
+		-- Julgamento: salta com a espada no alto e esmaga o chão
+		supremo = {
+			duracao = 0.75,
+			trilha = true,
+			quadros = {
+				{ t = 0.18, pose = { ombroD = A(3), cotoveloD = A(0.2), ombroE = A(2.8), cintura = A(0.25), raiz = A(0.1, 0, 0, 0, 0.8, 0), quadrilD = A(0.5), joelhoD = A(-0.9), quadrilE = A(0.5), joelhoE = A(-0.9) } },
+				{
+					t = 0.34,
+					suave = "forte",
+					pose = {
+						ombroD = A(0.6),
+						cotoveloD = A(0),
+						pulsoD = A(-0.8),
+						ombroE = A(0.6),
+						cintura = A(-0.45),
+						raiz = A(-0.3, 0, 0, 0, -0.7, 0),
+						quadrilD = A(0.9),
+						joelhoD = A(-1.2),
+						quadrilE = A(-0.4),
+						joelhoE = A(-0.5),
+					},
+				},
+			},
+		},
+	},
+
+	mago = {
+		ataque1 = lancarMago(1),
+		ataque2 = lancarMago(-1),
+		ataque3 = CONJURAR_MAGO,
+		carregar = {
+			manter = true,
+			quadros = {
+				{ t = 0.2, pose = { ombroD = A(2.85, 0, 0.15), cotoveloD = A(0.3), pulsoD = A(0), ombroE = A(1.5, 0.35, -0.1), cotoveloE = A(0.3), cintura = A(0.15), raiz = A(0.05), brilho = A(1) } },
+			},
+		},
+		soltar = {
+			duracao = 0.45,
+			quadros = {
+				{ t = 0.07, suave = "forte", pose = { ombroD = A(1.45), cotoveloD = A(0), pulsoD = A(-0.1), ombroE = A(1.45, 0.3), cintura = A(-0.35), raiz = A(-0.15, 0, 0, 0, -0.25, 0), brilho = A(2) } },
+			},
+		},
+		habilidade = CONJURAR_MAGO,
+		-- Tempestade: braços para o céu enquanto os raios caem
+		supremo = {
+			continuo = function(tau)
+				local s = math.sin(tau * 6) * 0.08
+				return { ombroD = A(2.9 + s, 0, 0.25), cotoveloD = A(0.2), pulsoD = A(0), ombroE = A(2.9 - s, 0, -0.25), cintura = A(0.2), raiz = A(0.05), brilho = A(1.5) }
+			end,
+		},
+	},
+
+	arqueiro = {
+		ataque1 = tiroArqueiro(),
+		ataque2 = tiroArqueiro(),
+		ataque3 = {
+			duracao = 0.42,
+			quadros = {
+				{ t = 0.12, pose = juntar(MIRA, { raiz = A(0.05), puxar = A(1.1) }) },
+				{ t = 0.16, suave = "forte", pose = { ombroD = A(1.1, 1.7, 0.5), cotoveloD = A(0.6), ombroE = A(1.9, 0.85), raiz = A(0.14), puxar = A(0) } },
+			},
+		},
+		carregar = {
+			manter = true,
+			quadros = { { t = 0.2, pose = juntar(MIRA, { puxar = A(1.15), raiz = A(0.04) }) } },
+		},
+		soltar = {
+			duracao = 0.42,
+			quadros = {
+				{ t = 0.04, suave = "forte", pose = { ombroD = A(1, 1.8, 0.6), cotoveloD = A(0.5), ombroE = A(1.95, 0.85), raiz = A(0.16), puxar = A(0) } },
+			},
+		},
+		-- Chuva de Flechas: mira para o alto
+		habilidade = {
+			duracao = 0.5,
+			quadros = {
+				{ t = 0.12, pose = { cintura = A(0, -0.85), pescoco = A(-0.5, 0.75), ombroE = A(2.35, 0.85), ombroD = A(2.2, 1.1), cotoveloD = A(2.2), puxar = A(1) } },
+				{ t = 0.18, suave = "forte", pose = { ombroD = A(2, 1.5, 0.3), cotoveloD = A(0.9), puxar = A(0) } },
+			},
+		},
+		-- Saraivada: gira atirando sem parar
+		supremo = {
+			continuo = function(tau)
+				local pose = table.clone(MIRA)
+				pose.raiz = A(0, tau * 10)
+				pose.puxar = A((math.sin(tau * 21) + 1) / 2)
+				return pose
+			end,
+		},
+	},
+}
+
+-- Esquivas (uma por classe). Duram um pouco mais que o impulso para o corpo "assentar".
+local ESQUIVAS = {
+	-- Investida: ombro e escudo à frente, passada longa
+	cavaleiro = {
+		duracao = 0.34,
+		quadros = {
+			{
+				t = 0.04,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.5, 0.35, 0, 0, -0.45, 0),
+					cintura = A(-0.2, 0.25),
+					pescoco = A(0.25, -0.4),
+					ombroE = A(1.25, 0.6, -0.15),
+					cotoveloE = A(1.3),
+					ombroD = A(-0.55, 0, 0.3),
+					cotoveloD = A(0.5),
+					quadrilD = A(0.9),
+					joelhoD = A(-1.1),
+					quadrilE = A(-0.6),
+					joelhoE = A(-0.5),
+				},
+			},
+			{ t = 0.22, pose = { raiz = A(-0.3, 0.2, 0, 0, -0.3, 0), quadrilD = A(0.5), joelhoD = A(-0.7), quadrilE = A(-0.3), joelhoE = A(-0.3) } },
+		},
+	},
+	-- Deslize arcano: corpo inclinado, braços abertos para trás, como se flutuasse
+	mago = {
+		duracao = 0.32,
+		quadros = {
+			{
+				t = 0.05,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.55, 0, 0, 0, -0.35, 0),
+					cintura = A(-0.25),
+					pescoco = A(0.35),
+					ombroD = A(-0.7, 0, 0.55),
+					ombroE = A(-0.7, 0, -0.55),
+					cotoveloD = A(0.2),
+					cotoveloE = A(0.2),
+					quadrilD = A(-0.35),
+					joelhoD = A(-0.6),
+					quadrilE = A(-0.5),
+					joelhoE = A(-0.9),
+					brilho = A(1),
+				},
+			},
+		},
+	},
+	-- Rolamento: encolhe e dá uma cambalhota para frente
+	arqueiro = {
+		duracao = 0.36,
+		quadros = {
+			{
+				t = 0.04,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.7, 0, 0, 0, -1.1, 0),
+					cintura = A(-0.6),
+					pescoco = A(-0.5),
+					ombroD = A(0.9, 0, 0.2),
+					cotoveloD = A(1.6),
+					ombroE = A(0.9, 0, -0.2),
+					cotoveloE = A(1.6),
+					quadrilD = A(1.6),
+					joelhoD = A(-2),
+					quadrilE = A(1.6),
+					joelhoE = A(-2),
+				},
+			},
+			{ t = 0.24, suave = "linear", pose = { raiz = A(-0.7 - math.pi * 2, 0, 0, 0, -1.1, 0) } },
+			{ t = 0.33, pose = { raiz = A(-math.pi * 2, 0, 0, 0, -0.3, 0), cintura = A(-0.15), pescoco = A(0), quadrilD = A(0.4), joelhoD = A(-0.6), quadrilE = A(-0.2), joelhoE = A(-0.3) } },
+		},
+	},
+}
+
+local ATINGIDO = {
+	duracao = 0.22,
+	quadros = { { t = 0.05, suave = "forte", pose = { cintura = A(0.28), pescoco = A(0.2), raiz = A(0.08) } } },
+}
+
+------------------------------------------------------------------------
+-- Interpolação
+------------------------------------------------------------------------
+
+local function suavizar(tipo: string?, a: number): number
+	if tipo == "linear" then
+		return a
+	elseif tipo == "forte" then
+		return 1 - (1 - a) ^ 4
+	end
+	return 1 - (1 - a) * (1 - a)
+end
+
+local function misturar(a, b, alfa: number)
+	return {
+		a[1] + (b[1] - a[1]) * alfa,
+		a[2] + (b[2] - a[2]) * alfa,
+		a[3] + (b[3] - a[3]) * alfa,
+		a[4] + (b[4] - a[4]) * alfa,
+		a[5] + (b[5] - a[5]) * alfa,
+		a[6] + (b[6] - a[6]) * alfa,
+	}
+end
+
+local function juntasUsadas(definicao)
+	if definicao.juntas then
+		return definicao.juntas
+	end
+	local lista, vistas = {}, {}
+	for _, quadro in definicao.quadros do
+		for junta in quadro.pose do
+			if not vistas[junta] then
+				vistas[junta] = true
+				table.insert(lista, junta)
+			end
+		end
+	end
+	definicao.juntas = lista
+	return lista
+end
+
+-- Pose da animação no tempo "tau", partindo da pose "base"
+local function amostrar(definicao, tau: number, base)
+	local quadros = definicao.quadros
+	local indice = 0
+	for k, quadro in quadros do
+		if quadro.t <= tau then
+			indice = k
+		end
+	end
+	local pose = {}
+	for _, junta in juntasUsadas(definicao) do
+		local inicio = base[junta] or ZERO
+		for k = indice, 1, -1 do
+			local v = quadros[k].pose[junta]
+			if v then
+				inicio = v
+				break
+			end
+		end
+		local proximo = quadros[indice + 1]
+		if proximo and proximo.pose[junta] then
+			local t0 = if indice == 0 then 0 else quadros[indice].t
+			local alfa = suavizar(proximo.suave, math.clamp((tau - t0) / math.max(proximo.t - t0, 0.001), 0, 1))
+			pose[junta] = misturar(inicio, proximo.pose[junta], alfa)
+		else
+			pose[junta] = inicio
+		end
+	end
+	return pose
+end
+
+------------------------------------------------------------------------
+-- Estado de cada personagem
+------------------------------------------------------------------------
+
+local personagens = {} -- [Model] = estado
+
+local function obterJuntas(personagem: Model)
+	local juntas = {}
+	local mapa = if personagem:FindFirstChild("UpperTorso") then JUNTAS_R15 else JUNTAS_R6
+	for nome, info in mapa do
+		local parte = personagem:FindFirstChild(info[1])
+		local motor = parte and parte:FindFirstChild(info[2])
+		if motor and motor:IsA("Motor6D") then
+			local rotacao = motor.C0.Rotation
+			juntas[nome] = { motor = motor, rot = rotacao, inv = rotacao:Inverse() }
+		end
+	end
+	return juntas
+end
+
+local function estadoDe(personagem: Model)
+	local e = personagens[personagem]
+	if not e then
+		e = {
+			personagem = personagem,
+			jogador = Players:GetPlayerFromCharacter(personagem),
+			humanoid = personagem:FindFirstChildOfClass("Humanoid"),
+			juntas = obterJuntas(personagem),
+			acao = nil,
+			dash = nil,
+			carregando = false,
+			cargaInicio = 0,
+			puxar = 0,
+			brilho = 0,
+			ultimaPose = {},
+		}
+		personagens[personagem] = e
+	end
+	return e
+end
+
+local function classeDe(e): string
+	local classe = e.jogador and e.jogador:GetAttribute("Classe")
+	return if Classes.existe(classe) then classe else "cavaleiro"
+end
+
+local function cargaDe(e): number
+	if not e.carregando then
+		return 0
+	end
+	return math.clamp((os.clock() - e.cargaInicio - Config.CARGA_ATAQUE_MIN) / (Config.CARGA_ATAQUE_MAX - Config.CARGA_ATAQUE_MIN) + 0.15, 0, 1)
+end
+
+local function comecar(e, definicao, dados)
+	if not definicao then
+		return
+	end
+	local agora = os.clock()
+	e.acao = {
+		def = definicao,
+		inicio = agora,
+		base = e.ultimaPose, -- parte de onde o corpo está (sem "pulos" entre animações)
+		dados = dados or {},
+		duracao = if definicao.manter then math.huge else (definicao.duracao or (dados and dados.duracao) or 0.5),
+		soltando = nil,
+	}
+end
+
+------------------------------------------------------------------------
+-- Detalhes das armas: rastro da espada, corda e flecha do arco, brilho do cajado e
+-- partículas de carga. Tudo criado só neste computador.
+------------------------------------------------------------------------
+
+local function prepararArma(e)
+	local acessorios = e.personagem:FindFirstChild("AcessoriosDeClasse")
+	local arma = acessorios and acessorios:FindFirstChild("ArmaDeClasse")
+	if arma == e.arma then
+		return
+	end
+	-- arma nova (trocou de classe ou renasceu): limpa os detalhes antigos
+	for _, objeto in e.detalhes or {} do
+		objeto:Destroy()
+	end
+	e.detalhes = {}
+	e.arma = arma
+	e.trilha, e.encaixe, e.flecha, e.glow, e.esfera, e.emissorCarga = nil, nil, nil, nil, nil, nil
+	if not arma then
+		return
+	end
+	local classe = Classes.obter(classeDe(e))
+
+	local lamina = arma:FindFirstChild("Lamina")
+	if lamina then
+		local base = lamina:FindFirstChild("TrilhaBase") :: Attachment?
+		local ponta = lamina:FindFirstChild("TrilhaPonta") :: Attachment?
+		if base and ponta then
+			local trilha = Instance.new("Trail")
+			trilha.Attachment0 = base
+			trilha.Attachment1 = ponta
+			trilha.Color = ColorSequence.new(Color3.new(1, 1, 1), classe.cor)
+			trilha.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
+			trilha.Lifetime = 0.16
+			trilha.LightEmission = 1
+			trilha.LightInfluence = 0
+			trilha.Enabled = false
+			trilha.Parent = lamina
+			e.trilha = trilha
+			table.insert(e.detalhes, trilha)
+			e.pontaArma = ponta
+		end
+	end
+
+	local arco = arma:FindFirstChild("Arco")
+	if arco then
+		local cima = arco:FindFirstChild("CordaCima") :: Attachment?
+		local baixo = arco:FindFirstChild("CordaBaixo") :: Attachment?
+		local encaixe = arco:FindFirstChild("Encaixe") :: Attachment?
+		if cima and baixo and encaixe then
+			for _, par in { { cima, encaixe }, { encaixe, baixo } } do
+				local corda = Instance.new("Beam")
+				corda.Attachment0 = par[1]
+				corda.Attachment1 = par[2]
+				corda.Width0 = 0.07
+				corda.Width1 = 0.07
+				corda.Color = ColorSequence.new(Color3.fromRGB(255, 240, 210))
+				corda.LightEmission = 0.4
+				corda.FaceCamera = true
+				corda.Segments = 1
+				corda.Parent = arco
+				table.insert(e.detalhes, corda)
+			end
+			local flecha = Instance.new("Part")
+			flecha.Size = Vector3.new(0.12, 0.12, 2.7)
+			flecha.Material = Enum.Material.Wood
+			flecha.Color = Color3.fromRGB(160, 120, 80)
+			flecha.Anchored = true
+			flecha.CanCollide = false
+			flecha.CanQuery = false
+			flecha.CanTouch = false
+			flecha.CastShadow = false
+			flecha.Transparency = 1
+			flecha.Parent = pasta
+			local pontaFlecha = Instance.new("Part")
+			pontaFlecha.Size = Vector3.new(0.22, 0.22, 0.4)
+			pontaFlecha.Material = Enum.Material.Neon
+			pontaFlecha.Color = classe.cor
+			pontaFlecha.Anchored = true
+			pontaFlecha.CanCollide = false
+			pontaFlecha.CanQuery = false
+			pontaFlecha.CanTouch = false
+			pontaFlecha.Transparency = 1
+			pontaFlecha.Parent = flecha
+			e.encaixe = encaixe
+			e.arco = arco
+			e.flecha = flecha
+			e.pontaFlecha = pontaFlecha
+			e.pontaArma = encaixe
+			table.insert(e.detalhes, flecha)
+		end
+	end
+
+	local haste = arma:FindFirstChild("Haste")
+	if haste then
+		local ponta = haste:FindFirstChild("Ponta") :: Attachment?
+		if ponta then
+			local glow = Instance.new("Part")
+			glow.Shape = Enum.PartType.Ball
+			glow.Size = Vector3.one
+			glow.Material = Enum.Material.Neon
+			glow.Color = classe.cor
+			glow.Anchored = true
+			glow.CanCollide = false
+			glow.CanQuery = false
+			glow.CanTouch = false
+			glow.CastShadow = false
+			glow.Transparency = 1
+			glow.Parent = pasta
+			local luz = Instance.new("PointLight")
+			luz.Color = classe.cor
+			luz.Range = 12
+			luz.Brightness = 0
+			luz.Parent = glow
+			e.glow = glow
+			e.luzGlow = luz
+			e.pontaArma = ponta
+			table.insert(e.detalhes, glow)
+		end
+	end
+
+	-- Esfera invisível na ponta da arma: as partículas de carga convergem para ela
+	local esfera = Instance.new("Part")
+	esfera.Shape = Enum.PartType.Ball
+	esfera.Size = Vector3.one * 5
+	esfera.Transparency = 1
+	esfera.Anchored = true
+	esfera.CanCollide = false
+	esfera.CanQuery = false
+	esfera.CanTouch = false
+	esfera.Parent = pasta
+	local emissor = Instance.new("ParticleEmitter")
+	emissor.Shape = Enum.ParticleEmitterShape.Sphere
+	emissor.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+	emissor.ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward
+	emissor.Color = ColorSequence.new(classe.cor:Lerp(Color3.new(1, 1, 1), 0.4), classe.cor)
+	emissor.LightEmission = 1
+	emissor.LightInfluence = 0
+	emissor.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.05), NumberSequenceKeypoint.new(0.6, 0.35), NumberSequenceKeypoint.new(1, 0) })
+	emissor.Lifetime = NumberRange.new(0.3, 0.4)
+	emissor.Speed = NumberRange.new(6, 9)
+	emissor.Rate = 0
+	emissor.Parent = esfera
+	e.esfera = esfera
+	e.emissorCarga = emissor
+	e.corClasse = classe.cor
+	table.insert(e.detalhes, esfera)
+end
+
+local function atualizarArma(e, agora: number)
+	prepararArma(e)
+	if not e.arma then
+		return
+	end
+	local acao = e.acao
+	if e.trilha then
+		local ligada = acao ~= nil and acao.def.trilha == true and (acao.soltando == nil) and (agora - acao.inicio) < (if acao.def.continuo then math.huge else acao.duracao * 0.8)
+		if e.trilha.Enabled ~= ligada then
+			e.trilha.Enabled = ligada
+		end
+	end
+	if e.encaixe and e.arco and e.flecha then
+		local puxar = math.clamp(e.puxar, 0, 1.3)
+		local z = 0.62 + puxar * 1.6
+		e.encaixe.Position = Vector3.new(0, 0, z)
+		local visivel = puxar > 0.15
+		e.flecha.Transparency = if visivel then 0 else 1
+		e.pontaFlecha.Transparency = if visivel then 0 else 1
+		if visivel then
+			local cf = e.arco.CFrame * CFrame.new(0, 0, z - 1.35)
+			e.flecha.CFrame = cf
+			e.pontaFlecha.CFrame = cf * CFrame.new(0, 0, -1.45)
+		end
+	end
+	local carga = cargaDe(e)
+	if e.glow and e.pontaArma then
+		local intensidade = math.clamp(e.brilho * 0.6 + carga, 0, 1.5)
+		e.glow.Transparency = if intensidade > 0.02 then 1 - math.min(0.75, intensidade * 0.6) else 1
+		e.glow.Size = Vector3.one * (0.6 + intensidade * 1.6 + math.sin(agora * 20) * 0.08 * carga)
+		e.glow.CFrame = CFrame.new(e.pontaArma.WorldPosition)
+		e.luzGlow.Brightness = intensidade * 3
+	end
+	if e.esfera and e.pontaArma then
+		e.esfera.CFrame = CFrame.new(e.pontaArma.WorldPosition)
+		e.emissorCarga.Rate = if e.carregando then 20 + 60 * carga else 0
+		if e.carregando and carga >= 1 and not e.cheioAvisado then
+			e.cheioAvisado = true
+			e.emissorCarga.Color = ColorSequence.new(Color3.new(1, 1, 1), OURO)
+			Vfx.cargaCheia({ pos = e.pontaArma.WorldPosition, local_ = e.jogador == jogador })
+		end
+	end
+end
+
+-- Barrinha de carga acima do próprio personagem (só quem carrega vê)
+local barra: BillboardGui? = nil
+local preenchimento: Frame? = nil
+
+local function criarBarra()
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "BarraDeCarga"
+	gui.Size = UDim2.fromOffset(70, 9)
+	gui.StudsOffset = Vector3.new(0, 3.6, 0)
+	gui.AlwaysOnTop = true
+	gui.Enabled = false
+	local fundo = Instance.new("Frame")
+	fundo.Size = UDim2.fromScale(1, 1)
+	fundo.BackgroundColor3 = Color3.fromRGB(20, 18, 28)
+	fundo.BackgroundTransparency = 0.25
+	fundo.BorderSizePixel = 0
+	fundo.Parent = gui
+	Instance.new("UICorner", fundo).CornerRadius = UDim.new(1, 0)
+	local contorno = Instance.new("UIStroke")
+	contorno.Color = Color3.new(0, 0, 0)
+	contorno.Thickness = 1.5
+	contorno.Parent = fundo
+	local cheio = Instance.new("Frame")
+	cheio.Size = UDim2.fromScale(0, 1)
+	cheio.BorderSizePixel = 0
+	cheio.Parent = fundo
+	Instance.new("UICorner", cheio).CornerRadius = UDim.new(1, 0)
+	gui.Parent = pasta
+	barra, preenchimento = gui, cheio
+end
+
+local function atualizarBarra(e, agora: number)
+	if e.jogador ~= jogador then
+		return
+	end
+	if not barra then
+		criarBarra()
+	end
+	local gui, cheio = barra :: BillboardGui, preenchimento :: Frame
+	local raiz = e.personagem:FindFirstChild("HumanoidRootPart")
+	gui.Adornee = raiz
+	gui.Enabled = e.carregando and raiz ~= nil
+	if not gui.Enabled then
+		return
+	end
+	local carga = cargaDe(e)
+	cheio.Size = UDim2.fromScale(carga, 1)
+	if carga >= 1 then
+		-- cheia: pisca entre dourado e branco
+		cheio.BackgroundColor3 = OURO:Lerp(Color3.new(1, 1, 1), (math.sin(agora * 18) + 1) * 0.3)
+	else
+		cheio.BackgroundColor3 = (e.corClasse or OURO):Lerp(Color3.new(1, 1, 1), 0.25)
+	end
+end
+
+------------------------------------------------------------------------
+-- Aplicar a pose nas juntas (depois da animação padrão, antes da física)
+------------------------------------------------------------------------
+
+local function pesoDaAcao(a, agora: number): (number, number)
+	local tau = agora - a.inicio
+	local entrada = a.def.entrada or 0.05
+	local peso = math.min(1, tau / entrada)
+	if a.soltando then
+		peso *= math.max(0, 1 - (agora - a.soltando) / 0.15)
+	elseif not a.def.manter then
+		local saida = a.def.saida or 0.12
+		local resto = a.duracao - tau
+		if resto < saida then
+			peso *= math.max(0, resto / saida)
+		end
+	end
+	return peso, tau
+end
+
+local function poseDaAcao(a, tau: number)
+	if a.def.continuo then
+		return a.def.continuo(tau, a.dados)
+	end
+	return amostrar(a.def, tau, a.base)
+end
+
+local function animarPersonagem(e, agora: number)
+	local final = {} -- junta -> { valores, peso }
+	local postura = POSTURAS[classeDe(e)]
+	if postura then
+		for junta, valor in postura do
+			final[junta] = { valor, PESO_POSTURA }
+		end
+	end
+
+	local function aplicarCamada(pose, peso: number)
+		for junta, valor in pose do
+			local atual = final[junta]
+			if atual then
+				final[junta] = { misturar(atual[1], valor, peso), atual[2] + (1 - atual[2]) * peso }
+			else
+				final[junta] = { valor, peso }
+			end
+		end
+	end
+
+	local a = e.acao
+	if a then
+		local peso, tau = pesoDaAcao(a, agora)
+		if peso <= 0 and (a.soltando or tau > a.duracao) then
+			e.acao = nil
+		else
+			local pose = poseDaAcao(a, tau)
+			if e.carregando and a.def.manter then
+				-- tremendo de força enquanto carrega
+				local carga = cargaDe(e)
+				local tremor = math.sin(agora * 45) * 0.025 * (0.4 + carga)
+				pose = table.clone(pose)
+				if pose.cintura then
+					pose.cintura = misturar(pose.cintura, A(pose.cintura[1] + tremor, pose.cintura[2] + tremor, pose.cintura[3]), 1)
+				end
+			end
+			e.ultimaPose = pose
+			aplicarCamada(pose, peso)
+		end
+	end
+
+	local d = e.dash
+	if d then
+		local tau = agora - d.inicio
+		local duracao = d.def.duracao
+		local peso = math.min(1, tau / 0.03)
+		if tau > duracao - 0.1 then
+			peso *= math.max(0, (duracao - tau) / 0.1)
+		end
+		if tau >= duracao then
+			e.dash = nil
+		else
+			-- a esquiva manda no corpo todo: tira a postura e o ataque de baixo
+			aplicarCamada(amostrar(d.def, tau, {}), peso)
+		end
+	end
+
+	local h = e.atingido
+	if h then
+		local tau = agora - h
+		if tau >= ATINGIDO.duracao then
+			e.atingido = nil
+		else
+			local peso = math.min(1, tau / 0.03) * math.max(0, 1 - tau / ATINGIDO.duracao)
+			aplicarCamada(amostrar(ATINGIDO, tau, {}), peso * 0.8)
+		end
+	end
+
+	e.puxar = if final.puxar then final.puxar[1][1] * final.puxar[2] else 0
+	e.brilho = if final.brilho then final.brilho[1][1] * final.brilho[2] else 0
+
+	for junta, info in final do
+		local j = e.juntas[junta]
+		local peso = info[2]
+		if j and peso > 0.001 and j.motor.Parent then
+			local v = info[1]
+			local alvo = j.inv * CFrame.new(v[4], v[5], v[6]) * CFrame.fromEulerAnglesYXZ(v[1], v[2], v[3]) * j.rot
+			j.motor.Transform = j.motor.Transform:Lerp(alvo, math.min(peso, 1))
+		end
+	end
+end
+
+------------------------------------------------------------------------
+-- API
+------------------------------------------------------------------------
+
+--[[ Toca uma animação num personagem.
+	acao: "ataque" (dados.combo), "carregar", "soltar" (dados.fracao), "cancelar",
+	      "esquiva", "habilidade", "supremo" (dados.duracao), "atingido" ]]
+function Animacoes.tocar(personagem: Model, acao: string, dados)
+	if not personagem or not personagem.Parent then
+		return
+	end
+	dados = dados or {}
+	local e = estadoDe(personagem)
+	local classe = if Classes.existe(dados.classe) then dados.classe else classeDe(e)
+	local acoes = ACOES[classe]
+	if acao == "ataque" then
+		comecar(e, acoes["ataque" .. math.clamp(dados.combo or 1, 1, 3)], dados)
+	elseif acao == "carregar" then
+		e.carregando = true
+		e.cargaInicio = os.clock()
+		e.cheioAvisado = false
+		comecar(e, acoes.carregar, dados)
+	elseif acao == "soltar" then
+		e.carregando = false
+		if e.emissorCarga and e.corClasse then
+			e.emissorCarga.Color = ColorSequence.new(e.corClasse:Lerp(Color3.new(1, 1, 1), 0.4), e.corClasse)
+		end
+		comecar(e, acoes.soltar, dados)
+	elseif acao == "cancelar" then
+		e.carregando = false
+		if e.acao and e.acao.def.manter then
+			e.acao.soltando = os.clock()
+		end
+	elseif acao == "esquiva" then
+		e.carregando = false
+		if e.acao and e.acao.def.manter then
+			e.acao.soltando = os.clock()
+		end
+		e.dash = { inicio = os.clock(), def = ESQUIVAS[classe] or ESQUIVAS.cavaleiro }
+		Vfx.esquiva({ jogador = e.jogador, classe = classe })
+	elseif acao == "habilidade" or acao == "supremo" then
+		comecar(e, acoes[acao], dados)
+	elseif acao == "atingido" then
+		e.atingido = os.clock()
+	end
+end
+
+-- Ações que o próprio jogador já anima na hora do clique (o servidor não manda de volta)
+local PREVISTAS = { ataque = true, carregar = true, soltar = true, cancelar = true, esquiva = true }
+
+-- Mensagem "anim" vinda do servidor
+function Animacoes.receber(dados)
+	local player = dados.jogador
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return
+	end
+	if player == jogador and PREVISTAS[dados.acao] then
+		return
+	end
+	local personagem = player.Character
+	if personagem then
+		Animacoes.tocar(personagem, dados.acao, dados)
+	end
+end
+
+function Animacoes.atingido(player: any)
+	if typeof(player) == "Instance" and player:IsA("Player") and player.Character then
+		Animacoes.tocar(player.Character, "atingido", nil)
+	end
+end
+
+function Animacoes.iniciar()
+	RunService.PreSimulation:Connect(function()
+		local agora = os.clock()
+		for personagem, e in personagens do
+			if not personagem.Parent then
+				for _, objeto in e.detalhes or {} do
+					objeto:Destroy()
+				end
+				personagens[personagem] = nil
+			else
+				local humanoid = e.humanoid
+				if humanoid and humanoid.Health > 0 and not humanoid.Sit then
+					animarPersonagem(e, agora)
+				end
+			end
+		end
+	end)
+	RunService.RenderStepped:Connect(function()
+		local agora = os.clock()
+		for _, e in personagens do
+			atualizarArma(e, agora)
+			atualizarBarra(e, agora)
+		end
+	end)
+
+	-- Todo personagem ganha estado assim que aparece (para a postura de combate)
+	local function acompanhar(player: Player)
+		player.CharacterAdded:Connect(function(personagem)
+			personagem:WaitForChild("Humanoid", 10)
+			task.wait(0.1)
+			if personagem.Parent then
+				estadoDe(personagem)
+			end
+		end)
+		if player.Character then
+			estadoDe(player.Character)
+		end
+	end
+	for _, player in Players:GetPlayers() do
+		acompanhar(player)
+	end
+	Players.PlayerAdded:Connect(acompanhar)
+end
+
+return Animacoes
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX00000027">
+          <Properties>
             <string name="Name">Controles</string>
-            <ProtectedString name="Source"><![CDATA[-- Controles: segurar para atacar (mira no mouse; no celular mira sozinha no inimigo mais próximo),
--- habilidade (E), esquiva (Q), supremo (R) e os botões de toque no celular.
+            <ProtectedString name="Source"><![CDATA[-- Controles: tocar para atacar (mira no mouse; no celular mira sozinha no inimigo mais próximo),
+-- segurar para carregar e soltar para um golpe forte, habilidade (E), esquiva (Q), supremo (R)
+-- e os botões de toque no celular.
 
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
@@ -5782,6 +6934,7 @@ local modulos = script.Parent
 local Estado = require(modulos.Estado)
 local Vfx = require(modulos.Vfx)
 local UI = require(modulos.UI)
+local Animacoes = require(modulos.Animacoes)
 
 local Controles = {}
 
@@ -5789,10 +6942,14 @@ local jogador = Players.LocalPlayer
 local Acao = ReplicatedStorage:WaitForChild("Remotos"):WaitForChild("Acao") :: RemoteEvent
 
 local segurandoAtaque = false
+local segurouEm = 0
+local carregando = false
+local cargaComecou = 0
 local ultimoAtaque = 0
 local comboLocal = 0
 local ultimoFoiFinal = false
 local mirandoAte = 0
+local esquivandoAte = 0
 local direcaoAtual = Vector3.new(0, 0, -1)
 
 local function planar(v: Vector3): Vector3
@@ -5887,7 +7044,10 @@ local function tentarAtacar()
 
 	local direcao = direcaoDaMira()
 	mirar(direcao)
-	Acao:FireServer("atacar", direcao)
+	Acao:FireServer("atacar", direcao, comboLocal)
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "ataque", { combo = comboLocal })
+	end
 
 	-- O próprio corte aparece na hora, sem esperar o servidor
 	if naPartida then
@@ -5903,6 +7063,69 @@ local function tentarAtacar()
 				cor = classe.cor,
 				combo = comboLocal,
 			})
+		end
+	end
+end
+
+------------------------------------------------------------------------
+-- Ataque carregado: segurando o ataque, começa a carregar; ao soltar, sai o golpe forte
+------------------------------------------------------------------------
+
+local function comecarCarga()
+	carregando = true
+	cargaComecou = os.clock()
+	Acao:FireServer("carregar")
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "carregar", nil)
+	end
+end
+
+local function cancelarCarga()
+	if not carregando then
+		return
+	end
+	carregando = false
+	Acao:FireServer("cancelar")
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "cancelar", nil)
+	end
+end
+
+local function soltarCarga()
+	if not carregando then
+		return
+	end
+	local raiz = personagem()
+	local duracao = os.clock() - cargaComecou
+	if not raiz or not podeLutar() or duracao < Config.CARGA_ATAQUE_MIN then
+		cancelarCarga()
+		return
+	end
+	carregando = false
+	local fracao = math.clamp((duracao - Config.CARGA_ATAQUE_MIN) / (Config.CARGA_ATAQUE_MAX - Config.CARGA_ATAQUE_MIN), 0, 1)
+	local direcao = direcaoDaMira()
+	mirar(direcao)
+	Acao:FireServer("soltar", direcao)
+	-- o golpe carregado encerra o combo (o próximo clique recomeça do primeiro golpe)
+	comboLocal = 0
+	ultimoAtaque = os.clock()
+	ultimoFoiFinal = true
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "soltar", { fracao = fracao })
+	end
+
+	local stats = Estado.stats
+	if Estado.modo == "partida" and stats then
+		local classe = Classes.obter(stats.classe)
+		if classe.id == "cavaleiro" then
+			Vfx.giroCarregado({
+				jogador = jogador,
+				raio = stats.alcance * (1.25 + 0.3 * fracao),
+				cor = classe.cor,
+				perfeito = fracao >= 0.99,
+			})
+		else
+			Vfx.tremer(0.4 + 0.6 * fracao, 0.15)
 		end
 	end
 end
@@ -5938,6 +7161,9 @@ local function esquivar()
 	if agora < Estado.esquivaFim then
 		return
 	end
+	-- esquivar cancela a carga (segure de novo para recomeçar)
+	cancelarCarga()
+	segurouEm = agora
 	local recarga = if Estado.stats then Estado.stats.recargaEsquiva else Config.ESQUIVA_RECARGA
 	Estado.esquivaFim = agora + recarga
 	Estado.esquivaTotal = recarga
@@ -5960,7 +7186,13 @@ local function esquivar()
 	Debris:AddItem(impulso, Config.ESQUIVA_DURACAO)
 	Debris:AddItem(anexo, Config.ESQUIVA_DURACAO)
 
-	Vfx.esquiva({ jogador = jogador })
+	-- o corpo vira para onde vai, para a animação da esquiva fazer sentido
+	direcaoAtual = direcao
+	mirandoAte = agora + Config.ESQUIVA_DURACAO + 0.1
+	esquivandoAte = mirandoAte
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "esquiva", nil)
+	end
 	Acao:FireServer("esquiva", direcao)
 end
 
@@ -5970,10 +7202,22 @@ Controles.supremo = usarSupremo
 Controles.esquivar = esquivar
 
 function Controles.segurarAtaque(segurando: boolean)
+	if segurando == segurandoAtaque then
+		return
+	end
 	segurandoAtaque = segurando
 	if segurando then
+		segurouEm = os.clock()
 		tentarAtacar()
+	elseif carregando then
+		soltarCarga()
 	end
+end
+
+-- Para tudo sem disparar o golpe (ao cair, morrer, abrir menus...)
+function Controles.pararAtaque()
+	segurandoAtaque = false
+	cancelarCarga()
 end
 
 -- Liga os botões de toque criados pelo HUD
@@ -6025,17 +7269,26 @@ function Controles.iniciar()
 	end)
 
 	RunService.Heartbeat:Connect(function()
-		if segurandoAtaque then
-			tentarAtacar()
+		local agora = os.clock()
+		if carregando then
+			local _, humanoidAtual = personagem()
+			if not podeLutar() or not humanoidAtual or humanoidAtual.Health <= 0 then
+				cancelarCarga()
+			else
+				-- enquanto carrega, o corpo acompanha a mira
+				mirandoAte = math.max(mirandoAte, agora + 0.1)
+			end
+		elseif segurandoAtaque and agora - segurouEm >= Config.CARGA_ATAQUE_COMECA and podeLutar() and personagem() then
+			comecarCarga()
 		end
 		local raiz, humanoid = personagem()
 		if not raiz or not humanoid then
 			return
 		end
-		if os.clock() < mirandoAte and humanoid.Health > 0 and not Estado.caido then
+		if agora < mirandoAte and humanoid.Health > 0 and not Estado.caido then
 			humanoid.AutoRotate = false
 			raiz.CFrame = CFrame.lookAt(raiz.Position, raiz.Position + direcaoAtual)
-			if segurandoAtaque then
+			if segurandoAtaque and agora >= esquivandoAte then
 				direcaoAtual = direcaoDaMira()
 			end
 		elseif not humanoid.AutoRotate then
@@ -6048,7 +7301,7 @@ return Controles
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000027">
+        <Item class="ModuleScript" referent="RBX00000028">
           <Properties>
             <string name="Name">Estado</string>
             <ProtectedString name="Source"><![CDATA[-- Estado compartilhado entre as partes da interface do jogador.
@@ -6084,7 +7337,7 @@ return Estado
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000028">
+        <Item class="ModuleScript" referent="RBX00000029">
           <Properties>
             <string name="Name">Hud</string>
             <ProtectedString name="Source"><![CDATA[-- HUD: tudo o que fica na tela durante o jogo (lobby e masmorra).
@@ -7122,7 +8375,7 @@ return Hud
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="RBX00000029">
+        <Item class="LocalScript" referent="RBX00000030">
           <Properties>
             <string name="Name">Main</string>
             <ProtectedString name="Source"><![CDATA[-- Script principal do jogador: liga a interface, os efeitos, os controles e recebe as
@@ -7139,6 +8392,7 @@ local Vfx = require(modulos.Vfx)
 local Ambiente = require(modulos.Ambiente)
 local VisualInimigos = require(modulos.VisualInimigos)
 local Controles = require(modulos.Controles)
+local Animacoes = require(modulos.Animacoes)
 local Hud = require(modulos.Hud)
 local Menus = require(modulos.Menus)
 
@@ -7166,6 +8420,7 @@ workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(acompanharCamera)
 acompanharCamera()
 
 Ambiente.iniciar()
+Animacoes.iniciar()
 VisualInimigos.iniciar()
 Hud.iniciar()
 Menus.iniciar()
@@ -7173,6 +8428,8 @@ Controles.iniciar()
 Controles.ligarBotoes(Hud.botoesToque)
 
 Vfx.extras.salto = VisualInimigos.salto
+Vfx.extras.anim = Animacoes.receber
+Vfx.aoJogadorAtingido = Animacoes.atingido
 Vfx.aoDanoLocal = Hud.danoLocal
 
 Hud.aoAbrir = function(nome: string)
@@ -7274,7 +8531,7 @@ local manipuladores = {
 	elevador = Menus.elevador,
 	caiu = function()
 		Estado.caido = true
-		Controles.segurarAtaque(false)
+		Controles.pararAtaque()
 		Hud.caiu()
 		Ambiente.caido(true)
 	end,
@@ -7286,7 +8543,7 @@ local manipuladores = {
 	morreu = function()
 		Estado.morto = true
 		Estado.caido = false
-		Controles.segurarAtaque(false)
+		Controles.pararAtaque()
 		Ambiente.caido(false)
 		Hud.morreu()
 	end,
@@ -7321,7 +8578,7 @@ Acao:FireServer("pronto")
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000030">
+        <Item class="ModuleScript" referent="RBX00000031">
           <Properties>
             <string name="Name">Menus</string>
             <ProtectedString name="Source"><![CDATA[-- Menus: escolha de classe, cartas, elevador, loja do mercador, resumo da partida e ajuda.
@@ -8103,7 +9360,7 @@ return Menus
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000031">
+        <Item class="ModuleScript" referent="RBX00000032">
           <Properties>
             <string name="Name">Modelos</string>
             <ProtectedString name="Source"><![CDATA[-- Aparência dos inimigos, montada com peças. Inspiração: Warcraft (proporções exageradas,
@@ -8873,7 +10130,7 @@ return Modelos
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000032">
+        <Item class="ModuleScript" referent="RBX00000033">
           <Properties>
             <string name="Name">UI</string>
             <ProtectedString name="Source"><![CDATA[-- Kit visual da interface: cores, fontes e componentes (painéis, botões, barras, medalhões).
@@ -9348,7 +10605,7 @@ return UI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000033">
+        <Item class="ModuleScript" referent="RBX00000034">
           <Properties>
             <string name="Name">Vfx</string>
             <ProtectedString name="Source"><![CDATA[-- Efeitos visuais desenhados no computador do jogador: cortes, projéteis, explosões,
@@ -9365,6 +10622,7 @@ local UI = require(script.Parent.UI)
 local Vfx = {}
 Vfx.extras = {} -- outros módulos podem registrar efeitos aqui (ex.: salto dos inimigos)
 Vfx.aoDanoLocal = nil :: ((number) -> ())?
+Vfx.aoJogadorAtingido = nil :: ((any) -> ())?
 
 local jogador = Players.LocalPlayer
 local terreno = workspace.Terrain
@@ -9729,6 +10987,8 @@ local ESTILOS_PROJETIL = {
 	veneno = { cor = Color3.fromRGB(130, 255, 80), formato = "bola", tamanho = 1.2 },
 	gelo = { cor = Color3.fromRGB(140, 220, 255), formato = "cristal", tamanho = 1.3 },
 	fogo = { cor = Color3.fromRGB(255, 120, 40), formato = "bola", tamanho = 1.4, fogo = true },
+	orbeCarregado = { cor = Color3.fromRGB(225, 150, 255), formato = "bola", tamanho = 1.2 },
+	flechaCarregada = { cor = Color3.fromRGB(255, 230, 120), formato = "flecha", tamanho = 1 },
 }
 
 local function rastro(p: BasePart, cor: Color3, largura: number, duracao: number)
@@ -10223,6 +11483,9 @@ end
 
 function Vfx.danoJogador(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	if Vfx.aoJogadorAtingido then
+		Vfx.aoJogadorAtingido(dados.jogador)
+	end
 	if raiz then
 		textoFlutuante(raiz.Position + Vector3.new(0, 3, 0), "-" .. dados.valor, Color3.fromRGB(255, 80, 80), 30, { pop = 1.4 })
 	end
@@ -10306,12 +11569,19 @@ function Vfx.bloqueio(dados)
 	end
 end
 
+local COR_ESQUIVA = {
+	cavaleiro = Color3.fromRGB(255, 225, 160),
+	mago = Color3.fromRGB(210, 160, 255),
+	arqueiro = Color3.fromRGB(170, 255, 190),
+}
+
 function Vfx.esquiva(dados)
 	local raiz = raizDoJogador(dados.jogador)
 	if not raiz then
 		return
 	end
 	local personagem = raiz.Parent
+	local cor = COR_ESQUIVA[dados.classe] or Color3.fromRGB(200, 230, 255)
 	-- "fantasmas" do personagem que ficam para trás
 	for i = 0, 2 do
 		task.delay(i * 0.05, function()
@@ -10320,14 +11590,79 @@ function Vfx.esquiva(dados)
 			end
 			for _, peca in personagem:GetChildren() do
 				if peca:IsA("BasePart") and peca.Name ~= "HumanoidRootPart" and peca.Transparency < 1 then
-					local fantasma = parte(peca.Size, peca.CFrame, Color3.fromRGB(200, 230, 255), 0.55, nil, Enum.Material.Neon)
-					animar(fantasma, 0.3, { Transparency = 1 })
+					local fantasma = parte(peca.Size, peca.CFrame, cor, 0.5 + i * 0.1, nil, Enum.Material.Neon)
+					animar(fantasma, 0.3, { Transparency = 1, Size = peca.Size * 0.85 })
 					Debris:AddItem(fantasma, 0.32)
 				end
 			end
 		end)
 	end
 	particulas(raiz.Position - Vector3.new(0, 2, 0), { cor = Color3.fromRGB(230, 240, 255), quantidade = 10, velocidade = 10, vida = 0.35, luz = 0.5 })
+	-- risco de vento que acompanha o corpo durante o impulso
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 1, 0)
+	a0.Parent = raiz
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -1.6, 0)
+	a1.Parent = raiz
+	local vento = Instance.new("Trail")
+	vento.Attachment0 = a0
+	vento.Attachment1 = a1
+	vento.Color = ColorSequence.new(BRANCO, cor)
+	vento.Transparency = sequencia({ { 0, 0.35 }, { 1, 1 } })
+	vento.Lifetime = 0.2
+	vento.LightEmission = 1
+	vento.LightInfluence = 0
+	vento.FaceCamera = true
+	vento.Parent = raiz
+	task.delay(0.22, function()
+		vento.Enabled = false
+	end)
+	Debris:AddItem(vento, 0.5)
+	Debris:AddItem(a0, 0.5)
+	Debris:AddItem(a1, 0.5)
+end
+
+------------------------------------------------------------------------
+-- Ataque carregado
+------------------------------------------------------------------------
+
+-- Carga cheia: clarão dourado na ponta da arma
+function Vfx.cargaCheia(dados)
+	local ouro = Color3.fromRGB(255, 214, 90)
+	local bola = parte(Vector3.one * 0.6, CFrame.new(dados.pos), ouro:Lerp(BRANCO, 0.4), 0.1, Enum.PartType.Ball, Enum.Material.Neon)
+	animar(bola, 0.25, { Size = Vector3.one * 4, Transparency = 1 })
+	Debris:AddItem(bola, 0.3)
+	particulas(dados.pos, { cor = BRANCO, cor2 = ouro, quantidade = 12, tamanho = 0.35, velocidade = 14, vida = 0.3 })
+	clarao(dados.pos, ouro, 14, 0.25, 4)
+	if dados.local_ then
+		Vfx.tremer(0.35, 0.1)
+	end
+end
+
+-- Giro do Cavaleiro com a espada carregada
+function Vfx.giroCarregado(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	local base = raiz.Position
+	local raio = dados.raio
+	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.6) else dados.cor
+	local origem = CFrame.lookAt(base, base + raiz.CFrame.LookVector)
+	arcoDeCorte(origem, raio * 0.85, 180, cor, { espessura = 1.8, duracao = 0.16 })
+	task.delay(0.08, function()
+		arcoDeCorte(origem * CFrame.Angles(0, math.pi, 0), raio * 0.85, 180, cor, { espessura = 1.8, duracao = 0.16 })
+	end)
+	local chao = Vector3.new(base.X, base.Y - 2.6, base.Z)
+	local onda = disco(chao, 2, cor, 0.3)
+	animar(onda, 0.35, { Size = Vector3.new(0.15, raio * 2.2, raio * 2.2), Transparency = 1 })
+	Debris:AddItem(onda, 0.4)
+	particulas(chao + Vector3.new(0, 0.5, 0), { cor = cor, cor2 = BRANCO, quantidade = 20, tamanho = 0.5, velocidade = 26, vida = 0.4 })
+	Vfx.tremerEm(base, if dados.perfeito then 1.6 else 1, 0.2)
+	if dados.perfeito then
+		clarao(base, cor, 30, 0.4, 6)
+	end
 end
 
 function Vfx.supremo(dados)
@@ -10437,7 +11772,7 @@ return Vfx
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000034">
+        <Item class="ModuleScript" referent="RBX00000035">
           <Properties>
             <string name="Name">VisualInimigos</string>
             <ProtectedString name="Source"><![CDATA[-- Dá vida aos inimigos no computador do jogador: monta o modelo (Modelos.luau), anima
@@ -11289,11 +12624,11 @@ return VisualInimigos
         </Item>
       </Item>
     </Item>
-    <Item class="StarterCharacterScripts" referent="RBX00000035">
+    <Item class="StarterCharacterScripts" referent="RBX00000036">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="RBX00000036">
+      <Item class="Script" referent="RBX00000037">
         <Properties>
           <string name="Name">Health</string>
           <ProtectedString name="Source"><![CDATA[-- Substitui o script "Health" padrão do Roblox, que regenera vida sozinho.

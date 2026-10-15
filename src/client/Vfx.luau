@@ -12,6 +12,7 @@ local UI = require(script.Parent.UI)
 local Vfx = {}
 Vfx.extras = {} -- outros módulos podem registrar efeitos aqui (ex.: salto dos inimigos)
 Vfx.aoDanoLocal = nil :: ((number) -> ())?
+Vfx.aoJogadorAtingido = nil :: ((any) -> ())?
 
 local jogador = Players.LocalPlayer
 local terreno = workspace.Terrain
@@ -376,6 +377,8 @@ local ESTILOS_PROJETIL = {
 	veneno = { cor = Color3.fromRGB(130, 255, 80), formato = "bola", tamanho = 1.2 },
 	gelo = { cor = Color3.fromRGB(140, 220, 255), formato = "cristal", tamanho = 1.3 },
 	fogo = { cor = Color3.fromRGB(255, 120, 40), formato = "bola", tamanho = 1.4, fogo = true },
+	orbeCarregado = { cor = Color3.fromRGB(225, 150, 255), formato = "bola", tamanho = 1.2 },
+	flechaCarregada = { cor = Color3.fromRGB(255, 230, 120), formato = "flecha", tamanho = 1 },
 }
 
 local function rastro(p: BasePart, cor: Color3, largura: number, duracao: number)
@@ -870,6 +873,9 @@ end
 
 function Vfx.danoJogador(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	if Vfx.aoJogadorAtingido then
+		Vfx.aoJogadorAtingido(dados.jogador)
+	end
 	if raiz then
 		textoFlutuante(raiz.Position + Vector3.new(0, 3, 0), "-" .. dados.valor, Color3.fromRGB(255, 80, 80), 30, { pop = 1.4 })
 	end
@@ -953,12 +959,19 @@ function Vfx.bloqueio(dados)
 	end
 end
 
+local COR_ESQUIVA = {
+	cavaleiro = Color3.fromRGB(255, 225, 160),
+	mago = Color3.fromRGB(210, 160, 255),
+	arqueiro = Color3.fromRGB(170, 255, 190),
+}
+
 function Vfx.esquiva(dados)
 	local raiz = raizDoJogador(dados.jogador)
 	if not raiz then
 		return
 	end
 	local personagem = raiz.Parent
+	local cor = COR_ESQUIVA[dados.classe] or Color3.fromRGB(200, 230, 255)
 	-- "fantasmas" do personagem que ficam para trás
 	for i = 0, 2 do
 		task.delay(i * 0.05, function()
@@ -967,14 +980,79 @@ function Vfx.esquiva(dados)
 			end
 			for _, peca in personagem:GetChildren() do
 				if peca:IsA("BasePart") and peca.Name ~= "HumanoidRootPart" and peca.Transparency < 1 then
-					local fantasma = parte(peca.Size, peca.CFrame, Color3.fromRGB(200, 230, 255), 0.55, nil, Enum.Material.Neon)
-					animar(fantasma, 0.3, { Transparency = 1 })
+					local fantasma = parte(peca.Size, peca.CFrame, cor, 0.5 + i * 0.1, nil, Enum.Material.Neon)
+					animar(fantasma, 0.3, { Transparency = 1, Size = peca.Size * 0.85 })
 					Debris:AddItem(fantasma, 0.32)
 				end
 			end
 		end)
 	end
 	particulas(raiz.Position - Vector3.new(0, 2, 0), { cor = Color3.fromRGB(230, 240, 255), quantidade = 10, velocidade = 10, vida = 0.35, luz = 0.5 })
+	-- risco de vento que acompanha o corpo durante o impulso
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, 1, 0)
+	a0.Parent = raiz
+	local a1 = Instance.new("Attachment")
+	a1.Position = Vector3.new(0, -1.6, 0)
+	a1.Parent = raiz
+	local vento = Instance.new("Trail")
+	vento.Attachment0 = a0
+	vento.Attachment1 = a1
+	vento.Color = ColorSequence.new(BRANCO, cor)
+	vento.Transparency = sequencia({ { 0, 0.35 }, { 1, 1 } })
+	vento.Lifetime = 0.2
+	vento.LightEmission = 1
+	vento.LightInfluence = 0
+	vento.FaceCamera = true
+	vento.Parent = raiz
+	task.delay(0.22, function()
+		vento.Enabled = false
+	end)
+	Debris:AddItem(vento, 0.5)
+	Debris:AddItem(a0, 0.5)
+	Debris:AddItem(a1, 0.5)
+end
+
+------------------------------------------------------------------------
+-- Ataque carregado
+------------------------------------------------------------------------
+
+-- Carga cheia: clarão dourado na ponta da arma
+function Vfx.cargaCheia(dados)
+	local ouro = Color3.fromRGB(255, 214, 90)
+	local bola = parte(Vector3.one * 0.6, CFrame.new(dados.pos), ouro:Lerp(BRANCO, 0.4), 0.1, Enum.PartType.Ball, Enum.Material.Neon)
+	animar(bola, 0.25, { Size = Vector3.one * 4, Transparency = 1 })
+	Debris:AddItem(bola, 0.3)
+	particulas(dados.pos, { cor = BRANCO, cor2 = ouro, quantidade = 12, tamanho = 0.35, velocidade = 14, vida = 0.3 })
+	clarao(dados.pos, ouro, 14, 0.25, 4)
+	if dados.local_ then
+		Vfx.tremer(0.35, 0.1)
+	end
+end
+
+-- Giro do Cavaleiro com a espada carregada
+function Vfx.giroCarregado(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	local base = raiz.Position
+	local raio = dados.raio
+	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.6) else dados.cor
+	local origem = CFrame.lookAt(base, base + raiz.CFrame.LookVector)
+	arcoDeCorte(origem, raio * 0.85, 180, cor, { espessura = 1.8, duracao = 0.16 })
+	task.delay(0.08, function()
+		arcoDeCorte(origem * CFrame.Angles(0, math.pi, 0), raio * 0.85, 180, cor, { espessura = 1.8, duracao = 0.16 })
+	end)
+	local chao = Vector3.new(base.X, base.Y - 2.6, base.Z)
+	local onda = disco(chao, 2, cor, 0.3)
+	animar(onda, 0.35, { Size = Vector3.new(0.15, raio * 2.2, raio * 2.2), Transparency = 1 })
+	Debris:AddItem(onda, 0.4)
+	particulas(chao + Vector3.new(0, 0.5, 0), { cor = cor, cor2 = BRANCO, quantidade = 20, tamanho = 0.5, velocidade = 26, vida = 0.4 })
+	Vfx.tremerEm(base, if dados.perfeito then 1.6 else 1, 0.2)
+	if dados.perfeito then
+		clarao(base, cor, 30, 0.4, 6)
+	end
 end
 
 function Vfx.supremo(dados)

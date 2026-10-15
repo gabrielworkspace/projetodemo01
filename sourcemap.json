@@ -159,6 +159,13 @@
                   ]
                 },
                 {
+                  "name": "Animacoes",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Animacoes.luau"
+                  ]
+                },
+                {
                   "name": "Controles",
                   "className": "ModuleScript",
                   "filePaths": [

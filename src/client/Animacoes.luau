@@ -290,26 +290,79 @@ local ACOES = {
 	},
 }
 
--- Esquiva: corpo baixo e inclinado, braços para trás
-local ESQUIVA = {
-	duracao = 0.32,
-	entrada = 0.03,
-	quadros = {
-		{
-			t = 0.05,
-			pose = {
-				raiz = A(-0.55, 0, 0, 0, -0.5, 0),
-				cintura = A(-0.25),
-				pescoco = A(0.3),
-				ombroD = A(-0.6, 0, 0.25),
-				ombroE = A(-0.6, 0, -0.25),
-				cotoveloD = A(0.3),
-				cotoveloE = A(0.3),
-				quadrilD = A(0.75),
-				joelhoD = A(-1),
-				quadrilE = A(-0.55),
-				joelhoE = A(-0.4),
+-- Esquivas (uma por classe). Duram um pouco mais que o impulso para o corpo "assentar".
+local ESQUIVAS = {
+	-- Investida: ombro e escudo à frente, passada longa
+	cavaleiro = {
+		duracao = 0.34,
+		quadros = {
+			{
+				t = 0.04,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.5, 0.35, 0, 0, -0.45, 0),
+					cintura = A(-0.2, 0.25),
+					pescoco = A(0.25, -0.4),
+					ombroE = A(1.25, 0.6, -0.15),
+					cotoveloE = A(1.3),
+					ombroD = A(-0.55, 0, 0.3),
+					cotoveloD = A(0.5),
+					quadrilD = A(0.9),
+					joelhoD = A(-1.1),
+					quadrilE = A(-0.6),
+					joelhoE = A(-0.5),
+				},
 			},
+			{ t = 0.22, pose = { raiz = A(-0.3, 0.2, 0, 0, -0.3, 0), quadrilD = A(0.5), joelhoD = A(-0.7), quadrilE = A(-0.3), joelhoE = A(-0.3) } },
+		},
+	},
+	-- Deslize arcano: corpo inclinado, braços abertos para trás, como se flutuasse
+	mago = {
+		duracao = 0.32,
+		quadros = {
+			{
+				t = 0.05,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.55, 0, 0, 0, -0.35, 0),
+					cintura = A(-0.25),
+					pescoco = A(0.35),
+					ombroD = A(-0.7, 0, 0.55),
+					ombroE = A(-0.7, 0, -0.55),
+					cotoveloD = A(0.2),
+					cotoveloE = A(0.2),
+					quadrilD = A(-0.35),
+					joelhoD = A(-0.6),
+					quadrilE = A(-0.5),
+					joelhoE = A(-0.9),
+					brilho = A(1),
+				},
+			},
+		},
+	},
+	-- Rolamento: encolhe e dá uma cambalhota para frente
+	arqueiro = {
+		duracao = 0.36,
+		quadros = {
+			{
+				t = 0.04,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.7, 0, 0, 0, -1.1, 0),
+					cintura = A(-0.6),
+					pescoco = A(-0.5),
+					ombroD = A(0.9, 0, 0.2),
+					cotoveloD = A(1.6),
+					ombroE = A(0.9, 0, -0.2),
+					cotoveloE = A(1.6),
+					quadrilD = A(1.6),
+					joelhoD = A(-2),
+					quadrilE = A(1.6),
+					joelhoE = A(-2),
+				},
+			},
+			{ t = 0.24, suave = "linear", pose = { raiz = A(-0.7 - math.pi * 2, 0, 0, 0, -1.1, 0) } },
+			{ t = 0.33, pose = { raiz = A(-math.pi * 2, 0, 0, 0, -0.3, 0), cintura = A(-0.15), pescoco = A(0), quadrilD = A(0.4), joelhoD = A(-0.6), quadrilE = A(-0.2), joelhoE = A(-0.3) } },
 		},
 	},
 }
@@ -652,6 +705,61 @@ local function atualizarArma(e, agora: number)
 	end
 end
 
+-- Barrinha de carga acima do próprio personagem (só quem carrega vê)
+local barra: BillboardGui? = nil
+local preenchimento: Frame? = nil
+
+local function criarBarra()
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "BarraDeCarga"
+	gui.Size = UDim2.fromOffset(70, 9)
+	gui.StudsOffset = Vector3.new(0, 3.6, 0)
+	gui.AlwaysOnTop = true
+	gui.Enabled = false
+	local fundo = Instance.new("Frame")
+	fundo.Size = UDim2.fromScale(1, 1)
+	fundo.BackgroundColor3 = Color3.fromRGB(20, 18, 28)
+	fundo.BackgroundTransparency = 0.25
+	fundo.BorderSizePixel = 0
+	fundo.Parent = gui
+	Instance.new("UICorner", fundo).CornerRadius = UDim.new(1, 0)
+	local contorno = Instance.new("UIStroke")
+	contorno.Color = Color3.new(0, 0, 0)
+	contorno.Thickness = 1.5
+	contorno.Parent = fundo
+	local cheio = Instance.new("Frame")
+	cheio.Size = UDim2.fromScale(0, 1)
+	cheio.BorderSizePixel = 0
+	cheio.Parent = fundo
+	Instance.new("UICorner", cheio).CornerRadius = UDim.new(1, 0)
+	gui.Parent = pasta
+	barra, preenchimento = gui, cheio
+end
+
+local function atualizarBarra(e, agora: number)
+	if e.jogador ~= jogador then
+		return
+	end
+	if not barra then
+		criarBarra()
+	end
+	local gui, cheio = barra :: BillboardGui, preenchimento :: Frame
+	local raiz = e.personagem:FindFirstChild("HumanoidRootPart")
+	gui.Adornee = raiz
+	gui.Enabled = e.carregando and raiz ~= nil
+	if not gui.Enabled then
+		return
+	end
+	local carga = cargaDe(e)
+	cheio.Size = UDim2.fromScale(carga, 1)
+	if carga >= 1 then
+		-- cheia: pisca entre dourado e branco
+		cheio.BackgroundColor3 = OURO:Lerp(Color3.new(1, 1, 1), (math.sin(agora * 18) + 1) * 0.3)
+	else
+		cheio.BackgroundColor3 = (e.corClasse or OURO):Lerp(Color3.new(1, 1, 1), 0.25)
+	end
+end
+
 ------------------------------------------------------------------------
 -- Aplicar a pose nas juntas (depois da animação padrão, antes da física)
 ------------------------------------------------------------------------
@@ -723,14 +831,16 @@ local function animarPersonagem(e, agora: number)
 	local d = e.dash
 	if d then
 		local tau = agora - d.inicio
+		local duracao = d.def.duracao
 		local peso = math.min(1, tau / 0.03)
-		if tau > ESQUIVA.duracao - 0.12 then
-			peso *= math.max(0, (ESQUIVA.duracao - tau) / 0.12)
+		if tau > duracao - 0.1 then
+			peso *= math.max(0, (duracao - tau) / 0.1)
 		end
-		if tau >= ESQUIVA.duracao then
+		if tau >= duracao then
 			e.dash = nil
 		else
-			aplicarCamada(amostrar(ESQUIVA, tau, {}), peso)
+			-- a esquiva manda no corpo todo: tira a postura e o ataque de baixo
+			aplicarCamada(amostrar(d.def, tau, {}), peso)
 		end
 	end
 
@@ -794,7 +904,10 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 		end
 	elseif acao == "esquiva" then
 		e.carregando = false
-		e.dash = { inicio = os.clock() }
+		if e.acao and e.acao.def.manter then
+			e.acao.soltando = os.clock()
+		end
+		e.dash = { inicio = os.clock(), def = ESQUIVAS[classe] or ESQUIVAS.cavaleiro }
 		Vfx.esquiva({ jogador = e.jogador, classe = classe })
 	elseif acao == "habilidade" or acao == "supremo" then
 		comecar(e, acoes[acao], dados)
@@ -848,6 +961,7 @@ function Animacoes.iniciar()
 		local agora = os.clock()
 		for _, e in personagens do
 			atualizarArma(e, agora)
+			atualizarBarra(e, agora)
 		end
 	end)
 

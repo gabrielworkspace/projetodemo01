@@ -12,6 +12,7 @@ local Vfx = require(modulos.Vfx)
 local Ambiente = require(modulos.Ambiente)
 local VisualInimigos = require(modulos.VisualInimigos)
 local Controles = require(modulos.Controles)
+local Animacoes = require(modulos.Animacoes)
 local Hud = require(modulos.Hud)
 local Menus = require(modulos.Menus)
 
@@ -39,6 +40,7 @@ workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(acompanharCamera)
 acompanharCamera()
 
 Ambiente.iniciar()
+Animacoes.iniciar()
 VisualInimigos.iniciar()
 Hud.iniciar()
 Menus.iniciar()
@@ -46,6 +48,8 @@ Controles.iniciar()
 Controles.ligarBotoes(Hud.botoesToque)
 
 Vfx.extras.salto = VisualInimigos.salto
+Vfx.extras.anim = Animacoes.receber
+Vfx.aoJogadorAtingido = Animacoes.atingido
 Vfx.aoDanoLocal = Hud.danoLocal
 
 Hud.aoAbrir = function(nome: string)
@@ -147,7 +151,7 @@ local manipuladores = {
 	elevador = Menus.elevador,
 	caiu = function()
 		Estado.caido = true
-		Controles.segurarAtaque(false)
+		Controles.pararAtaque()
 		Hud.caiu()
 		Ambiente.caido(true)
 	end,
@@ -159,7 +163,7 @@ local manipuladores = {
 	morreu = function()
 		Estado.morto = true
 		Estado.caido = false
-		Controles.segurarAtaque(false)
+		Controles.pararAtaque()
 		Ambiente.caido(false)
 		Hud.morreu()
 	end,

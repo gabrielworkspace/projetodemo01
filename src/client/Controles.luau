@@ -1,5 +1,6 @@
--- Controles: segurar para atacar (mira no mouse; no celular mira sozinha no inimigo mais próximo),
--- habilidade (E), esquiva (Q), supremo (R) e os botões de toque no celular.
+-- Controles: tocar para atacar (mira no mouse; no celular mira sozinha no inimigo mais próximo),
+-- segurar para carregar e soltar para um golpe forte, habilidade (E), esquiva (Q), supremo (R)
+-- e os botões de toque no celular.
 
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
@@ -16,6 +17,7 @@ local modulos = script.Parent
 local Estado = require(modulos.Estado)
 local Vfx = require(modulos.Vfx)
 local UI = require(modulos.UI)
+local Animacoes = require(modulos.Animacoes)
 
 local Controles = {}
 
@@ -23,10 +25,14 @@ local jogador = Players.LocalPlayer
 local Acao = ReplicatedStorage:WaitForChild("Remotos"):WaitForChild("Acao") :: RemoteEvent
 
 local segurandoAtaque = false
+local segurouEm = 0
+local carregando = false
+local cargaComecou = 0
 local ultimoAtaque = 0
 local comboLocal = 0
 local ultimoFoiFinal = false
 local mirandoAte = 0
+local esquivandoAte = 0
 local direcaoAtual = Vector3.new(0, 0, -1)
 
 local function planar(v: Vector3): Vector3
@@ -121,7 +127,10 @@ local function tentarAtacar()
 
 	local direcao = direcaoDaMira()
 	mirar(direcao)
-	Acao:FireServer("atacar", direcao)
+	Acao:FireServer("atacar", direcao, comboLocal)
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "ataque", { combo = comboLocal })
+	end
 
 	-- O próprio corte aparece na hora, sem esperar o servidor
 	if naPartida then
@@ -137,6 +146,69 @@ local function tentarAtacar()
 				cor = classe.cor,
 				combo = comboLocal,
 			})
+		end
+	end
+end
+
+------------------------------------------------------------------------
+-- Ataque carregado: segurando o ataque, começa a carregar; ao soltar, sai o golpe forte
+------------------------------------------------------------------------
+
+local function comecarCarga()
+	carregando = true
+	cargaComecou = os.clock()
+	Acao:FireServer("carregar")
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "carregar", nil)
+	end
+end
+
+local function cancelarCarga()
+	if not carregando then
+		return
+	end
+	carregando = false
+	Acao:FireServer("cancelar")
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "cancelar", nil)
+	end
+end
+
+local function soltarCarga()
+	if not carregando then
+		return
+	end
+	local raiz = personagem()
+	local duracao = os.clock() - cargaComecou
+	if not raiz or not podeLutar() or duracao < Config.CARGA_ATAQUE_MIN then
+		cancelarCarga()
+		return
+	end
+	carregando = false
+	local fracao = math.clamp((duracao - Config.CARGA_ATAQUE_MIN) / (Config.CARGA_ATAQUE_MAX - Config.CARGA_ATAQUE_MIN), 0, 1)
+	local direcao = direcaoDaMira()
+	mirar(direcao)
+	Acao:FireServer("soltar", direcao)
+	-- o golpe carregado encerra o combo (o próximo clique recomeça do primeiro golpe)
+	comboLocal = 0
+	ultimoAtaque = os.clock()
+	ultimoFoiFinal = true
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "soltar", { fracao = fracao })
+	end
+
+	local stats = Estado.stats
+	if Estado.modo == "partida" and stats then
+		local classe = Classes.obter(stats.classe)
+		if classe.id == "cavaleiro" then
+			Vfx.giroCarregado({
+				jogador = jogador,
+				raio = stats.alcance * (1.25 + 0.3 * fracao),
+				cor = classe.cor,
+				perfeito = fracao >= 0.99,
+			})
+		else
+			Vfx.tremer(0.4 + 0.6 * fracao, 0.15)
 		end
 	end
 end
@@ -172,6 +244,9 @@ local function esquivar()
 	if agora < Estado.esquivaFim then
 		return
 	end
+	-- esquivar cancela a carga (segure de novo para recomeçar)
+	cancelarCarga()
+	segurouEm = agora
 	local recarga = if Estado.stats then Estado.stats.recargaEsquiva else Config.ESQUIVA_RECARGA
 	Estado.esquivaFim = agora + recarga
 	Estado.esquivaTotal = recarga
@@ -194,7 +269,13 @@ local function esquivar()
 	Debris:AddItem(impulso, Config.ESQUIVA_DURACAO)
 	Debris:AddItem(anexo, Config.ESQUIVA_DURACAO)
 
-	Vfx.esquiva({ jogador = jogador })
+	-- o corpo vira para onde vai, para a animação da esquiva fazer sentido
+	direcaoAtual = direcao
+	mirandoAte = agora + Config.ESQUIVA_DURACAO + 0.1
+	esquivandoAte = mirandoAte
+	if jogador.Character then
+		Animacoes.tocar(jogador.Character, "esquiva", nil)
+	end
 	Acao:FireServer("esquiva", direcao)
 end
 
@@ -204,10 +285,22 @@ Controles.supremo = usarSupremo
 Controles.esquivar = esquivar
 
 function Controles.segurarAtaque(segurando: boolean)
+	if segurando == segurandoAtaque then
+		return
+	end
 	segurandoAtaque = segurando
 	if segurando then
+		segurouEm = os.clock()
 		tentarAtacar()
+	elseif carregando then
+		soltarCarga()
 	end
+end
+
+-- Para tudo sem disparar o golpe (ao cair, morrer, abrir menus...)
+function Controles.pararAtaque()
+	segurandoAtaque = false
+	cancelarCarga()
 end
 
 -- Liga os botões de toque criados pelo HUD
@@ -259,17 +352,26 @@ function Controles.iniciar()
 	end)
 
 	RunService.Heartbeat:Connect(function()
-		if segurandoAtaque then
-			tentarAtacar()
+		local agora = os.clock()
+		if carregando then
+			local _, humanoidAtual = personagem()
+			if not podeLutar() or not humanoidAtual or humanoidAtual.Health <= 0 then
+				cancelarCarga()
+			else
+				-- enquanto carrega, o corpo acompanha a mira
+				mirandoAte = math.max(mirandoAte, agora + 0.1)
+			end
+		elseif segurandoAtaque and agora - segurouEm >= Config.CARGA_ATAQUE_COMECA and podeLutar() and personagem() then
+			comecarCarga()
 		end
 		local raiz, humanoid = personagem()
 		if not raiz or not humanoid then
 			return
 		end
-		if os.clock() < mirandoAte and humanoid.Health > 0 and not Estado.caido then
+		if agora < mirandoAte and humanoid.Health > 0 and not Estado.caido then
 			humanoid.AutoRotate = false
 			raiz.CFrame = CFrame.lookAt(raiz.Position, raiz.Position + direcaoAtual)
-			if segurandoAtaque then
+			if segurandoAtaque and agora >= esquivandoAte then
 				direcaoAtual = direcaoDaMira()
 			end
 		elseif not humanoid.AutoRotate then
