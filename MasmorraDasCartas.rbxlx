@@ -90,6 +90,10 @@ Cartas.lista = {
 	carta("perfurante", "Orbe Perfurante", "📌", "Epica", "mago", 2, "Orbes atravessam mais 2 inimigos", { perfuracao = 2 }),
 	carta("combustao", "Combustão", "💥", "Lendaria", "mago", 1, "Inimigos explodem ao morrer e ferem os vizinhos", { explosaoMorte = 1 }),
 	carta("arquimago", "Arquimago", "🧙", "Lendaria", "mago", 1, "Cada inimigo derrotado reduz 1s da recarga da habilidade", { arquimago = 1 }),
+	carta("fonteArcana", "Fonte Arcana", "💧", "Comum", "mago", 4, "A mana volta 35% mais rápido", { manaRegenPct = 0.35 }),
+	carta("reservatorio", "Reservatório Arcano", "🏺", "Comum", "mago", 3, "+40 de mana máxima", { manaPlana = 40 }),
+	carta("sifao", "Sifão de Almas", "👻", "Rara", "mago", 3, "Cada inimigo derrotado devolve 10 de mana", { manaAbate = 10 }),
+	carta("menteSerena", "Mente Serena", "🧘", "Epica", "mago", 2, "Magias custam 20% menos mana", { economiaMana = 0.2 }),
 
 	-- Arqueiro ---------------------------------------------------------------
 	carta("pontaAfiada", "Ponta Afiada", "📍", "Comum", "arqueiro", 5, "+15% de dano", { danoPct = 0.15 }),
@@ -108,9 +112,9 @@ Cartas.lista = {
 	carta("laminasAfiadas", "Lâminas Afiadas", "🔪", "Comum", "assassino", 5, "+15% de dano", { danoPct = 0.15 }),
 	carta("reflexos", "Reflexos", "⚡", "Comum", "assassino", 5, "Ataca 15% mais rápido", { ataqueVelPct = 0.15 }),
 	carta("sombraAgil", "Sombra Ágil", "💨", "Comum", "assassino", 3, "+10% de velocidade e esquiva 20% mais rápida", { velocidadePct = 0.1, esquivaPct = 0.2 }),
-	carta("venenoAdagas", "Lâminas Envenenadas", "🧪", "Rara", "assassino", 3, "Cada golpe envenena o inimigo por 3 segundos", { queimadura = 0.35 }),
+	carta("corteProfundo", "Corte Profundo", "🩸", "Rara", "assassino", 3, "O sangramento acumula +2 vezes e causa 40% a mais de dano", { sangrePilhas = 2, sangrePct = 0.4 }),
 	carta("pontoFraco", "Ponto Fraco", "🎯", "Rara", "assassino", 3, "Golpes pelas costas causam +40% de dano", { costasPct = 0.4 }),
-	carta("sangria", "Sangria", "🩸", "Rara", "assassino", 3, "Críticos curam 4 de vida", { curaCritico = 4 }),
+	carta("sangria", "Sede de Sangue", "🦇", "Rara", "assassino", 3, "Críticos curam 4 de vida", { curaCritico = 4 }),
 	carta("sombraPersistente", "Sombra Persistente", "🌑", "Epica", "assassino", 2, "O Passo Sombrio recarga 30% mais rápido", { recargaPct = 0.3 }),
 	carta("lequeAdagas", "Leque de Adagas", "🎴", "Epica", "assassino", 2, "O golpe final do combo arremessa 3 adagas em leque", { leque = 1 }),
 	carta("contraAtaque", "Contra-Ataque", "🔄", "Epica", "assassino", 1, "Depois de esquivar, o próximo golpe é crítico garantido", { contraAtaque = 1 }),
@@ -171,6 +175,7 @@ Classes.dados = {
 			tipo = "corte",
 			arco = 140,
 			combo = { 1, 1.1, 1.9 }, -- o terceiro golpe é o finalizador
+			impacto = { 0.13, 0.13, 0.27 }, -- quando a lâmina chega no alvo em cada golpe (segundos)
 			nome = "Combo de Espada",
 			icone = "⚔️",
 		},
@@ -196,8 +201,8 @@ Classes.dados = {
 		icone = "🔮",
 		cor = Color3.fromRGB(180, 96, 255),
 		descricao = "Ataca de longe com orbes que explodem e controla o campo com fogo e raios.",
-		forte = "Enorme dano em área e controle de grupos",
-		fraco = "Pouquíssima vida e ataque lento",
+		forte = "Enorme dano em área, magias de fogo, gelo e arcano",
+		fraco = "Pouca vida, ataque lento e depende de mana",
 		notas = { Vida = 1, Dano = 5, Alcance = 4, Velocidade = 2 },
 
 		vida = 80,
@@ -206,6 +211,10 @@ Classes.dados = {
 		intervalo = 0.52,
 		alcance = 50,
 		armadura = 0,
+		-- Mana: toda magia gasta mana, que volta sozinha com o tempo
+		mana = 100,
+		manaRegen = 14, -- por segundo
+		custos = { ataque = 7, final = 14, carregado = 22, habilidade = 30 },
 
 		ataque = {
 			tipo = "projetil",
@@ -214,7 +223,8 @@ Classes.dados = {
 			raio = 1.3,
 			explosao = 4,
 			combo = { 1, 1, 1.7 },
-			nome = "Orbe Arcano",
+			impacto = { 0.15, 0.15, 0.28 },
+			nome = "Dardo, Gelo e Fogo",
 			icone = "✨",
 		},
 		habilidade = {
@@ -244,9 +254,9 @@ Classes.dados = {
 		notas = { Vida = 3, Dano = 3, Alcance = 5, Velocidade = 4 },
 
 		vida = 100,
-		dano = 15,
+		dano = 22, -- cada tiro tira a flecha da aljava: mais lento, mas mais forte
 		velocidade = 20,
-		intervalo = 0.32,
+		intervalo = 0.5,
 		alcance = 60,
 		armadura = 0,
 		critico = 0.05,
@@ -258,6 +268,7 @@ Classes.dados = {
 			raio = 0.9,
 			explosao = 0,
 			combo = { 1, 1, 2 },
+			impacto = { 0.26, 0.26, 0.34 },
 			nome = "Flechada",
 			icone = "🎯",
 		},
@@ -282,17 +293,19 @@ Classes.dados = {
 		titulo = "A Lâmina na Sombra",
 		icone = "🗡️",
 		cor = Color3.fromRGB(235, 60, 90),
-		descricao = "Duas adagas, muitos críticos e golpes pelas costas. Some e reaparece atrás do alvo.",
-		forte = "Mata um alvo de cada vez, críticos e esquiva rápida",
-		fraco = "Pouca vida, alcance curtíssimo, quase nada de área",
-		notas = { Vida = 2, Dano = 5, Alcance = 1, Velocidade = 5 },
+		descricao = "Duas adagas que fazem sangrar, muitos críticos e golpes pelas costas.",
+		forte = "Sangramento, críticos, o mais rápido de todos",
+		fraco = "Defesa baixa: leva 15% a mais de dano; pouca vida",
+		notas = { Vida = 1, Dano = 5, Alcance = 1, Velocidade = 5 },
 
 		vida = 85,
 		dano = 15,
-		velocidade = 21,
+		velocidade = 23,
 		intervalo = 0.26,
 		alcance = 7.5,
-		armadura = 0,
+		armadura = -0.15, -- defesa baixa: leva mais dano
+		-- cada golpe abre um corte: o inimigo sangra (acumula até maxPilhas vezes)
+		sangramento = { dps = 0.14, duracao = 4, maxPilhas = 5 },
 		critico = 0.15,
 		esquivaMult = 0.7,
 		ameacaMult = 0.6,
@@ -301,6 +314,7 @@ Classes.dados = {
 			tipo = "corte",
 			arco = 95,
 			combo = { 1, 1, 2.4 },
+			impacto = { 0.09, 0.09, 0.2 },
 			costas = 0.5, -- +50% de dano acertando o inimigo pelas costas
 			nome = "Dança das Adagas",
 			icone = "🗡️",
@@ -365,6 +379,12 @@ Config.CARGA_ATAQUE_MAX = 1.2 -- carga cheia (dano máximo e efeito especial)
 Config.DANO_CARGA_MIN = 1.6 -- multiplicador de dano com carga mínima
 Config.DANO_CARGA_MAX = 3.2 -- multiplicador de dano com carga cheia
 Config.VELOCIDADE_CARREGANDO = 0.5 -- anda mais devagar enquanto carrega
+
+-- Defesa com escudo (Cavaleiro): segure F, o botão direito do mouse ou L2
+Config.DEFESA_REDUCAO = 0.75 -- golpes de frente perdem 75% do dano
+Config.DEFESA_ANGULO = 65 -- protege golpes vindos até 65° para cada lado da frente
+Config.DEFESA_PERFEITA = 0.3 -- erguer o escudo até 0,3s antes do golpe: bloqueia tudo e atordoa
+Config.VELOCIDADE_DEFENDENDO = 0.45
 
 -- Supremo: a barra enche causando dano e derrotando inimigos
 Config.CARGA_MAXIMA = 100
@@ -888,7 +908,7 @@ function Combate.calcularStats(estado)
 		rouboVida = e("rouboVida"),
 		regen = e("regen"),
 		multOuro = (1 + e("ouroPct")) * (if e("ouroMult") > 0 then 2 else 1),
-		armadura = math.min(classe.armadura + e("armadura"), 0.6),
+		armadura = math.clamp(classe.armadura + e("armadura"), -0.5, 0.6),
 		espinhos = e("espinhos"),
 		escudo = e("escudo") > 0,
 		investida = e("investida"),
@@ -914,7 +934,15 @@ function Combate.calcularStats(estado)
 		recarga = classe.habilidade.recarga * (1 - math.min(e("recargaPct"), 0.6)),
 		recargaEsquiva = Config.ESQUIVA_RECARGA * (classe.esquivaMult or 1) * (1 - math.min(e("esquivaPct"), 0.6)),
 		multCarga = 1 + e("cargaPct"),
+		-- Mago
+		manaMax = if classe.mana then classe.mana + e("manaPlana") else 0,
+		manaRegen = (classe.manaRegen or 0) * (1 + e("manaRegenPct")),
+		custoMana = 1 - math.min(e("economiaMana"), 0.5),
+		manaAbate = e("manaAbate"),
 		-- Assassino
+		sangueDps = if classe.sangramento then classe.sangramento.dps * (1 + e("sangrePct")) else 0,
+		sangueMax = if classe.sangramento then classe.sangramento.maxPilhas + e("sangrePilhas") else 0,
+		sangueDuracao = if classe.sangramento then classe.sangramento.duracao else 0,
 		costas = (classe.ataque.costas or 0) + e("costasPct"),
 		curaCritico = e("curaCritico"),
 		leque = e("leque"),
@@ -922,6 +950,8 @@ function Combate.calcularStats(estado)
 		execucao = e("execucao") > 0,
 		milCortes = e("milCortes") > 0,
 	}
+	-- mana: começa cheia e nunca passa do máximo
+	estado.mana = math.min(estado.mana or estado.stats.manaMax, estado.stats.manaMax)
 	return estado.stats
 end
 
@@ -938,7 +968,49 @@ function Combate.enviarStats(estado)
 		arco = classe.ataque.arco,
 		carga = estado.carga,
 		cargaMax = Config.CARGA_MAXIMA,
+		mana = estado.mana,
+		manaMax = stats.manaMax,
+		manaRegen = stats.manaRegen,
+		custoMana = stats.custoMana,
 	})
+end
+
+------------------------------------------------------------------------
+-- Mana (Mago)
+------------------------------------------------------------------------
+
+function Combate.enviarMana(estado, forcar: boolean?)
+	if estado.stats.manaMax <= 0 then
+		return
+	end
+	local anterior = estado.manaEnviada or -100
+	if forcar or math.abs(estado.mana - anterior) >= 2 or (estado.mana >= estado.stats.manaMax and anterior < estado.stats.manaMax) then
+		estado.manaEnviada = estado.mana
+		Remotos.enviar(estado.player, "mana", { valor = estado.mana, max = estado.stats.manaMax })
+	end
+end
+
+-- Gasta mana; sem mana suficiente, avisa o jogador e devolve false
+function Combate.gastarMana(estado, custo: number): boolean
+	if estado.stats.manaMax <= 0 then
+		return true
+	end
+	custo *= estado.stats.custoMana
+	if estado.mana < custo then
+		Remotos.enviar(estado.player, "semMana", {})
+		return false
+	end
+	estado.mana -= custo
+	Combate.enviarMana(estado, true)
+	return true
+end
+
+function Combate.ganharMana(estado, quantidade: number)
+	if estado.stats.manaMax <= 0 then
+		return
+	end
+	estado.mana = math.min(estado.stats.manaMax, estado.mana + quantidade)
+	Combate.enviarMana(estado)
 end
 
 function Combate.aplicarVelocidade(estado)
@@ -953,6 +1025,9 @@ function Combate.aplicarVelocidade(estado)
 	local fator = if os.clock() < (estado.lentoAte or 0) then estado.lentoFator or 1 else 1
 	if estado.carregandoDesde then
 		fator *= Config.VELOCIDADE_CARREGANDO
+	end
+	if estado.defendendoDesde then
+		fator *= Config.VELOCIDADE_DEFENDENDO
 	end
 	if os.clock() < (estado.rapidoAte or 0) then
 		fator *= 1.3
@@ -1040,6 +1115,23 @@ local function queimar(inimigo, danoPorSegundo: number, estado)
 	inimigo.modelo:SetAttribute("Queimando", true)
 end
 
+local COR_SANGUE = Color3.fromRGB(200, 20, 35)
+
+-- Assassino: cada golpe abre mais um corte (pilha); o inimigo perde vida enquanto sangra
+local function sangrar(inimigo, estado)
+	local stats = estado.stats
+	local sangue = inimigo.sangue
+	if not sangue or os.clock() > sangue.ate then
+		sangue = { pilhas = 0 }
+		inimigo.sangue = sangue
+	end
+	sangue.pilhas = math.min(stats.sangueMax, sangue.pilhas + 1)
+	sangue.ate = os.clock() + stats.sangueDuracao
+	sangue.dps = stats.dano * stats.sangueDps
+	sangue.fonte = estado
+	inimigo.modelo:SetAttribute("Sangrando", sangue.pilhas)
+end
+
 local function desacelerar(inimigo, fator: number, duracao: number)
 	inimigo.lentoAte = os.clock() + duracao
 	inimigo.lentoFator = math.min(inimigo.lentoFator or 1, fator)
@@ -1109,6 +1201,7 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		critico = opcoes.critico == true,
 		cor = opcoes.cor,
 		autor = estado and estado.player,
+		sangue = opcoes.sangue or (estado ~= nil and opcoes.principal == true and estado.stats.sangueMax > 0),
 	})
 
 	if opcoes.empurrar and not inimigo.pesado and inimigo.vida > 0 then
@@ -1125,6 +1218,9 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		end
 		if stats.queimadura > 0 then
 			queimar(inimigo, stats.dano * stats.queimadura, estado)
+		end
+		if stats.sangueMax > 0 and opcoes.principal then
+			sangrar(inimigo, estado)
 		end
 		if stats.raios > 0 and opcoes.principal then
 			correnteEletrica(run, inimigo, estado, stats.raios, stats.dano * 0.5)
@@ -1231,6 +1327,7 @@ function Combate.derrubar(run, estado)
 	humanoid.UseJumpPower = true
 	humanoid.JumpPower = 0
 	estado.carregandoDesde = nil
+	estado.defendendoDesde = nil
 	humanoid.Sit = true
 	Combate.aplicarVelocidade(estado)
 	definirCaidoNoPersonagem(estado, true)
@@ -1283,6 +1380,32 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 	end
 	if agora < (estado.resistenteAte or 0) then
 		dano *= 0.6
+	end
+
+	-- Escudo erguido (Cavaleiro): golpes vindos da frente perdem quase todo o dano.
+	-- Erguido logo antes do golpe, é uma defesa perfeita: bloqueia tudo e atordoa quem atacou.
+	if estado.defendendoDesde and not opcoes.ambiente then
+		local origem = opcoes.origem or (fonte and fonte.raiz and fonte.raiz.Position)
+		if origem then
+			local paraFonte = planar(origem - raiz.Position)
+			local frente = planar(raiz.CFrame.LookVector)
+			local deFrente = paraFonte.Magnitude < 0.5
+				or (frente.Magnitude > 0.1 and paraFonte.Unit:Dot(frente.Unit) >= math.cos(math.rad(Config.DEFESA_ANGULO)))
+			if deFrente then
+				local perfeita = agora - estado.defendendoDesde <= Config.DEFESA_PERFEITA
+				local direcaoEscudo = if frente.Magnitude > 0.1 then frente.Unit else Vector3.new(0, 0, -1)
+				Vfx.partida(run, "defesa", { jogador = estado.player, perfeita = perfeita, pos = raiz.Position + direcaoEscudo * 1.8, dir = direcaoEscudo })
+				animar(run, estado, "bloqueou", nil)
+				if perfeita then
+					if fonte and fonte.vivo then
+						Combate.atordoar(fonte, 1.2)
+					end
+					Combate.adicionarCarga(estado, 6)
+					return
+				end
+				dano *= 1 - Config.DEFESA_REDUCAO
+			end
+		end
 	end
 	dano = math.max(1, math.floor(dano * (1 - estado.stats.armadura) + 0.5))
 
@@ -1341,8 +1464,9 @@ local function pelasCostas(inimigo, origem: Vector3): boolean
 end
 
 local laminasNoturnas
+local feiticoDoMago
 
-local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vector3, mult: number, final: boolean)
+local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vector3, mult: number, final: boolean, combo: number)
 	local stats = estado.stats
 	local arco = classe.ataque.arco * (if final then 1.25 else 1)
 	local alcance = stats.alcance * (if final then 1.15 else 1)
@@ -1354,7 +1478,7 @@ local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vecto
 		alcance = alcance,
 		arco = arco,
 		cor = classe.cor,
-		combo = estado.combo,
+		combo = combo,
 	}, estado.player)
 
 	local limite = math.cos(math.rad(arco / 2))
@@ -1498,6 +1622,80 @@ local function disparoDeClasse(run, estado, classe, raiz: BasePart, direcao: Vec
 	Projeteis.disparar(run, lista)
 end
 
+-- Mago: cada golpe do combo é uma magia diferente
+--   1º Dardo Arcano: rápido e preciso, pequena explosão arcana
+--   2º Lança de Gelo: atravessa um inimigo a mais e deixa lento
+--   3º Bola de Fogo: lenta e grande, explode e queima
+local MAGIAS_DO_COMBO = { "dardoArcano", "lancaGelo", "bolaFogo" }
+local COR_ARCANA = Color3.fromRGB(190, 110, 255)
+local COR_GELO = Color3.fromRGB(150, 225, 255)
+
+-- Ponto de onde a magia sai: o cristal do cajado, à frente e à direita do corpo
+local function pontaDoCajado(raiz: BasePart, direcao: Vector3): Vector3
+	local direita = Vector3.new(-direcao.Z, 0, direcao.X)
+	return raiz.Position + direcao * 2.5 + Vector3.new(0, 1.4, 0) + direita * 0.5
+end
+
+feiticoDoMago = function(run, estado, classe, raiz: BasePart, direcao: Vector3, mult: number, combo: number)
+	local stats = estado.stats
+	local tipo = MAGIAS_DO_COMBO[combo] or "dardoArcano"
+	local origem = pontaDoCajado(raiz, direcao)
+	local quantidade = stats.projeteis
+	local lista = {}
+	for i = 1, quantidade do
+		local angulo = math.rad((i - (quantidade + 1) / 2) * 13)
+		local dir = CFrame.Angles(0, angulo, 0):VectorToWorldSpace(direcao)
+		local critico = math.random() < stats.critico
+		local dano = stats.dano * mult * (if critico then stats.multCritico else 1)
+		local magia = {
+			lado = "jogador",
+			tipo = tipo,
+			pos = origem,
+			dir = dir,
+			alcance = stats.alcance,
+			tamanho = stats.tamanho,
+			ricochete = stats.ricochete,
+			perfuracao = stats.perfuracao,
+		}
+		if tipo == "dardoArcano" then
+			magia.velocidade = 80
+			magia.raio = 1 * stats.tamanho
+			magia.explosao = stats.explosao * 0.7
+			magia.aoAcertar = function(inimigo, _, projetil)
+				Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, empurrar = projetil.dir * 14 })
+			end
+			magia.aoExplodir = function(pos: Vector3, principal)
+				Vfx.partida(run, "explosao", { pos = pos, raio = magia.explosao, cor = COR_ARCANA, leve = true })
+				Combate.danoEmArea(run, pos, magia.explosao, dano * 0.5, estado, { semEfeitos = true, exceto = principal, cor = COR_ARCANA })
+			end
+		elseif tipo == "lancaGelo" then
+			magia.velocidade = 72
+			magia.raio = 0.9 * stats.tamanho
+			magia.perfuracao += 1
+			magia.aoAcertar = function(inimigo, _, projetil)
+				Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, cor = COR_GELO, lento = 0.55, empurrar = projetil.dir * 10 })
+			end
+		else
+			magia.velocidade = 50
+			magia.tamanho = stats.tamanho * 1.4
+			magia.raio = 1.6 * stats.tamanho
+			magia.explosao = math.max(stats.explosao, 4) * 1.8
+			magia.aoAcertar = function(inimigo, _, projetil)
+				Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, queimar = true, cor = COR_FOGO, empurrar = projetil.dir * 30 })
+			end
+			magia.aoExplodir = function(pos: Vector3, principal)
+				Vfx.partida(run, "explosao", { pos = pos, raio = magia.explosao, cor = COR_FOGO, forte = true })
+				Combate.danoEmArea(run, pos, magia.explosao, dano * 0.6, estado, { semEfeitos = true, exceto = principal, queimar = true, cor = COR_FOGO, empurrarForca = 30 })
+			end
+		end
+		if not magia.explosao or magia.explosao <= 0 then
+			magia.explosao = nil
+		end
+		table.insert(lista, magia)
+	end
+	Projeteis.disparar(run, lista)
+end
+
 local function rajadaDoDragao(run, estado, raiz: BasePart, direcao: Vector3)
 	local stats = estado.stats
 	local alcance = stats.alcance * 2.2
@@ -1515,7 +1713,7 @@ local function rajadaDoDragao(run, estado, raiz: BasePart, direcao: Vector3)
 end
 
 function Combate.atacar(run, estado, direcao: any)
-	if not podeAgir(run, estado) or estado.carregandoDesde then
+	if not podeAgir(run, estado) or estado.carregandoDesde or estado.defendendoDesde then
 		return
 	end
 	local stats = estado.stats
@@ -1528,6 +1726,10 @@ function Combate.atacar(run, estado, direcao: any)
 	if agora - estado.ultimoAtaque > stats.intervalo * 2.6 + 0.3 then
 		estado.combo = 0
 	end
+	local custos = classe.custos
+	if custos and not Combate.gastarMana(estado, if estado.combo % 3 + 1 == 3 then custos.final else custos.ataque) then
+		return
+	end
 	estado.combo = estado.combo % 3 + 1
 	local final = estado.combo == 3
 	estado.ultimoFoiFinal = final
@@ -1535,17 +1737,28 @@ function Combate.atacar(run, estado, direcao: any)
 
 	local raiz = raizDe(estado) :: BasePart
 	local dir = direcaoValida(direcao, raiz)
-	local mult = classe.ataque.combo[estado.combo] or 1
-	animar(run, estado, "ataque", { combo = estado.combo }, estado.player)
+	local combo = estado.combo
+	local mult = classe.ataque.combo[combo] or 1
+	animar(run, estado, "ataque", { combo = combo }, estado.player)
 
-	if classe.ataque.tipo == "corte" then
-		golpeDeEspada(run, estado, classe, raiz, dir, mult, final)
-	else
-		disparoDeClasse(run, estado, classe, raiz, dir, mult, final)
-	end
-	if stats.dragao > 0 then
-		rajadaDoDragao(run, estado, raiz, dir)
-	end
+	-- o golpe acontece quando a arma chega no alvo, no meio da animação
+	local impacto = classe.ataque.impacto and classe.ataque.impacto[combo] or 0
+	task.delay(impacto, function()
+		if not podeAgir(run, estado) or estado.defendendoDesde then
+			return
+		end
+		local raizAgora = raizDe(estado) :: BasePart
+		if classe.ataque.tipo == "corte" then
+			golpeDeEspada(run, estado, classe, raizAgora, dir, mult, final, combo)
+		elseif classe.id == "mago" then
+			feiticoDoMago(run, estado, classe, raizAgora, dir, mult, combo)
+		else
+			disparoDeClasse(run, estado, classe, raizAgora, dir, mult, final)
+		end
+		if stats.dragao > 0 then
+			rajadaDoDragao(run, estado, raizAgora, dir)
+		end
+	end)
 end
 
 ------------------------------------------------------------------------
@@ -1553,7 +1766,12 @@ end
 ------------------------------------------------------------------------
 
 function Combate.carregar(run, estado)
-	if not podeAgir(run, estado) or estado.carregandoDesde then
+	if not podeAgir(run, estado) or estado.carregandoDesde or estado.defendendoDesde then
+		return
+	end
+	local custos = Classes.obter(estado.classe).custos
+	if custos and estado.mana < custos.carregado * estado.stats.custoMana then
+		Remotos.enviar(estado.player, "semMana", {})
 		return
 	end
 	estado.carregandoDesde = os.clock()
@@ -1612,15 +1830,36 @@ local function golpeCarregado(run, estado, classe, raiz: BasePart, direcao: Vect
 			rajadaDoDragao(run, estado, raiz, direcao)
 		end
 	elseif classe.id == "mago" then
-		-- Orbe enorme e lento que explode forte (atravessa tudo com a carga cheia)
+		-- Orbe do Vazio: lento, puxa os inimigos em volta enquanto voa e explode forte
+		-- (atravessa tudo com a carga cheia)
+		local custos = classe.custos
+		if custos then
+			estado.mana = math.max(0, estado.mana - custos.carregado * stats.custoMana)
+			Combate.enviarMana(estado, true)
+		end
 		local tamanho = (1.8 + 1.4 * fracao) * stats.tamanho
 		local explosao = math.max(stats.explosao, 4) * (1.6 + 1.4 * fracao)
 		local dano = stats.dano * mult
+		local raioPuxao = 9 + 5 * fracao
+		local proximoPuxao = 0
 		Projeteis.disparar(run, {
 			{
 				lado = "jogador",
 				tipo = "orbeCarregado",
-				pos = raiz.Position + direcao * 2 + Vector3.new(0, 1, 0),
+				pos = pontaDoCajado(raiz, direcao),
+				aoMover = function(projetil)
+					local agora = os.clock()
+					if agora < proximoPuxao then
+						return
+					end
+					proximoPuxao = agora + 0.1
+					for _, inimigo in inimigosVivos(run) do
+						local delta = planar(projetil.pos - inimigo.raiz.Position)
+						if not inimigo.pesado and delta.Magnitude > 1 and delta.Magnitude <= raioPuxao then
+							inimigo.raiz.AssemblyLinearVelocity = delta.Unit * 24 + Vector3.new(0, 2, 0)
+						end
+					end
+				end,
 				dir = direcao,
 				velocidade = 42,
 				alcance = stats.alcance * 1.1,
@@ -1632,7 +1871,7 @@ local function golpeCarregado(run, estado, classe, raiz: BasePart, direcao: Vect
 					Combate.danoAoInimigo(run, inimigo, dano, estado, { principal = true, empurrar = projetil.dir * 30 })
 				end,
 				aoExplodir = function(pos: Vector3, principal)
-					Vfx.partida(run, "explosao", { pos = pos, raio = explosao, cor = classe.cor, forte = true })
+					Vfx.partida(run, "vazio", { pos = pos, raio = explosao })
 					Combate.danoEmArea(run, pos, explosao, dano * 0.7, estado, { semEfeitos = true, exceto = principal, cor = classe.cor, empurrarForca = 35 })
 				end,
 			},
@@ -1706,6 +1945,31 @@ function Combate.soltar(run, estado, direcao: any)
 	local classe = Classes.obter(estado.classe)
 	animar(run, estado, "soltar", { fracao = fracao }, estado.player)
 	golpeCarregado(run, estado, classe, raiz, dir, fracao)
+end
+
+------------------------------------------------------------------------
+-- Defesa com escudo (Cavaleiro): segurar ergue o escudo, soltar abaixa
+------------------------------------------------------------------------
+
+function Combate.defender(run, estado, ativo: boolean)
+	if estado.classe ~= "cavaleiro" then
+		return
+	end
+	if ativo then
+		if not podeAgir(run, estado) or estado.defendendoDesde then
+			return
+		end
+		if estado.carregandoDesde then
+			Combate.cancelarCarga(run, estado)
+		end
+		estado.defendendoDesde = os.clock()
+		Combate.aplicarVelocidade(estado)
+		animar(run, estado, "defender", nil, estado.player)
+	elseif estado.defendendoDesde then
+		estado.defendendoDesde = nil
+		Combate.aplicarVelocidade(estado)
+		animar(run, estado, "pararDefesa", nil, estado.player)
+	end
 end
 
 ------------------------------------------------------------------------
@@ -1899,6 +2163,10 @@ function Combate.habilidade(run, estado, direcao: any)
 		return
 	end
 	local stats = estado.stats
+	local custos = Classes.obter(estado.classe).custos
+	if custos and not Combate.gastarMana(estado, custos.habilidade) then
+		return
+	end
 	estado.habilidadeProntaEm = agora + stats.recarga
 	Remotos.enviar(estado.player, "recarga", { tipo = "habilidade", restante = stats.recarga, total = stats.recarga })
 
@@ -2155,7 +2423,16 @@ end
 function Combate.tick(run, dt: number)
 	local agora = os.clock()
 	for _, inimigo in inimigosVivos(run) do
-		if inimigo.queimaAte then
+		local sangue = inimigo.sangue
+		if sangue then
+			if agora < sangue.ate then
+				Combate.danoAoInimigo(run, inimigo, sangue.dps * sangue.pilhas * dt, sangue.fonte, { semEfeitos = true, cor = COR_SANGUE, sangue = "gota" })
+			else
+				inimigo.sangue = nil
+				inimigo.modelo:SetAttribute("Sangrando", 0)
+			end
+		end
+		if inimigo.vivo and inimigo.queimaAte then
 			if agora < inimigo.queimaAte then
 				Combate.danoAoInimigo(run, inimigo, inimigo.queimaDps * dt, inimigo.queimaFonte, { semEfeitos = true, cor = COR_FOGO })
 			else
@@ -2173,6 +2450,9 @@ function Combate.tick(run, dt: number)
 			else
 				if estado.stats.regen > 0 then
 					Combate.curar(run, estado, estado.stats.regen * dt, true)
+				end
+				if estado.stats.manaMax > 0 and estado.mana < estado.stats.manaMax then
+					Combate.ganharMana(estado, estado.stats.manaRegen * dt)
 				end
 				local raiz = raizDe(estado)
 				if raiz and run.sala and Masmorra.naLava(run.sala, raiz.Position) then
@@ -2196,7 +2476,10 @@ end
 
 -- Ao começar cada sala
 function Combate.novaSala(estado)
+	estado.mana = estado.stats.manaMax
+	Combate.enviarMana(estado, true)
 	estado.carregandoDesde = nil
+	estado.defendendoDesde = nil
 	estado.escudoAtivo = estado.stats.escudo
 	estado.invulneravelAte = os.clock() + 1.5
 	estado.lentoAte = nil
@@ -2958,8 +3241,11 @@ local function ataqueDisparo(run, inimigo, ataque, alvo, agora: number): boolean
 				velocidade = ataque.velocidade or 45,
 				alcance = (ataque.alcance or 45) * 1.3,
 				raio = 1.1,
-				aoAcertar = function(estado)
-					Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoesDoEfeito(inimigo, ataque.efeito))
+				aoAcertar = function(estado, _, projetil)
+					-- o golpe vem de onde o projétil estava (para o escudo saber se foi de frente)
+					local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+					opcoes.origem = projetil.pos - projetil.dir * 4
+					Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
 				end,
 			})
 		end
@@ -2999,8 +3285,11 @@ local function ataqueRajada(run, inimigo, ataque, agora: number): boolean
 				velocidade = ataque.velocidade or 35,
 				alcance = 70,
 				raio = 1.2,
-				aoAcertar = function(estado)
-					Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoesDoEfeito(inimigo, ataque.efeito))
+				aoAcertar = function(estado, _, projetil)
+					-- o golpe vem de onde o projétil estava (para o escudo saber se foi de frente)
+					local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+					opcoes.origem = projetil.pos - projetil.dir * 4
+					Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
 				end,
 			})
 		end
@@ -3173,7 +3462,9 @@ local function ataqueArea(run, inimigo, ataque, agora: number): boolean
 				Vfx.partida(run, "impactoArea", { pos = ponto, raio = raio, visual = ataque.visual })
 				for _, info in jogadoresAtingiveis(run) do
 					if planar(info.raiz.Position - ponto).Magnitude <= raio + 1 then
-						Combate.danoAoJogador(run, info.estado, inimigo.dano * (ataque.mult or 1), nil, opcoesDoEfeito(inimigo, ataque.efeito))
+						local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+						opcoes.origem = ponto
+						Combate.danoAoJogador(run, info.estado, inimigo.dano * (ataque.mult or 1), nil, opcoes)
 					end
 				end
 			end)
@@ -3461,7 +3752,7 @@ function Inimigos.morrer(run, inimigo)
 			Vfx.partida(run, "explosao", { pos = chao, raio = raio, cor = Color3.fromRGB(255, 120, 40), forte = true })
 			for _, info in jogadoresAtingiveis(run) do
 				if planar(info.raiz.Position - chao).Magnitude <= raio + 1 then
-					Combate.danoAoJogador(run, info.estado, inimigo.dano * 1.5, nil, {})
+					Combate.danoAoJogador(run, info.estado, inimigo.dano * 1.5, nil, { origem = chao })
 				end
 			end
 		end)
@@ -4200,7 +4491,7 @@ game:BindToClose(function()
 	Dados.salvarTodos()
 end)
 
-local ACOES_DE_COMBATE = { atacar = true, carregar = true, soltar = true, cancelar = true, habilidade = true, esquiva = true, supremo = true }
+local ACOES_DE_COMBATE = { atacar = true, carregar = true, soltar = true, cancelar = true, defender = true, habilidade = true, esquiva = true, supremo = true }
 
 Remotos.Acao.OnServerEvent:Connect(function(player, tipo, dados, extra)
 	if type(tipo) ~= "string" then
@@ -5110,6 +5401,9 @@ function Run:aoMorrerInimigo(inimigo, estadoMatador)
 		if stats.arquimago then
 			Combate.reduzirRecarga(estadoMatador, 1)
 		end
+		if stats.manaAbate > 0 then
+			Combate.ganharMana(estadoMatador, stats.manaAbate)
+		end
 		-- Carta Combustão: explosões em cadeia
 		if stats.explosaoMorte > 0 then
 			task.delay(0.12, function()
@@ -5773,7 +6067,7 @@ end
 -- No lobby os ataques são só para exibir a classe: os outros jogadores veem a animação
 local cargaNoLobby = {} -- [Player] = momento em que começou a carregar
 
-local function animacaoNoLobby(player: Player, tipo: string, extra: any)
+local function animacaoNoLobby(player: Player, tipo: string, extra: any, ativo: any)
 	local dados = { jogador = player, classe = player:GetAttribute("Classe") or "cavaleiro" }
 	if tipo == "atacar" then
 		dados.acao = "ataque"
@@ -5794,6 +6088,11 @@ local function animacaoNoLobby(player: Player, tipo: string, extra: any)
 		dados.acao = "cancelar"
 	elseif tipo == "esquiva" then
 		dados.acao = "esquiva"
+	elseif tipo == "defender" then
+		if dados.classe ~= "cavaleiro" then
+			return
+		end
+		dados.acao = if ativo == true then "defender" else "pararDefesa"
 	else
 		return
 	end
@@ -5805,7 +6104,7 @@ function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any, extra
 	local run = partidaDoJogador[player]
 	local estado = run and run.jogadores[player]
 	if not estado then
-		animacaoNoLobby(player, tipo, extra)
+		animacaoNoLobby(player, tipo, extra, direcao)
 		return
 	end
 	if tipo == "atacar" then
@@ -5816,6 +6115,8 @@ function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any, extra
 		Combate.soltar(run, estado, direcao)
 	elseif tipo == "cancelar" then
 		Combate.cancelarCarga(run, estado)
+	elseif tipo == "defender" then
+		Combate.defender(run, estado, direcao == true)
 	elseif tipo == "habilidade" then
 		Combate.habilidade(run, estado, direcao)
 	elseif tipo == "esquiva" then
@@ -5884,7 +6185,8 @@ Projeteis.distanciaAoSegmento = distanciaAoSegmento
 	perfuracao, ricochete           (quantos inimigos atravessa / quica)
 	explosao                        (raio da explosão ao terminar, opcional)
 	aoAcertar(alvo, pos, projetil)  alvo = inimigo (lado jogador) ou estado do jogador (lado inimigo)
-	aoExplodir(pos, alvoPrincipal)  ]]
+	aoExplodir(pos, alvoPrincipal)
+	aoMover(projetil, dt)           (chamado a cada passo, opcional)  ]]
 function Projeteis.disparar(run, lista)
 	local visuais = {}
 	for _, dados in lista do
@@ -5905,6 +6207,7 @@ function Projeteis.disparar(run, lista)
 			explosao = dados.explosao,
 			aoAcertar = dados.aoAcertar,
 			aoExplodir = dados.aoExplodir,
+			aoMover = dados.aoMover,
 			atingidos = {},
 		}
 		run.projeteis[projetil] = true
@@ -5999,6 +6302,9 @@ function Projeteis.atualizar(run, dt: number)
 		local fim = inicio + projetil.dir * passo
 		projetil.pos = fim
 		projetil.percorrido += passo
+		if projetil.aoMover then
+			projetil.aoMover(projetil, dt)
+		end
 
 		-- Quem está no caminho deste passo, em ordem
 		local candidatos = {}
@@ -6302,16 +6608,9 @@ return Ambiente
           <Properties>
             <string name="Name">Animacoes</string>
             <ProtectedString name="Source"><![CDATA[-- Animações dos personagens feitas por código (não precisam de arquivos de animação).
---
--- Cada animação é uma lista de "quadros-chave": em cada tempo, o ângulo de algumas juntas
--- (ombro, cotovelo, cintura...). Entre os quadros, os ângulos são suavizados. A animação é
--- aplicada por cima da animação padrão do Roblox (andar, pular), então as pernas continuam
--- andando enquanto os braços atacam.
---
--- Ângulos em radianos, no espaço da peça "pai" (X = direita, Y = cima, Z = trás):
---   rx > 0 leva o braço/perna para FRENTE (1,57 = esticado para frente; 3,14 = para cima)
---   ry > 0 gira para a ESQUERDA (visto de cima)   rz > 0 abre o braço direito para o lado
---   no tronco, rx < 0 inclina para frente
+-- As poses e os golpes ficam em Poses.luau; aqui elas são aplicadas nas juntas do personagem,
+-- por cima da animação padrão do Roblox (andar, pular). Também cuida dos detalhes das armas
+-- (rastro da lâmina, corda e flecha do arco, brilho do cajado, partículas de carga).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6322,6 +6621,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
 
 local Vfx = require(script.Parent.Vfx)
+local Poses = require(script.Parent.Poses)
 
 local Animacoes = {}
 
@@ -6331,7 +6631,6 @@ pasta.Name = "AnimacoesLocais"
 pasta.Parent = workspace
 
 local PESO_POSTURA = 0.75
-local ZERO = { 0, 0, 0, 0, 0, 0 }
 local OURO = Color3.fromRGB(255, 214, 90)
 
 -- Junta lógica -> { peça que contém o Motor6D, nome do Motor6D }
@@ -6361,633 +6660,15 @@ local JUNTAS_R6 = {
 	quadrilE = { "Torso", "Left Hip" },
 }
 
--- Ângulos (rx, ry, rz) e deslocamento (px, py, pz)
-local function A(rx: number?, ry: number?, rz: number?, px: number?, py: number?, pz: number?)
-	return { rx or 0, ry or 0, rz or 0, px or 0, py or 0, pz or 0 }
-end
-
-local function juntar(base, extra)
-	local resultado = table.clone(base)
-	for chave, valor in extra do
-		resultado[chave] = valor
-	end
-	return resultado
-end
-
-------------------------------------------------------------------------
--- Posturas (como cada classe segura a arma parada) e animações
-------------------------------------------------------------------------
-
--- Postura: vale sempre (andando ou parado) e mexe só da cintura para cima
-local POSTURAS = {
-	cavaleiro = { ombroD = A(0.35, 0, 0.12), cotoveloD = A(0.6), ombroE = A(0.55, 0.35, -0.1), cotoveloE = A(1.1), pescoco = A(-0.05) },
-	mago = { ombroD = A(0.25, 0, 0.1), cotoveloD = A(0.8), pulsoD = A(-1.05), ombroE = A(0.15, 0, -0.12), cintura = A(0.06) },
-	arqueiro = { ombroE = A(0.45, 0.2, -0.1), cotoveloE = A(0.3), ombroD = A(0.15, 0, 0.1) },
-	-- o Assassino anda sempre curvado, com as adagas baixas e à frente
-	assassino = {
-		cintura = A(-0.3),
-		pescoco = A(0.22),
-		ombroD = A(0.55, 0, 0.3),
-		cotoveloD = A(1.2),
-		pulsoD = A(-0.3),
-		ombroE = A(0.75, 0.25, -0.3),
-		cotoveloE = A(1.35),
-		pulsoE = A(-0.3),
-	},
-}
-
--- Pose parada: o corpo todo, só quando o personagem está quase sem se mexer.
--- "t" é o tempo em segundos (para respirar e balançar de leve).
-local PARADO = {
-	-- Guarda firme: base larga, escudo à frente, espada pronta
-	cavaleiro = function(t: number)
-		local respirar = math.sin(t * 1.6) * 0.025
-		return {
-			raiz = A(0, 0.3, 0, 0, -0.22, 0),
-			cintura = A(-0.04 + respirar, -0.22),
-			pescoco = A(-0.05, -0.08),
-			ombroE = A(0.95, 0.55, -0.1),
-			cotoveloE = A(1.25),
-			ombroD = A(0.4, 0, 0.3),
-			cotoveloD = A(0.75),
-			pulsoD = A(-0.45),
-			quadrilD = A(0.32, 0, 0.14),
-			joelhoD = A(-0.5),
-			tornozeloD = A(0.18),
-			quadrilE = A(-0.12, 0, -0.14),
-			joelhoE = A(-0.32),
-			tornozeloE = A(0.18),
-		}
-	end,
-	-- Ereto e confiante: cajado apoiado, a outra mão conjura uma luz, flutua de leve
-	mago = function(t: number)
-		local flutuar = math.sin(t * 2) * 0.06
-		return {
-			raiz = A(0, 0, 0, 0, flutuar, 0),
-			cintura = A(0.1 + math.sin(t * 1.4) * 0.02),
-			pescoco = A(-0.14),
-			ombroD = A(0.2, 0, 0.2),
-			cotoveloD = A(0.9),
-			pulsoD = A(-1.1),
-			ombroE = A(0.75, 0.35, -0.25),
-			cotoveloE = A(1.35),
-			pulsoE = A(0.45 + math.sin(t * 2) * 0.1),
-			quadrilD = A(0, 0, 0.04),
-			quadrilE = A(0, 0, -0.04),
-			brilho = A(0.35 + math.sin(t * 2) * 0.1),
-		}
-	end,
-	-- Relaxado, peso numa perna, arco baixo, olhando em volta
-	arqueiro = function(t: number)
-		return {
-			raiz = A(0, -0.25, 0.07),
-			cintura = A(0.02, 0.15, -0.05),
-			pescoco = A(0, math.sin(t * 0.6) * 0.45),
-			ombroE = A(0.25, 0, -0.18),
-			cotoveloE = A(0.25),
-			ombroD = A(-0.12, 0, 0.18),
-			cotoveloD = A(0.5),
-			quadrilD = A(0, 0, 0.1),
-			quadrilE = A(0.18, 0, -0.16),
-			joelhoE = A(-0.35),
-			tornozeloE = A(0.15),
-		}
-	end,
-	-- Agachado e inclinado para frente, pronto para dar o bote
-	assassino = function(t: number)
-		local respirar = math.sin(t * 3.2) * 0.04
-		return {
-			raiz = A(0, 0.3, 0, 0, -0.42 + respirar, 0),
-			cintura = A(-0.5 + respirar, -0.2),
-			pescoco = A(0.42, 0.15 + math.sin(t * 0.8) * 0.15),
-			ombroD = A(0.7, 0, 0.4),
-			cotoveloD = A(1.35),
-			pulsoD = A(-0.35),
-			ombroE = A(1, 0.35, -0.35),
-			cotoveloE = A(1.55),
-			pulsoE = A(-0.35),
-			quadrilD = A(0.65, 0, 0.15),
-			joelhoD = A(-1.1),
-			tornozeloD = A(0.42),
-			quadrilE = A(0.35, 0, -0.2),
-			joelhoE = A(-1),
-			tornozeloE = A(0.6),
-		}
-	end,
-}
-
--- Arqueiro mirando: corpo de lado, braço do arco esticado, mão puxando a corda até o rosto
-local MIRA = {
-	cintura = A(0, -0.85),
-	pescoco = A(0, 0.75),
-	ombroE = A(1.57, 0.85),
-	cotoveloE = A(0),
-	pulsoE = A(0),
-	ombroD = A(1.45, 1.1),
-	cotoveloD = A(2.2),
-	puxar = A(1),
-}
-
-local function lancarMago(lado: number)
-	return {
-		duracao = 0.32,
-		quadros = {
-			{ t = 0.07, suave = "forte", pose = { ombroD = A(1.55, -0.15 * lado), cotoveloD = A(0.1), pulsoD = A(-0.2), ombroE = A(1.4, 0.3, -0.1), cotoveloE = A(0.2), cintura = A(0, -0.2 * lado), brilho = A(1) } },
-		},
-	}
-end
-
-local CONJURAR_MAGO = {
-	duracao = 0.5,
-	quadros = {
-		{ t = 0.13, pose = { ombroD = A(2.9, 0, 0.1), cotoveloD = A(0.2), pulsoD = A(0), ombroE = A(2.6, 0, -0.1), cintura = A(0.25), brilho = A(1) } },
-		{ t = 0.24, suave = "forte", pose = { ombroD = A(1.5), cotoveloD = A(0), pulsoD = A(-0.1), ombroE = A(1.5, 0.3), cintura = A(-0.3), raiz = A(-0.12, 0, 0, 0, -0.2, 0), brilho = A(1.5) } },
-	},
-}
-
-local function tiroArqueiro()
-	return {
-		duracao = 0.3,
-		quadros = {
-			{ t = 0.06, pose = MIRA },
-			{ t = 0.09, suave = "forte", pose = { ombroD = A(1.3, 1.5, 0.3), cotoveloD = A(0.9), ombroE = A(1.75, 0.85), puxar = A(0) } },
-		},
-	}
-end
-
-local ACOES = {
-	assassino = {
-		-- corte rápido da direita para a esquerda (adaga direita)
-		ataque1 = {
-			duracao = 0.24,
-			trilha = true,
-			quadros = {
-				{ t = 0.04, pose = { ombroD = A(1.1, -1, 0.35), cotoveloD = A(0.9), pulsoD = A(-0.6), cintura = A(-0.35, -0.45), raiz = A(0, -0.15, 0, 0, -0.3, 0) } },
-				{ t = 0.11, suave = "forte", pose = { ombroD = A(1.45, 0.95), cotoveloD = A(0.15), pulsoD = A(-0.9), cintura = A(-0.4, 0.45), raiz = A(-0.05, 0.2, 0, 0, -0.35, 0) } },
-			},
-		},
-		-- corte rápido da esquerda para a direita (adaga esquerda)
-		ataque2 = {
-			duracao = 0.24,
-			trilha = true,
-			quadros = {
-				{ t = 0.04, pose = { ombroE = A(1.1, 1, -0.35), cotoveloE = A(0.9), pulsoE = A(-0.6), cintura = A(-0.35, 0.45), raiz = A(0, 0.15, 0, 0, -0.3, 0) } },
-				{ t = 0.11, suave = "forte", pose = { ombroE = A(1.45, -0.95), cotoveloE = A(0.15), pulsoE = A(-0.9), cintura = A(-0.4, -0.45), raiz = A(-0.05, -0.2, 0, 0, -0.35, 0) } },
-			},
-		},
-		-- golpe final: salta e cruza as duas adagas para baixo
-		ataque3 = {
-			duracao = 0.4,
-			trilha = true,
-			quadros = {
-				{ t = 0.1, pose = { ombroD = A(2.4, 0.35), ombroE = A(2.4, -0.35), cotoveloD = A(1.1), cotoveloE = A(1.1), cintura = A(0.2), raiz = A(0.05, 0, 0, 0, 0.35, 0) } },
-				{
-					t = 0.19,
-					suave = "forte",
-					pose = {
-						ombroD = A(1.25, 0.55),
-						ombroE = A(1.25, -0.55),
-						cotoveloD = A(0.1),
-						cotoveloE = A(0.1),
-						cintura = A(-0.55),
-						raiz = A(-0.2, 0, 0, 0, -0.5, 0),
-						quadrilD = A(0.9),
-						joelhoD = A(-1),
-						quadrilE = A(-0.45),
-						joelhoE = A(-0.5),
-					},
-				},
-			},
-		},
-		-- carregando: encolhido como uma mola, adagas para trás
-		carregar = {
-			manter = true,
-			quadros = {
-				{
-					t = 0.15,
-					pose = {
-						raiz = A(0, 0, 0, 0, -0.65, 0),
-						cintura = A(-0.6),
-						pescoco = A(0.5),
-						ombroD = A(-0.45, 0, 0.55),
-						ombroE = A(-0.45, 0, -0.55),
-						cotoveloD = A(0.5),
-						cotoveloE = A(0.5),
-						quadrilD = A(0.95),
-						joelhoD = A(-1.45),
-						tornozeloD = A(0.5),
-						quadrilE = A(-0.15),
-						joelhoE = A(-1),
-						tornozeloE = A(0.7),
-					},
-				},
-			},
-		},
-		-- Investida Letal: dispara para frente com as duas adagas esticadas
-		soltar = {
-			duracao = 0.42,
-			trilha = true,
-			quadros = {
-				{
-					t = 0.04,
-					suave = "forte",
-					pose = {
-						ombroD = A(1.6, -0.25),
-						ombroE = A(1.6, 0.25),
-						cotoveloD = A(0),
-						cotoveloE = A(0),
-						pulsoD = A(-1.4),
-						pulsoE = A(-1.4),
-						cintura = A(-0.55),
-						pescoco = A(0.5),
-						raiz = A(-0.3, 0, 0, 0, -0.55, 0),
-						quadrilD = A(1.05),
-						joelhoD = A(-0.7),
-						quadrilE = A(-0.85),
-						joelhoE = A(-0.25),
-					},
-				},
-			},
-		},
-		-- Passo Sombrio: agacha, some e reaparece cravando a adaga
-		habilidade = {
-			duracao = 0.4,
-			trilha = true,
-			quadros = {
-				{ t = 0.05, pose = { raiz = A(0, 0, 0, 0, -0.7, 0), cintura = A(-0.6), ombroD = A(-0.4, 0, 0.5), ombroE = A(-0.4, 0, -0.5), quadrilD = A(1), joelhoD = A(-1.5), quadrilE = A(0.6), joelhoE = A(-1.3) } },
-				{ t = 0.16, suave = "forte", pose = { raiz = A(-0.1, 0, 0, 0, -0.3, 0), cintura = A(-0.45), ombroD = A(1.55, 0.3), cotoveloD = A(0.05), pulsoD = A(-1.3), ombroE = A(0.4, 0, -0.6), quadrilD = A(0.7), joelhoD = A(-0.8), quadrilE = A(-0.3), joelhoE = A(-0.4) } },
-			},
-		},
-		-- Lâminas da Noite: cortes em X sem parar
-		supremo = {
-			trilha = true,
-			continuo = function(tau)
-				local f = math.sin(tau * 24)
-				return {
-					raiz = A(-0.1, f * 0.35, 0, 0, -0.35, 0),
-					cintura = A(-0.45, f * 0.5),
-					ombroD = A(1.35, f * 1.1, 0.2),
-					cotoveloD = A(0.2),
-					pulsoD = A(-1),
-					ombroE = A(1.35, -f * 1.1, -0.2),
-					cotoveloE = A(0.2),
-					pulsoE = A(-1),
-					quadrilD = A(0.7),
-					joelhoD = A(-0.9),
-					quadrilE = A(-0.3),
-					joelhoE = A(-0.5),
-				}
-			end,
-		},
-	},
-
-	cavaleiro = {
-		-- corte da direita para a esquerda
-		ataque1 = {
-			duracao = 0.34,
-			trilha = true,
-			quadros = {
-				{ t = 0.07, pose = { ombroD = A(1.25, -1.25, 0.25), cotoveloD = A(0.5), pulsoD = A(-1.1), cintura = A(0, -0.55), raiz = A(0, -0.15) } },
-				{ t = 0.17, suave = "forte", pose = { ombroD = A(1.45, 1.05), cotoveloD = A(0.15), pulsoD = A(-1.2), cintura = A(-0.1, 0.6), raiz = A(-0.12, 0.2) } },
-			},
-		},
-		-- revés, da esquerda para a direita
-		ataque2 = {
-			duracao = 0.34,
-			trilha = true,
-			quadros = {
-				{ t = 0.07, pose = { ombroD = A(1.35, 1, -0.2), cotoveloD = A(1), pulsoD = A(-1.2), cintura = A(0, 0.55), raiz = A(0, 0.12) } },
-				{ t = 0.17, suave = "forte", pose = { ombroD = A(1.35, -1.2, 0.2), cotoveloD = A(0.2), pulsoD = A(-1.2), cintura = A(-0.1, -0.6), raiz = A(-0.1, -0.2) } },
-			},
-		},
-		-- golpe final: espada por cima da cabeça e para baixo
-		ataque3 = {
-			duracao = 0.48,
-			trilha = true,
-			quadros = {
-				{ t = 0.12, pose = { ombroD = A(3, 0.1), cotoveloD = A(0.35), pulsoD = A(0.2), ombroE = A(1.4, 0.4), cintura = A(0.25), raiz = A(0.08, 0, 0, 0, 0.15, 0) } },
-				{
-					t = 0.22,
-					suave = "forte",
-					pose = {
-						ombroD = A(0.75),
-						cotoveloD = A(0.05),
-						pulsoD = A(-0.6),
-						ombroE = A(0.5, 0.3),
-						cintura = A(-0.4),
-						raiz = A(-0.25, 0, 0, 0, -0.35, 0),
-						quadrilD = A(0.6),
-						joelhoD = A(-0.7),
-						quadrilE = A(-0.35),
-						joelhoE = A(-0.3),
-					},
-				},
-			},
-		},
-		-- carregando: espada para trás, corpo torcido, pernas abertas
-		carregar = {
-			manter = true,
-			quadros = {
-				{
-					t = 0.15,
-					pose = {
-						ombroD = A(0.9, -1.7, 0.4),
-						cotoveloD = A(0.4),
-						pulsoD = A(-0.9),
-						ombroE = A(0.8, 0.5),
-						cintura = A(0, -0.9),
-						raiz = A(-0.15, -0.1, 0, 0, -0.3, 0),
-						quadrilD = A(-0.35, 0, 0.2),
-						quadrilE = A(0.45, 0, -0.2),
-						joelhoE = A(-0.5),
-					},
-				},
-			},
-		},
-		-- solta: giro completo com a espada estendida
-		soltar = {
-			duracao = 0.45,
-			trilha = true,
-			quadros = {
-				{ t = 0.05, suave = "forte", pose = { ombroD = A(0.35, 0, 1.45), cotoveloD = A(0), pulsoD = A(-1.2), ombroE = A(0.5, 0, -1), cintura = A(0, 0.4), raiz = A(-0.1, 0, 0, 0, -0.2, 0) } },
-				{ t = 0.33, suave = "linear", pose = { raiz = A(-0.1, math.pi * 2, 0, 0, -0.2, 0) } },
-			},
-		},
-		-- Redemoinho: gira sem parar enquanto durar
-		habilidade = {
-			trilha = true,
-			continuo = function(tau)
-				return { raiz = A(-0.08, tau * 14, 0, 0, -0.15, 0), ombroD = A(0.35, 0, 1.45), cotoveloD = A(0), pulsoD = A(-1.2), ombroE = A(0.5, 0, -1) }
-			end,
-		},
-		-- Julgamento: salta com a espada no alto e esmaga o chão
-		supremo = {
-			duracao = 0.75,
-			trilha = true,
-			quadros = {
-				{ t = 0.18, pose = { ombroD = A(3), cotoveloD = A(0.2), ombroE = A(2.8), cintura = A(0.25), raiz = A(0.1, 0, 0, 0, 0.8, 0), quadrilD = A(0.5), joelhoD = A(-0.9), quadrilE = A(0.5), joelhoE = A(-0.9) } },
-				{
-					t = 0.34,
-					suave = "forte",
-					pose = {
-						ombroD = A(0.6),
-						cotoveloD = A(0),
-						pulsoD = A(-0.8),
-						ombroE = A(0.6),
-						cintura = A(-0.45),
-						raiz = A(-0.3, 0, 0, 0, -0.7, 0),
-						quadrilD = A(0.9),
-						joelhoD = A(-1.2),
-						quadrilE = A(-0.4),
-						joelhoE = A(-0.5),
-					},
-				},
-			},
-		},
-	},
-
-	mago = {
-		ataque1 = lancarMago(1),
-		ataque2 = lancarMago(-1),
-		ataque3 = CONJURAR_MAGO,
-		carregar = {
-			manter = true,
-			quadros = {
-				{ t = 0.2, pose = { ombroD = A(2.85, 0, 0.15), cotoveloD = A(0.3), pulsoD = A(0), ombroE = A(1.5, 0.35, -0.1), cotoveloE = A(0.3), cintura = A(0.15), raiz = A(0.05), brilho = A(1) } },
-			},
-		},
-		soltar = {
-			duracao = 0.45,
-			quadros = {
-				{ t = 0.07, suave = "forte", pose = { ombroD = A(1.45), cotoveloD = A(0), pulsoD = A(-0.1), ombroE = A(1.45, 0.3), cintura = A(-0.35), raiz = A(-0.15, 0, 0, 0, -0.25, 0), brilho = A(2) } },
-			},
-		},
-		habilidade = CONJURAR_MAGO,
-		-- Tempestade: braços para o céu enquanto os raios caem
-		supremo = {
-			continuo = function(tau)
-				local s = math.sin(tau * 6) * 0.08
-				return { ombroD = A(2.9 + s, 0, 0.25), cotoveloD = A(0.2), pulsoD = A(0), ombroE = A(2.9 - s, 0, -0.25), cintura = A(0.2), raiz = A(0.05), brilho = A(1.5) }
-			end,
-		},
-	},
-
-	arqueiro = {
-		ataque1 = tiroArqueiro(),
-		ataque2 = tiroArqueiro(),
-		ataque3 = {
-			duracao = 0.42,
-			quadros = {
-				{ t = 0.12, pose = juntar(MIRA, { raiz = A(0.05), puxar = A(1.1) }) },
-				{ t = 0.16, suave = "forte", pose = { ombroD = A(1.1, 1.7, 0.5), cotoveloD = A(0.6), ombroE = A(1.9, 0.85), raiz = A(0.14), puxar = A(0) } },
-			},
-		},
-		carregar = {
-			manter = true,
-			quadros = { { t = 0.2, pose = juntar(MIRA, { puxar = A(1.15), raiz = A(0.04) }) } },
-		},
-		soltar = {
-			duracao = 0.42,
-			quadros = {
-				{ t = 0.04, suave = "forte", pose = { ombroD = A(1, 1.8, 0.6), cotoveloD = A(0.5), ombroE = A(1.95, 0.85), raiz = A(0.16), puxar = A(0) } },
-			},
-		},
-		-- Chuva de Flechas: mira para o alto
-		habilidade = {
-			duracao = 0.5,
-			quadros = {
-				{ t = 0.12, pose = { cintura = A(0, -0.85), pescoco = A(-0.5, 0.75), ombroE = A(2.35, 0.85), ombroD = A(2.2, 1.1), cotoveloD = A(2.2), puxar = A(1) } },
-				{ t = 0.18, suave = "forte", pose = { ombroD = A(2, 1.5, 0.3), cotoveloD = A(0.9), puxar = A(0) } },
-			},
-		},
-		-- Saraivada: gira atirando sem parar
-		supremo = {
-			continuo = function(tau)
-				local pose = table.clone(MIRA)
-				pose.raiz = A(0, tau * 10)
-				pose.puxar = A((math.sin(tau * 21) + 1) / 2)
-				return pose
-			end,
-		},
-	},
-}
-
--- Esquivas (uma por classe). Duram um pouco mais que o impulso para o corpo "assentar".
-local ESQUIVAS = {
-	-- Passo de sombra: corrida baixa de ninja, braços para trás
-	assassino = {
-		duracao = 0.3,
-		quadros = {
-			{
-				t = 0.035,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.6, 0, 0, 0, -0.6, 0),
-					cintura = A(-0.3),
-					pescoco = A(0.6),
-					ombroD = A(-1.25, 0, 0.25),
-					ombroE = A(-1.25, 0, -0.25),
-					cotoveloD = A(0.1),
-					cotoveloE = A(0.1),
-					quadrilD = A(1.15),
-					joelhoD = A(-1.4),
-					quadrilE = A(-0.55),
-					joelhoE = A(-0.7),
-				},
-			},
-		},
-	},
-	-- Investida: ombro e escudo à frente, passada longa
-	cavaleiro = {
-		duracao = 0.34,
-		quadros = {
-			{
-				t = 0.04,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.5, 0.35, 0, 0, -0.45, 0),
-					cintura = A(-0.2, 0.25),
-					pescoco = A(0.25, -0.4),
-					ombroE = A(1.25, 0.6, -0.15),
-					cotoveloE = A(1.3),
-					ombroD = A(-0.55, 0, 0.3),
-					cotoveloD = A(0.5),
-					quadrilD = A(0.9),
-					joelhoD = A(-1.1),
-					quadrilE = A(-0.6),
-					joelhoE = A(-0.5),
-				},
-			},
-			{ t = 0.22, pose = { raiz = A(-0.3, 0.2, 0, 0, -0.3, 0), quadrilD = A(0.5), joelhoD = A(-0.7), quadrilE = A(-0.3), joelhoE = A(-0.3) } },
-		},
-	},
-	-- Deslize arcano: corpo inclinado, braços abertos para trás, como se flutuasse
-	mago = {
-		duracao = 0.32,
-		quadros = {
-			{
-				t = 0.05,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.55, 0, 0, 0, -0.35, 0),
-					cintura = A(-0.25),
-					pescoco = A(0.35),
-					ombroD = A(-0.7, 0, 0.55),
-					ombroE = A(-0.7, 0, -0.55),
-					cotoveloD = A(0.2),
-					cotoveloE = A(0.2),
-					quadrilD = A(-0.35),
-					joelhoD = A(-0.6),
-					quadrilE = A(-0.5),
-					joelhoE = A(-0.9),
-					brilho = A(1),
-				},
-			},
-		},
-	},
-	-- Rolamento: encolhe e dá uma cambalhota para frente
-	arqueiro = {
-		duracao = 0.36,
-		quadros = {
-			{
-				t = 0.04,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.7, 0, 0, 0, -1.1, 0),
-					cintura = A(-0.6),
-					pescoco = A(-0.5),
-					ombroD = A(0.9, 0, 0.2),
-					cotoveloD = A(1.6),
-					ombroE = A(0.9, 0, -0.2),
-					cotoveloE = A(1.6),
-					quadrilD = A(1.6),
-					joelhoD = A(-2),
-					quadrilE = A(1.6),
-					joelhoE = A(-2),
-				},
-			},
-			{ t = 0.24, suave = "linear", pose = { raiz = A(-0.7 - math.pi * 2, 0, 0, 0, -1.1, 0) } },
-			{ t = 0.33, pose = { raiz = A(-math.pi * 2, 0, 0, 0, -0.3, 0), cintura = A(-0.15), pescoco = A(0), quadrilD = A(0.4), joelhoD = A(-0.6), quadrilE = A(-0.2), joelhoE = A(-0.3) } },
-		},
-	},
-}
-
-local ATINGIDO = {
-	duracao = 0.22,
-	quadros = { { t = 0.05, suave = "forte", pose = { cintura = A(0.28), pescoco = A(0.2), raiz = A(0.08) } } },
-}
-
-------------------------------------------------------------------------
--- Interpolação
-------------------------------------------------------------------------
-
-local function suavizar(tipo: string?, a: number): number
-	if tipo == "linear" then
-		return a
-	elseif tipo == "forte" then
-		return 1 - (1 - a) ^ 4
-	end
-	return 1 - (1 - a) * (1 - a)
-end
-
-local function misturar(a, b, alfa: number)
-	return {
-		a[1] + (b[1] - a[1]) * alfa,
-		a[2] + (b[2] - a[2]) * alfa,
-		a[3] + (b[3] - a[3]) * alfa,
-		a[4] + (b[4] - a[4]) * alfa,
-		a[5] + (b[5] - a[5]) * alfa,
-		a[6] + (b[6] - a[6]) * alfa,
-	}
-end
-
-local function juntasUsadas(definicao)
-	if definicao.juntas then
-		return definicao.juntas
-	end
-	local lista, vistas = {}, {}
-	for _, quadro in definicao.quadros do
-		for junta in quadro.pose do
-			if not vistas[junta] then
-				vistas[junta] = true
-				table.insert(lista, junta)
-			end
-		end
-	end
-	definicao.juntas = lista
-	return lista
-end
-
--- Pose da animação no tempo "tau", partindo da pose "base"
-local function amostrar(definicao, tau: number, base)
-	local quadros = definicao.quadros
-	local indice = 0
-	for k, quadro in quadros do
-		if quadro.t <= tau then
-			indice = k
-		end
-	end
-	local pose = {}
-	for _, junta in juntasUsadas(definicao) do
-		local inicio = base[junta] or ZERO
-		for k = indice, 1, -1 do
-			local v = quadros[k].pose[junta]
-			if v then
-				inicio = v
-				break
-			end
-		end
-		local proximo = quadros[indice + 1]
-		if proximo and proximo.pose[junta] then
-			local t0 = if indice == 0 then 0 else quadros[indice].t
-			local alfa = suavizar(proximo.suave, math.clamp((tau - t0) / math.max(proximo.t - t0, 0.001), 0, 1))
-			pose[junta] = misturar(inicio, proximo.pose[junta], alfa)
-		else
-			pose[junta] = inicio
-		end
-	end
-	return pose
-end
+local A = Poses.A
+local POSTURAS = Poses.POSTURAS
+local PARADO = Poses.PARADO
+local ACOES = Poses.ACOES
+local ESQUIVAS = Poses.ESQUIVAS
+local ATINGIDO = Poses.ATINGIDO
+local BLOQUEIO = Poses.BLOQUEIO
+local amostrar = Poses.amostrar
+local misturar = Poses.misturar
 
 ------------------------------------------------------------------------
 -- Estado de cada personagem
@@ -7023,6 +6704,7 @@ local function estadoDe(personagem: Model)
 			cargaInicio = 0,
 			puxar = 0,
 			brilho = 0,
+			flechaMao = 0,
 			ultimaPose = {},
 		}
 		personagens[personagem] = e
@@ -7045,6 +6727,9 @@ end
 local function comecar(e, definicao, dados)
 	if not definicao then
 		return
+	end
+	if definicao.quadros then
+		Poses.preparar(definicao)
 	end
 	local agora = os.clock()
 	e.acao = {
@@ -7220,7 +6905,13 @@ local function atualizarArma(e, agora: number)
 	end
 	local acao = e.acao
 	if e.trilha then
-		local ligada = acao ~= nil and acao.def.trilha == true and (acao.soltando == nil) and (agora - acao.inicio) < (if acao.def.continuo then math.huge else acao.duracao * 0.8)
+		-- "trilha" = true (o tempo todo) ou { início, fim } (só durante o corte)
+		local ligada = false
+		if acao and acao.def.trilha and acao.soltando == nil then
+			local tau = agora - acao.inicio
+			local janela = acao.def.trilha
+			ligada = if type(janela) == "table" then tau >= janela[1] and tau <= janela[2] else true
+		end
 		if e.trilha.Enabled ~= ligada then
 			e.trilha.Enabled = ligada
 		end
@@ -7232,11 +6923,20 @@ local function atualizarArma(e, agora: number)
 		local puxar = math.clamp(e.puxar, 0, 1.3)
 		local z = 0.62 + puxar * 1.6
 		e.encaixe.Position = Vector3.new(0, 0, z)
-		local visivel = puxar > 0.15
+		local noArco = puxar > 0.15
+		-- flecha na mão direita: acabou de tirar da aljava e ainda não encaixou
+		local maoDireita = e.personagem:FindFirstChild("RightHand") or e.personagem:FindFirstChild("Right Arm")
+		local naMao = not noArco and e.flechaMao > 0.5 and maoDireita ~= nil
+		local visivel = noArco or naMao
 		e.flecha.Transparency = if visivel then 0 else 1
 		e.pontaFlecha.Transparency = if visivel then 0 else 1
-		if visivel then
+		if noArco then
 			local cf = e.arco.CFrame * CFrame.new(0, 0, z - 1.35)
+			e.flecha.CFrame = cf
+			e.pontaFlecha.CFrame = cf * CFrame.new(0, 0, -1.45)
+		elseif naMao then
+			-- presa entre os dedos, apontando para cima ao longo do braço
+			local cf = (maoDireita :: BasePart).CFrame * CFrame.new(0, 0.9, 0) * CFrame.Angles(math.rad(90), 0, 0)
 			e.flecha.CFrame = cf
 			e.pontaFlecha.CFrame = cf * CFrame.new(0, 0, -1.45)
 		end
@@ -7319,13 +7019,17 @@ end
 -- Aplicar a pose nas juntas (depois da animação padrão, antes da física)
 ------------------------------------------------------------------------
 
+-- Peso geral da ação. Quem tem quadros já entra e sai suave junta por junta (peso de cada
+-- valor); só as animações contínuas e as interrompidas precisam de rampa aqui.
 local function pesoDaAcao(a, agora: number): (number, number)
 	local tau = agora - a.inicio
-	local entrada = a.def.entrada or 0.05
-	local peso = math.min(1, tau / entrada)
+	local peso = 1
+	if a.def.continuo then
+		peso = math.min(1, tau / 0.08)
+	end
 	if a.soltando then
 		peso *= math.max(0, 1 - (agora - a.soltando) / 0.15)
-	elseif not a.def.manter then
+	elseif not a.def.manter and not a.def.voltar then
 		local saida = a.def.saida or 0.12
 		local resto = a.duracao - tau
 		if resto < saida then
@@ -7352,13 +7056,18 @@ local function animarPersonagem(e, agora: number)
 		end
 	end
 
+	-- Mistura uma camada por cima: o peso de cada junta é o peso da camada vezes o peso
+	-- do próprio valor (o 7º número)
 	local function aplicarCamada(pose, peso: number)
 		for junta, valor in pose do
-			local atual = final[junta]
-			if atual then
-				final[junta] = { misturar(atual[1], valor, peso), atual[2] + (1 - atual[2]) * peso }
-			else
-				final[junta] = { valor, peso }
+			local w = peso * (valor[7] or 1)
+			if w > 0.001 then
+				local atual = final[junta]
+				if atual then
+					final[junta] = { misturar(atual[1], valor, w), atual[2] + (1 - atual[2]) * w }
+				else
+					final[junta] = { valor, w }
+				end
 			end
 		end
 	end
@@ -7382,8 +7091,9 @@ local function animarPersonagem(e, agora: number)
 	local a = e.acao
 	if a then
 		local peso, tau = pesoDaAcao(a, agora)
-		if peso <= 0 and (a.soltando or tau > a.duracao) then
+		if (peso <= 0 and a.soltando) or tau > a.duracao then
 			e.acao = nil
+			e.ultimaPose = {}
 		else
 			local pose = poseDaAcao(a, tau)
 			if e.carregando and a.def.manter then
@@ -7395,7 +7105,12 @@ local function animarPersonagem(e, agora: number)
 					pose.cintura = misturar(pose.cintura, A(pose.cintura[1] + tremor, pose.cintura[2] + tremor, pose.cintura[3]), 1)
 				end
 			end
-			e.ultimaPose = pose
+			-- guarda onde o corpo está (com o peso atual) para a próxima ação partir daqui
+			local guardada = {}
+			for junta, valor in pose do
+				guardada[junta] = { valor[1], valor[2], valor[3], valor[4], valor[5], valor[6], (valor[7] or 1) * peso }
+			end
+			e.ultimaPose = guardada
 			aplicarCamada(pose, peso)
 		end
 	end
@@ -7416,19 +7131,36 @@ local function animarPersonagem(e, agora: number)
 		end
 	end
 
-	local h = e.atingido
-	if h then
-		local tau = agora - h
-		if tau >= ATINGIDO.duracao then
-			e.atingido = nil
-		else
-			local peso = math.min(1, tau / 0.03) * math.max(0, 1 - tau / ATINGIDO.duracao)
-			aplicarCamada(amostrar(ATINGIDO, tau, {}), peso * 0.8)
+	-- reações rápidas por cima de tudo: levou dano / escudo bloqueou
+	for _, info in { { "atingido", ATINGIDO, 0.8 }, { "bloqueou", BLOQUEIO, 1 } } do
+		local inicio = e[info[1]]
+		if inicio then
+			local tau = agora - inicio
+			Poses.preparar(info[2])
+			if tau >= info[2].duracao then
+				e[info[1]] = nil
+			else
+				aplicarCamada(amostrar(info[2], tau, {}), info[3])
+			end
 		end
 	end
 
 	e.puxar = if final.puxar then final.puxar[1][1] * final.puxar[2] else 0
 	e.brilho = if final.brilho then final.brilho[1][1] * final.brilho[2] else 0
+	e.flechaMao = if final.flechaMao then final.flechaMao[1][1] * final.flechaMao[2] else 0
+
+	-- as juntas podem ter sido trocadas (roupa/escala aplicada depois de nascer): procura de novo
+	local precisaBuscar = next(e.juntas) == nil
+	for _, j in e.juntas do
+		if not j.motor.Parent or not j.motor:IsDescendantOf(e.personagem) then
+			precisaBuscar = true
+			break
+		end
+	end
+	if precisaBuscar and agora >= (e.proximaBusca or 0) then
+		e.proximaBusca = agora + 0.5
+		e.juntas = obterJuntas(e.personagem)
+	end
 
 	for junta, info in final do
 		local j = e.juntas[junta]
@@ -7447,7 +7179,8 @@ end
 
 --[[ Toca uma animação num personagem.
 	acao: "ataque" (dados.combo), "carregar", "soltar" (dados.fracao), "cancelar",
-	      "esquiva", "habilidade", "supremo" (dados.duracao), "atingido" ]]
+	      "esquiva", "habilidade", "supremo" (dados.duracao), "defender", "pararDefesa",
+	      "bloqueou", "atingido" ]]
 function Animacoes.tocar(personagem: Model, acao: string, dados)
 	if not personagem or not personagem.Parent then
 		return
@@ -7483,13 +7216,24 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 		Vfx.esquiva({ jogador = e.jogador, classe = classe })
 	elseif acao == "habilidade" or acao == "supremo" then
 		comecar(e, acoes[acao], dados)
+	elseif acao == "defender" then
+		e.carregando = false
+		e.defendendo = true
+		comecar(e, acoes.defender, dados)
+	elseif acao == "pararDefesa" then
+		e.defendendo = false
+		if e.acao and e.acao.def == acoes.defender then
+			e.acao.soltando = os.clock()
+		end
+	elseif acao == "bloqueou" then
+		e.bloqueou = os.clock()
 	elseif acao == "atingido" then
 		e.atingido = os.clock()
 	end
 end
 
 -- Ações que o próprio jogador já anima na hora do clique (o servidor não manda de volta)
-local PREVISTAS = { ataque = true, carregar = true, soltar = true, cancelar = true, esquiva = true }
+local PREVISTAS = { ataque = true, carregar = true, soltar = true, cancelar = true, esquiva = true, defender = true, pararDefesa = true }
 
 -- Mensagem "anim" vinda do servidor
 function Animacoes.receber(dados)
@@ -7564,8 +7308,8 @@ return Animacoes
           <Properties>
             <string name="Name">Controles</string>
             <ProtectedString name="Source"><![CDATA[-- Controles: tocar para atacar (mira no mouse; no celular mira sozinha no inimigo mais próximo),
--- segurar para carregar e soltar para um golpe forte, habilidade (E), esquiva (Q), supremo (R)
--- e os botões de toque no celular.
+-- segurar para carregar e soltar para um golpe forte, habilidade (E), esquiva (Q), supremo (R),
+-- defesa com escudo do Cavaleiro (F / botão direito / L2) e os botões de toque no celular.
 
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
@@ -7593,6 +7337,7 @@ local segurandoAtaque = false
 local segurouEm = 0
 local carregando = false
 local cargaComecou = 0
+local defendendo = false
 local ultimoAtaque = 0
 local comboLocal = 0
 local ultimoFoiFinal = false
@@ -7681,12 +7426,28 @@ local function impulso(direcao: Vector3, velocidade: number, duracao: number)
 	Debris:AddItem(anexo, duracao)
 end
 
+-- Mago: tem mana para esta magia? (o servidor confere de novo; aqui é só para não animar à toa)
+local function temMana(tipoCusto: string): boolean
+	local stats = Estado.stats
+	if Estado.modo ~= "partida" or not stats or (stats.manaMax or 0) <= 0 then
+		return true
+	end
+	local custos = Classes.obter(stats.classe).custos
+	local custo = if custos then (custos[tipoCusto] or 0) * (stats.custoMana or 1) else 0
+	if Estado.mana < custo then
+		Estado.avisar("semMana")
+		return false
+	end
+	Estado.mana -= custo
+	return true
+end
+
 local function podeLutar(): boolean
 	return not Estado.caido and not Estado.morto and Estado.menusAbertos == 0
 end
 
 local function tentarAtacar()
-	if not podeLutar() then
+	if not podeLutar() or defendendo then
 		return
 	end
 	local raiz = personagem()
@@ -7704,6 +7465,10 @@ local function tentarAtacar()
 	if agora - ultimoAtaque > intervalo * 2.6 + 0.3 then
 		comboLocal = 0
 	end
+	if not temMana(if comboLocal % 3 + 1 == 3 then "final" else "ataque") then
+		ultimoAtaque = agora - intervalo * 0.5 -- não fica repetindo o aviso a cada quadro
+		return
+	end
 	comboLocal = comboLocal % 3 + 1
 	ultimoFoiFinal = comboLocal == 3
 	ultimoAtaque = agora
@@ -7719,16 +7484,24 @@ local function tentarAtacar()
 	if naPartida then
 		local classe = Classes.obter(stats.classe)
 		if classe.ataque.tipo == "corte" then
-			local final = comboLocal == 3
-			Vfx.corte({
-				jogador = jogador,
-				pos = raiz.Position,
-				dir = direcao,
-				alcance = stats.alcance * (if final then 1.15 else 1),
-				arco = stats.arco * (if final then 1.25 else 1),
-				cor = classe.cor,
-				combo = comboLocal,
-			})
+			-- o rastro do corte aparece quando a lâmina passa na frente (não no clique)
+			local combo = comboLocal
+			local final = combo == 3
+			task.delay(classe.ataque.impacto and classe.ataque.impacto[combo] or 0, function()
+				local raizAgora = personagem()
+				if not raizAgora then
+					return
+				end
+				Vfx.corte({
+					jogador = jogador,
+					pos = raizAgora.Position,
+					dir = direcao,
+					alcance = stats.alcance * (if final then 1.15 else 1),
+					arco = stats.arco * (if final then 1.25 else 1),
+					cor = classe.cor,
+					combo = combo,
+				})
+			end)
 		end
 	end
 end
@@ -7738,6 +7511,13 @@ end
 ------------------------------------------------------------------------
 
 local function comecarCarga()
+	local stats = Estado.stats
+	local custos = stats and Classes.obter(stats.classe).custos
+	if custos and Estado.modo == "partida" and Estado.mana < custos.carregado * (stats.custoMana or 1) then
+		Estado.avisar("semMana")
+		segurouEm = os.clock() + 999 -- só tenta de novo ao segurar outra vez
+		return
+	end
 	carregando = true
 	cargaComecou = os.clock()
 	Acao:FireServer("carregar")
@@ -7802,6 +7582,38 @@ local function soltarCarga()
 	end
 end
 
+------------------------------------------------------------------------
+-- Defesa com escudo (só o Cavaleiro)
+------------------------------------------------------------------------
+
+local function minhaClasse(): string
+	return if Estado.stats then Estado.stats.classe else Estado.perfil.classe
+end
+
+local function defender(ativo: boolean)
+	if ativo == defendendo then
+		return
+	end
+	if ativo then
+		if minhaClasse() ~= "cavaleiro" or not podeLutar() then
+			return
+		end
+		cancelarCarga()
+		defendendo = true
+		Acao:FireServer("defender", true)
+		if jogador.Character then
+			Animacoes.tocar(jogador.Character, "defender", nil)
+		end
+	else
+		defendendo = false
+		Acao:FireServer("defender", false)
+		if jogador.Character then
+			Animacoes.tocar(jogador.Character, "pararDefesa", nil)
+		end
+	end
+end
+Controles.defender = defender
+
 local function usarHabilidade()
 	if Estado.modo ~= "partida" or not podeLutar() then
 		return
@@ -7809,6 +7621,10 @@ local function usarHabilidade()
 	if os.clock() < Estado.habilidadeFim - 0.1 then
 		return
 	end
+	if not temMana("habilidade") then
+		return
+	end
+	defender(false)
 	local direcao = direcaoDaMira()
 	mirar(direcao)
 	Acao:FireServer("habilidade", direcao)
@@ -7838,8 +7654,9 @@ local function esquivar()
 	if agora < Estado.esquivaFim then
 		return
 	end
-	-- esquivar cancela a carga (segure de novo para recomeçar)
+	-- esquivar cancela a carga e abaixa o escudo (segure de novo para recomeçar)
 	cancelarCarga()
+	defender(false)
 	segurouEm = agora
 	local recarga = if Estado.stats then Estado.stats.recargaEsquiva else Config.ESQUIVA_RECARGA
 	Estado.esquivaFim = agora + recarga
@@ -7895,6 +7712,7 @@ end
 function Controles.pararAtaque()
 	segurandoAtaque = false
 	cancelarCarga()
+	defender(false)
 end
 
 -- Liga os botões de toque criados pelo HUD
@@ -7921,6 +7739,13 @@ function Controles.ligarBotoes(botoes)
 	aoTocar(botoes.habilidade, usarHabilidade)
 	aoTocar(botoes.esquiva, esquivar)
 	aoTocar(botoes.supremo, usarSupremo)
+	if botoes.defesa then
+		aoTocar(botoes.defesa, function()
+			defender(true)
+		end, function()
+			defender(false)
+		end)
+	end
 end
 
 function Controles.iniciar()
@@ -7937,16 +7762,29 @@ function Controles.iniciar()
 			esquivar()
 		elseif tecla == Enum.KeyCode.R or tecla == Enum.KeyCode.ButtonY then
 			usarSupremo()
+		elseif tecla == Enum.KeyCode.F or tecla == Enum.KeyCode.ButtonL2 or tipo == Enum.UserInputType.MouseButton2 then
+			defender(true)
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(entrada)
 		if entrada.UserInputType == Enum.UserInputType.MouseButton1 or entrada.KeyCode == Enum.KeyCode.ButtonR2 then
 			Controles.segurarAtaque(false)
+		elseif entrada.KeyCode == Enum.KeyCode.F or entrada.KeyCode == Enum.KeyCode.ButtonL2 or entrada.UserInputType == Enum.UserInputType.MouseButton2 then
+			defender(false)
 		end
 	end)
 
 	RunService.Heartbeat:Connect(function()
 		local agora = os.clock()
+		if defendendo then
+			-- o escudo acompanha a mira (protege o lado para onde você aponta)
+			if not podeLutar() or minhaClasse() ~= "cavaleiro" then
+				defender(false)
+			else
+				direcaoAtual = direcaoDaMira()
+				mirandoAte = math.max(mirandoAte, agora + 0.1)
+			end
+		end
 		if carregando then
 			local _, humanoidAtual = personagem()
 			if not podeLutar() or not humanoidAtual or humanoidAtual.Health <= 0 then
@@ -7955,7 +7793,7 @@ function Controles.iniciar()
 				-- enquanto carrega, o corpo acompanha a mira
 				mirandoAte = math.max(mirandoAte, agora + 0.1)
 			end
-		elseif segurandoAtaque and agora - segurouEm >= Config.CARGA_ATAQUE_COMECA and podeLutar() and personagem() then
+		elseif segurandoAtaque and not defendendo and agora - segurouEm >= Config.CARGA_ATAQUE_COMECA and podeLutar() and personagem() then
 			comecarCarga()
 		end
 		local raiz, humanoid = personagem()
@@ -7993,6 +7831,8 @@ local Estado = {
 	ouroPartida = 0,
 	carga = 0,
 	cargaMax = 100,
+	mana = 0, -- só o Mago usa
+	manaMax = 0,
 	habilidadeFim = 0,
 	habilidadeTotal = 1,
 	esquivaFim = 0,
@@ -8324,6 +8164,17 @@ local barraCarga = UI.barra({
 })
 barraCarga.rotulo.Visible = false
 barraCarga.definir(0)
+-- Mana (só aparece para o Mago), logo acima do painel
+local barraMana = UI.barra({
+	Parent = barraAcoes,
+	Position = UDim2.fromOffset(106, -20),
+	Size = UDim2.fromOffset(440, 16),
+	Cor = Color3.fromRGB(70, 140, 255),
+	CorClara = Color3.fromRGB(160, 210, 255),
+	Fundo = Color3.fromRGB(12, 18, 36),
+	Raio = 5,
+})
+barraMana.quadro.Visible = false
 
 local linhaSlots = criar("Frame", {
 	Position = UDim2.fromOffset(106, 64),
@@ -8397,7 +8248,7 @@ slots.supremo.rotulo.Text = "Supremo"
 -- Versão celular: vida no topo e botões grandes à direita
 local vidaCelular = UI.painel({
 	Position = UDim2.fromOffset(16, 64),
-	Size = UDim2.fromOffset(280, 66),
+	Size = UDim2.fromOffset(280, 82),
 	Transparencia = 0.15,
 	SemCantos = true,
 	Visible = false,
@@ -8414,6 +8265,16 @@ local barraCargaCelular = UI.barra({
 	Raio = 4,
 })
 barraCargaCelular.rotulo.Visible = false
+local barraManaCelular = UI.barra({
+	Parent = vidaCelular,
+	Position = UDim2.fromOffset(12, 58),
+	Size = UDim2.fromOffset(256, 12),
+	Cor = Color3.fromRGB(70, 140, 255),
+	Fundo = Color3.fromRGB(12, 18, 36),
+	Raio = 4,
+})
+barraManaCelular.rotulo.Visible = false
+barraManaCelular.quadro.Visible = false
 barraCargaCelular.definir(0)
 
 local areaToque = criar("Frame", {
@@ -8455,6 +8316,8 @@ local toque = {
 	habilidade = botaoRedondo("habilidade", 78, UDim2.new(1, -150, 1, -128), "🌀"),
 	esquiva = botaoRedondo("esquiva", 70, UDim2.new(1, -168, 1, -40), "💨"),
 	supremo = botaoRedondo("supremo", 74, UDim2.new(1, -66, 1, -178), "⚡"),
+	-- só aparece para o Cavaleiro (segurar ergue o escudo)
+	defesa = botaoRedondo("defesa", 66, UDim2.new(1, -226, 1, -112), "🛡️"),
 }
 
 -- Caído / espectador
@@ -8587,6 +8450,7 @@ local function atualizarClasseNaBarra()
 	toque.ataque.rotulo.Text = classe.ataque.icone
 	toque.habilidade.rotulo.Text = classe.habilidade.icone
 	toque.supremo.rotulo.Text = classe.supremo.icone
+	toque.defesa.botao.Visible = classe.id == "cavaleiro"
 	barraVida.cor(classe.cor:Lerp(cores.vida, 0.65))
 end
 
@@ -8978,6 +8842,14 @@ function Hud.iniciar()
 	atualizarPerfil()
 
 	local pulsoVida = 0
+	local manaExibida = 0
+	local semManaAte = 0
+	Estado.Mudou:Connect(function(chave)
+		if chave == "semMana" then
+			semManaAte = os.clock() + 0.4
+			Hud.aviso("💧 Sem mana!")
+		end
+	end)
 	RunService.RenderStepped:Connect(function(dt)
 		local personagem = jogador.Character
 		local humanoid = personagem and personagem:FindFirstChildOfClass("Humanoid")
@@ -8996,6 +8868,22 @@ function Hud.iniciar()
 		end
 		if Estado.modo ~= "partida" then
 			return
+		end
+
+		-- mana: a barra corre suave até o valor do servidor; pisca vermelha quando falta
+		local temMana = Estado.manaMax > 0
+		barraMana.quadro.Visible = temMana
+		barraManaCelular.quadro.Visible = temMana
+		if temMana then
+			manaExibida += (Estado.mana - manaExibida) * math.min(1, dt * 12)
+			local fracaoMana = math.clamp(manaExibida / Estado.manaMax, 0, 1)
+			local textoMana = "💧 " .. math.floor(manaExibida) .. " / " .. math.floor(Estado.manaMax)
+			barraMana.definir(fracaoMana, textoMana)
+			barraManaCelular.definir(fracaoMana)
+			local alerta = math.max(0, semManaAte - os.clock()) / 0.4
+			local corFundo = Color3.fromRGB(12, 18, 36):Lerp(Color3.fromRGB(150, 20, 30), alerta)
+			barraMana.quadro.BackgroundColor3 = corFundo
+			barraManaCelular.quadro.BackgroundColor3 = corFundo
 		end
 
 		local carga = math.clamp(Estado.carga / math.max(Estado.cargaMax, 1), 0, 1)
@@ -9173,7 +9061,16 @@ local manipuladores = {
 		Estado.stats = dados
 		Estado.carga = dados.carga or Estado.carga
 		Estado.cargaMax = dados.cargaMax or Estado.cargaMax
+		Estado.mana = dados.mana or 0
+		Estado.manaMax = dados.manaMax or 0
 		Estado.avisar("stats")
+	end,
+	mana = function(dados)
+		Estado.mana = dados.valor
+		Estado.manaMax = dados.max
+	end,
+	semMana = function()
+		Estado.avisar("semMana")
 	end,
 	carga = function(dados)
 		Estado.carga = dados.valor
@@ -9979,7 +9876,7 @@ local painelAjuda = UI.painel({ Size = UDim2.fromScale(1, 1), Parent = menuAjuda
 botaoFechar(menuAjuda)
 UI.titulo(painelAjuda, "COMO JOGAR", 16, 420, 52)
 local secoes = {
-	{ "🎮", "Controles", "Clique (segure) para atacar  •  E: habilidade  •  Q: esquiva  •  R: supremo\nNo celular, use os botões redondos à direita." },
+	{ "🎮", "Controles", "Clique: ataque (segure e solte: golpe carregado)  •  E: habilidade  •  Q: esquiva  •  R: supremo\nCavaleiro: segure F ou o botão direito para erguer o escudo. No celular, use os botões redondos." },
 	{ "⚔️", "Combo", "Todo terceiro ataque é um golpe final mais forte. A barra dourada enche lutando: com ela cheia, use o supremo!" },
 	{ "💨", "Esquiva", "Durante a esquiva você não leva dano e atravessa projéteis. Fuja das áreas vermelhas no chão!" },
 	{ "🃏", "Cartas", "Depois de cada sala, escolha 1 de 3 cartas. Cada classe tem cartas próprias, e algumas combinam muito bem." },
@@ -10823,6 +10720,1183 @@ return Modelos
         </Item>
         <Item class="ModuleScript" referent="RBX00000033">
           <Properties>
+            <string name="Name">Poses</string>
+            <ProtectedString name="Source"><![CDATA[-- Poses e animações dos personagens (só dados e contas: pode ser testado fora do Roblox).
+--
+-- Cada animação é uma lista de "quadros-chave": em cada tempo, o ângulo de algumas juntas
+-- (ombro, cotovelo, cintura...). Entre os quadros, os valores são suavizados.
+--
+-- Cada valor tem 7 números: rx, ry, rz (ângulos em radianos), px, py, pz (deslocamento) e
+-- w (peso, de 0 a 1). Com peso 0 a junta volta para a animação de baixo (postura, andar...).
+-- Toda animação começa com peso 0 nas juntas que ainda não estavam em uso e, no campo
+-- "voltar", solta todas as juntas devagar: o golpe sai da pose de combate e volta para ela.
+--
+-- Espaço da peça "pai" (X = direita, Y = cima, Z = trás):
+--   rx > 0 leva o braço/perna para FRENTE (1,57 = esticado para frente; 3,14 = para cima)
+--   ry > 0 gira para a ESQUERDA (visto de cima)   rz > 0 abre o braço direito para o lado
+--   no tronco (cintura), rx < 0 inclina para frente; joelho < 0 dobra
+-- Valores especiais: "puxar" (corda do arco, 0 a 1,3) e "brilho" (cristal do cajado).
+
+local Poses = {}
+
+local function A(rx: number?, ry: number?, rz: number?, px: number?, py: number?, pz: number?)
+	return { rx or 0, ry or 0, rz or 0, px or 0, py or 0, pz or 0, 1 }
+end
+Poses.A = A
+
+local SOLTO = { 0, 0, 0, 0, 0, 0, 0 }
+Poses.SOLTO = SOLTO
+
+local function solto(v)
+	return { v[1], v[2], v[3], v[4], v[5], v[6], 0 }
+end
+
+local function juntar(base, extra)
+	local resultado = table.clone(base)
+	for chave, valor in extra do
+		resultado[chave] = valor
+	end
+	return resultado
+end
+
+local PI = math.pi
+
+------------------------------------------------------------------------
+-- Postura (sempre, da cintura para cima) e pose parada (corpo todo)
+------------------------------------------------------------------------
+
+Poses.POSTURAS = {
+	cavaleiro = { ombroD = A(0.35, 0, 0.12), cotoveloD = A(0.6), ombroE = A(0.55, 0.35, -0.1), cotoveloE = A(1.1), pescoco = A(-0.05) },
+	mago = { ombroD = A(0.25, 0, 0.1), cotoveloD = A(0.8), pulsoD = A(-1.05), ombroE = A(0.15, 0, -0.12), cintura = A(0.06) },
+	arqueiro = { ombroE = A(0.45, 0.2, -0.1), cotoveloE = A(0.3), ombroD = A(0.15, 0, 0.1) },
+	-- o Assassino anda sempre curvado, com as adagas baixas e à frente
+	assassino = {
+		cintura = A(-0.3),
+		pescoco = A(0.22),
+		ombroD = A(0.55, 0, 0.3),
+		cotoveloD = A(1.2),
+		pulsoD = A(-0.3),
+		ombroE = A(0.75, 0.25, -0.3),
+		cotoveloE = A(1.35),
+		pulsoE = A(-0.3),
+	},
+}
+
+-- "t" é o tempo em segundos (para respirar e balançar de leve)
+Poses.PARADO = {
+	-- Guarda firme: base larga, escudo à frente, espada pronta
+	cavaleiro = function(t: number)
+		local respirar = math.sin(t * 1.6) * 0.025
+		return {
+			raiz = A(0, 0.3, 0, 0, -0.22, 0),
+			cintura = A(-0.04 + respirar, -0.22),
+			pescoco = A(-0.05, -0.08),
+			ombroE = A(0.95, 0.55, -0.1),
+			cotoveloE = A(1.25),
+			ombroD = A(0.4, 0, 0.3),
+			cotoveloD = A(0.75),
+			pulsoD = A(-0.45),
+			quadrilD = A(0.32, 0, 0.14),
+			joelhoD = A(-0.5),
+			tornozeloD = A(0.18),
+			quadrilE = A(-0.12, 0, -0.14),
+			joelhoE = A(-0.32),
+			tornozeloE = A(0.18),
+		}
+	end,
+	-- Ereto e confiante: cajado apoiado, a outra mão conjura uma luz, flutua de leve
+	mago = function(t: number)
+		local flutuar = math.sin(t * 2) * 0.06
+		return {
+			raiz = A(0, 0, 0, 0, flutuar, 0),
+			cintura = A(0.1 + math.sin(t * 1.4) * 0.02),
+			pescoco = A(-0.14),
+			ombroD = A(0.2, 0, 0.2),
+			cotoveloD = A(0.9),
+			pulsoD = A(-1.1),
+			ombroE = A(0.75, 0.35, -0.25),
+			cotoveloE = A(1.35),
+			pulsoE = A(0.45 + math.sin(t * 2) * 0.1),
+			quadrilD = A(0, 0, 0.04),
+			quadrilE = A(0, 0, -0.04),
+			brilho = A(0.35 + math.sin(t * 2) * 0.1),
+		}
+	end,
+	-- Relaxado, peso numa perna, arco baixo, olhando em volta
+	arqueiro = function(t: number)
+		return {
+			raiz = A(0, -0.25, 0.07),
+			cintura = A(0.02, 0.15, -0.05),
+			pescoco = A(0, math.sin(t * 0.6) * 0.45),
+			ombroE = A(0.25, 0, -0.18),
+			cotoveloE = A(0.25),
+			ombroD = A(-0.12, 0, 0.18),
+			cotoveloD = A(0.5),
+			quadrilD = A(0, 0, 0.1),
+			quadrilE = A(0.18, 0, -0.16),
+			joelhoE = A(-0.35),
+			tornozeloE = A(0.15),
+		}
+	end,
+	-- Agachado e inclinado para frente, pronto para dar o bote
+	assassino = function(t: number)
+		local respirar = math.sin(t * 3.2) * 0.04
+		return {
+			raiz = A(0, 0.3, 0, 0, -0.42 + respirar, 0),
+			cintura = A(-0.5 + respirar, -0.2),
+			pescoco = A(0.42, 0.15 + math.sin(t * 0.8) * 0.15),
+			ombroD = A(0.7, 0, 0.4),
+			cotoveloD = A(1.35),
+			pulsoD = A(-0.35),
+			ombroE = A(1, 0.35, -0.35),
+			cotoveloE = A(1.55),
+			pulsoE = A(-0.35),
+			quadrilD = A(0.65, 0, 0.15),
+			joelhoD = A(-1.1),
+			tornozeloD = A(0.42),
+			quadrilE = A(0.35, 0, -0.2),
+			joelhoE = A(-1),
+			tornozeloE = A(0.6),
+		}
+	end,
+}
+
+------------------------------------------------------------------------
+-- Cavaleiro
+------------------------------------------------------------------------
+
+local cavaleiro = {
+	-- Corte da direita para a esquerda: espada atrás do ombro, passo à frente, corta na
+	-- frente (impacto em 0,13s), acompanha para a esquerda e volta para a guarda
+	ataque1 = {
+		voltar = 0.42,
+		trilha = { 0.08, 0.24 },
+		quadros = {
+			{
+				t = 0.08,
+				pose = {
+					ombroD = A(0.45, -0.34, -1.18),
+					cotoveloD = A(1.78),
+					pulsoD = A(-0.34),
+					ombroE = A(0.8, 0.6, -0.2),
+					cotoveloE = A(1.1),
+					cintura = A(0, -0.6),
+					raiz = A(0, -0.2, 0, 0, -0.15, 0),
+					quadrilD = A(-0.2),
+					quadrilE = A(0.35),
+					joelhoE = A(-0.4),
+				},
+			},
+			{
+				t = 0.13,
+				suave = "forte",
+				pose = {
+					ombroD = A(0.75, -0.34, -0.57),
+					cotoveloD = A(1.42),
+					pulsoD = A(-1.61),
+					ombroE = A(0.5, 0.3, -0.4),
+					cintura = A(-0.1, 0.1),
+					raiz = A(-0.05, 0.05, 0, 0, -0.22, 0),
+					quadrilD = A(-0.3),
+					joelhoD = A(-0.25),
+					quadrilE = A(0.5),
+					joelhoE = A(-0.55),
+				},
+			},
+			{
+				t = 0.21,
+				pose = {
+					ombroD = A(0.88, 0.19, -0.52),
+					cotoveloD = A(1.23),
+					pulsoD = A(-1.7),
+					ombroE = A(0.3, 0.2, -0.5),
+					cintura = A(-0.15, 0.6),
+					raiz = A(-0.1, 0.25, 0, 0, -0.25, 0),
+				},
+			},
+		},
+	},
+	-- Revés: espada cruza para a esquerda e corta de volta para a direita
+	ataque2 = {
+		voltar = 0.42,
+		trilha = { 0.08, 0.24 },
+		quadros = {
+			{
+				t = 0.08,
+				pose = {
+					ombroD = A(0.41, 1.6, 1.05),
+					cotoveloD = A(1.33),
+					pulsoD = A(-0.98),
+					ombroE = A(0.4, 0.2, -0.4),
+					cintura = A(0, 0.55),
+					raiz = A(0, 0.15, 0, 0, -0.15, 0),
+				},
+			},
+			{
+				t = 0.13,
+				suave = "forte",
+				pose = {
+					ombroD = A(1.22, 0.96, 0.61),
+					cotoveloD = A(0.58),
+					pulsoD = A(-1.33),
+					ombroE = A(0.6, 0.4, -0.3),
+					cintura = A(-0.1, -0.1),
+					raiz = A(-0.05, -0.05, 0, 0, -0.22, 0),
+					quadrilD = A(0.45),
+					joelhoD = A(-0.5),
+					quadrilE = A(-0.25),
+					joelhoE = A(-0.2),
+				},
+			},
+			{
+				t = 0.21,
+				pose = {
+					ombroD = A(0.62, -0.06, 0.03),
+					cotoveloD = A(1.62),
+					pulsoD = A(-1.7),
+					ombroE = A(0.8, 0.5, -0.2),
+					cintura = A(-0.15, -0.6),
+					raiz = A(-0.1, -0.25, 0, 0, -0.25, 0),
+				},
+			},
+		},
+	},
+	-- Golpe final: espada por cima da cabeça, salta e esmaga à frente (impacto em 0,27s)
+	ataque3 = {
+		voltar = 0.6,
+		trilha = { 0.16, 0.4 },
+		quadros = {
+			{
+				t = 0.15,
+				pose = {
+					ombroD = A(2.25, -0.25, -0.45),
+					cotoveloD = A(0.37),
+					pulsoD = A(0.29),
+					ombroE = A(1.6, 0.3, -0.2),
+					cotoveloE = A(1),
+					cintura = A(0.3),
+					raiz = A(0.1, 0, 0, 0, 0.15, 0),
+					quadrilD = A(0.3),
+					joelhoD = A(-0.3),
+					quadrilE = A(-0.1),
+				},
+			},
+			{
+				t = 0.27,
+				suave = "forte",
+				pose = {
+					ombroD = A(1.11, -0.1, -0.5),
+					cotoveloD = A(1.43),
+					pulsoD = A(-1.7),
+					ombroE = A(0.4, 0.3, -0.3),
+					cotoveloE = A(0.9),
+					cintura = A(-0.55),
+					raiz = A(-0.2, 0, 0, 0, -0.55, 0),
+					quadrilD = A(1),
+					joelhoD = A(-1.1),
+					tornozeloD = A(0.2),
+					quadrilE = A(-0.45),
+					joelhoE = A(-0.6),
+				},
+			},
+			{ t = 0.42, pose = { cintura = A(-0.5), ombroD = A(1.05, -0.1, -0.45) } },
+		},
+	},
+	-- Carregando: espada para trás e para baixo, corpo torcido, base larga
+	carregar = {
+		manter = true,
+		quadros = {
+			{
+				t = 0.15,
+				pose = {
+					ombroD = A(-0.42, -1, -1.25),
+					cotoveloD = A(1.5),
+					pulsoD = A(-0.57),
+					ombroE = A(1, 0.6, -0.2),
+					cotoveloE = A(1.1),
+					cintura = A(-0.1, -1),
+					raiz = A(-0.1, -0.2, 0, 0, -0.4, 0),
+					quadrilD = A(-0.4, 0, 0.25),
+					joelhoD = A(-0.3),
+					quadrilE = A(0.6, 0, -0.2),
+					joelhoE = A(-0.8),
+					tornozeloE = A(0.3),
+				},
+			},
+		},
+	},
+	-- Solta: giro completo com a espada estendida
+	soltar = {
+		voltar = 0.52,
+		trilha = { 0, 0.4 },
+		quadros = {
+			{ t = 0.05, suave = "forte", pose = { ombroD = A(0.08, -1.56, 0.79), cotoveloD = A(1.61), pulsoD = A(-1.23), ombroE = A(0.4, 0, -1.2), cintura = A(0, 0.5), raiz = A(-0.1, 0, 0, 0, -0.3, 0) } },
+			{ t = 0.35, suave = "linear", pose = { raiz = A(-0.1, PI * 2, 0, 0, -0.3, 0), cintura = A(0, 0) } },
+		},
+	},
+	-- Redemoinho: gira sem parar enquanto durar
+	habilidade = {
+		trilha = true,
+		continuo = function(tau)
+			return {
+				raiz = A(-0.08, tau * 14, 0, 0, -0.25, 0),
+				ombroD = A(0.35, 0, 1.45),
+				cotoveloD = A(0),
+				pulsoD = A(-1.2),
+				ombroE = A(0.5, 0, -1),
+				quadrilD = A(0.3, 0, 0.2),
+				joelhoD = A(-0.4),
+				quadrilE = A(0.3, 0, -0.2),
+				joelhoE = A(-0.4),
+			}
+		end,
+	},
+	-- Julgamento: salta com a espada nas duas mãos e esmaga o chão
+	supremo = {
+		voltar = 0.8,
+		trilha = { 0.2, 0.5 },
+		quadros = {
+			{
+				t = 0.2,
+				pose = {
+					ombroD = A(1.94, 0.18, -0.24),
+					pulsoD = A(-0.35),
+					ombroE = A(2.3, -0.4),
+					cotoveloD = A(0.38),
+					cotoveloE = A(0.6),
+					cintura = A(0.35),
+					raiz = A(0.15, 0, 0, 0, 1, 0),
+					quadrilD = A(0.6),
+					joelhoD = A(-1),
+					quadrilE = A(0.6),
+					joelhoE = A(-1),
+				},
+			},
+			{
+				t = 0.36,
+				suave = "forte",
+				pose = {
+					ombroD = A(0.31, 0.21, -1.3),
+					ombroE = A(0.6, -0.2),
+					cotoveloD = A(1.85),
+					cotoveloE = A(0.3),
+					pulsoD = A(-1.25),
+					cintura = A(-0.6),
+					raiz = A(-0.3, 0, 0, 0, -0.8, 0),
+					quadrilD = A(1.1),
+					joelhoD = A(-1.4),
+					quadrilE = A(-0.3),
+					joelhoE = A(-1),
+				},
+			},
+			{ t = 0.6, pose = { cintura = A(-0.55) } },
+		},
+	},
+	-- Defesa: escudo erguido à frente, corpo encolhido atrás dele, espada pronta
+	defender = {
+		manter = true,
+		quadros = {
+			{
+				t = 0.1,
+				suave = "forte",
+				pose = {
+					ombroE = A(1.01, -1.57, -0.21),
+					cotoveloE = A(1.52),
+					pulsoE = A(0),
+					ombroD = A(0.5, -0.3, 0.35),
+					cotoveloD = A(1),
+					pulsoD = A(-0.6),
+					cintura = A(-0.15, 0.25),
+					pescoco = A(0.1),
+					raiz = A(0, -0.35, 0, 0, -0.3, 0),
+					quadrilD = A(-0.25, 0, 0.15),
+					joelhoD = A(-0.4),
+					quadrilE = A(0.55, 0, -0.1),
+					joelhoE = A(-0.75),
+					tornozeloE = A(0.2),
+				},
+			},
+		},
+	},
+}
+
+------------------------------------------------------------------------
+-- Mago
+------------------------------------------------------------------------
+
+local mago = {
+	-- Estocada com o cajado: puxa para trás, avança o corpo e aponta o cristal
+	ataque1 = {
+		voltar = 0.44,
+		quadros = {
+			{
+				t = 0.08,
+				pose = {
+					ombroD = A(-0.1, -0.81, -0.3),
+					cotoveloD = A(1.51),
+					pulsoD = A(-1.5),
+					ombroE = A(1.2, 0.6, -0.2),
+					cotoveloE = A(0.6),
+					pulsoE = A(-0.6),
+					cintura = A(0.1, -0.45),
+					raiz = A(0, -0.15, 0, 0, -0.05, 0),
+					brilho = A(0.8),
+				},
+			},
+			{
+				t = 0.15,
+				suave = "forte",
+				pose = {
+					ombroD = A(1.11, -0.53, -0.23),
+					cotoveloD = A(0.05),
+					pulsoD = A(-1.7),
+					ombroE = A(0.5, 0.3, -0.5),
+					cotoveloE = A(0.9),
+					pulsoE = A(0),
+					cintura = A(-0.15, 0.35),
+					raiz = A(-0.08, 0.15, 0, 0, -0.1, 0),
+					quadrilE = A(0.4),
+					joelhoE = A(-0.35),
+					quadrilD = A(-0.2),
+					brilho = A(1.6),
+				},
+			},
+			{ t = 0.25, pose = { ombroD = A(1, -0.45, -0.2), cotoveloD = A(0.3), cintura = A(0, 0.25), brilho = A(0.6) } },
+		},
+	},
+	-- Empurrão com a mão livre: a magia sai da palma
+	ataque2 = {
+		voltar = 0.44,
+		quadros = {
+			{
+				t = 0.08,
+				pose = {
+					ombroE = A(0.4, 0.6, -0.6),
+					cotoveloE = A(2),
+					pulsoE = A(0),
+					ombroD = A(0.5, 0, 0.3),
+					cotoveloD = A(0.9),
+					cintura = A(0.1, 0.45),
+					raiz = A(0, 0.15, 0, 0, -0.05, 0),
+				},
+			},
+			{
+				t = 0.15,
+				suave = "forte",
+				pose = {
+					ombroE = A(1.6, -0.1),
+					cotoveloE = A(0.05),
+					pulsoE = A(0.6),
+					ombroD = A(0.3, 0, 0.45),
+					cintura = A(-0.15, -0.4),
+					raiz = A(-0.08, -0.15, 0, 0, -0.1, 0),
+					quadrilD = A(0.4),
+					joelhoD = A(-0.35),
+					quadrilE = A(-0.2),
+				},
+			},
+			{ t = 0.25, pose = { ombroE = A(1.4, -0.05), cotoveloE = A(0.3), cintura = A(0, -0.25) } },
+		},
+	},
+	-- Golpe final: ergue o cajado com as duas mãos e crava à frente
+	ataque3 = {
+		voltar = 0.58,
+		quadros = {
+			{
+				t = 0.15,
+				pose = {
+					ombroD = A(1.78, 0.08, -0.3),
+					cotoveloD = A(0),
+					pulsoD = A(-1.7),
+					ombroE = A(2.6, -0.2, -0.2),
+					cotoveloE = A(0.8),
+					cintura = A(0.35),
+					pescoco = A(-0.3),
+					raiz = A(0.08, 0, 0, 0, 0.2, 0),
+					brilho = A(1.2),
+				},
+			},
+			{
+				t = 0.28,
+				suave = "forte",
+				pose = {
+					ombroD = A(1.28, -0.11, -0.6),
+					cotoveloD = A(0),
+					pulsoD = A(-1.7),
+					ombroE = A(1.3, -0.3),
+					cotoveloE = A(0.3),
+					cintura = A(-0.5),
+					pescoco = A(0.2),
+					raiz = A(-0.2, 0, 0, 0, -0.45, 0),
+					quadrilD = A(0.8),
+					joelhoD = A(-0.9),
+					quadrilE = A(-0.4),
+					joelhoE = A(-0.4),
+					brilho = A(2.2),
+				},
+			},
+			{ t = 0.42, pose = { cintura = A(-0.45), brilho = A(1) } },
+		},
+	},
+	-- Carregando: cajado no alto, a outra mão aberta juntando energia, corpo para trás
+	carregar = {
+		manter = true,
+		quadros = {
+			{
+				t = 0.2,
+				pose = {
+					ombroD = A(1.87, -0.05, -0.25),
+					cotoveloD = A(0),
+					pulsoD = A(-1.7),
+					ombroE = A(1.2, 0.2, -0.9),
+					cotoveloE = A(0.5),
+					pulsoE = A(0.6),
+					cintura = A(0.25),
+					pescoco = A(-0.35),
+					raiz = A(0.05, 0, 0, 0, -0.1, 0),
+					quadrilD = A(-0.2, 0, 0.15),
+					quadrilE = A(0.3, 0, -0.15),
+					joelhoE = A(-0.3),
+					brilho = A(1),
+				},
+			},
+		},
+	},
+	-- Solta: empurra as duas mãos à frente com o corpo todo
+	soltar = {
+		voltar = 0.55,
+		quadros = {
+			{
+				t = 0.06,
+				suave = "forte",
+				pose = {
+					ombroD = A(1.42, -0.15, -0.6),
+					cotoveloD = A(0),
+					pulsoD = A(-1.7),
+					ombroE = A(1.5, -0.2),
+					cotoveloE = A(0),
+					pulsoE = A(0.5),
+					cintura = A(-0.45),
+					pescoco = A(0.3),
+					raiz = A(-0.15, 0, 0, 0, -0.35, 0),
+					quadrilE = A(0.75),
+					joelhoE = A(-0.7),
+					quadrilD = A(-0.45),
+					brilho = A(2.5),
+				},
+			},
+			{ t = 0.3, pose = { cintura = A(-0.35), brilho = A(1) } },
+		},
+	},
+	-- Meteoro: chama do céu com as duas mãos e puxa para baixo
+	habilidade = {
+		voltar = 0.62,
+		quadros = {
+			{
+				t = 0.15,
+				pose = {
+					ombroD = A(1.77, -0.01, -0.17),
+					ombroE = A(3, 0, -0.2),
+					cotoveloD = A(0),
+					cotoveloE = A(0.2),
+					pulsoD = A(-1.7),
+					cintura = A(0.35),
+					pescoco = A(-0.5),
+					raiz = A(0.05, 0, 0, 0, 0.1, 0),
+					brilho = A(1.2),
+				},
+			},
+			{
+				t = 0.32,
+				suave = "forte",
+				pose = {
+					ombroD = A(1, -0.14, -0.6),
+					cotoveloD = A(0),
+					pulsoD = A(-1.7),
+					ombroE = A(1, -0.2),
+					cotoveloE = A(0.3),
+					cintura = A(-0.4),
+					pescoco = A(0.1),
+					raiz = A(-0.15, 0, 0, 0, -0.4, 0),
+					quadrilD = A(0.7),
+					joelhoD = A(-0.8),
+					quadrilE = A(-0.3),
+					brilho = A(2),
+				},
+			},
+		},
+	},
+	-- Tempestade: flutua com os braços para o céu enquanto os raios caem
+	supremo = {
+		continuo = function(tau)
+			local s = math.sin(tau * 6) * 0.08
+			return {
+				ombroD = A(2.9 + s, 0, 0.3),
+				cotoveloD = A(0.2),
+				pulsoD = A(0),
+				ombroE = A(2.9 - s, 0, -0.3),
+				cotoveloE = A(0.2),
+				cintura = A(0.25),
+				pescoco = A(-0.45),
+				raiz = A(0.05, 0, 0, 0, 0.6 + math.sin(tau * 3) * 0.12, 0),
+				quadrilD = A(0.2),
+				joelhoD = A(-0.5),
+				quadrilE = A(-0.1),
+				joelhoE = A(-0.3),
+				brilho = A(1.5),
+			}
+		end,
+	},
+}
+
+------------------------------------------------------------------------
+-- Arqueiro
+------------------------------------------------------------------------
+
+-- Mirando: corpo de lado, braço do arco esticado, mão puxando a corda até o rosto
+local MIRA = {
+	cintura = A(0, -0.85),
+	pescoco = A(0, 0.75),
+	ombroE = A(1.57, 0.85),
+	cotoveloE = A(0),
+	pulsoE = A(0),
+	ombroD = A(1.45, 1.1),
+	cotoveloD = A(2.2),
+	puxar = A(1),
+}
+
+-- Solta a flecha: a mão da corda voa para trás da orelha e o arco recua
+local SOLTOU = {
+	ombroD = A(1.3, 1.6, 0.4),
+	cotoveloD = A(1),
+	ombroE = A(1.75, 0.85),
+	cintura = A(0.05, -0.85),
+	puxar = A(0),
+}
+
+-- Ciclo de um tiro: leva a mão à aljava nas costas, pega a flecha, encaixa no arco,
+-- puxa a corda até o rosto e solta. "flechaMao" mostra a flecha na mão direita.
+-- "solta" é o momento do disparo (igual a Classes.arqueiro.ataque.impacto).
+local function cicloDeTiro(solta: number, puxada: number, extra)
+	extra = extra or {}
+	local quadros = {
+		-- mão sobe por cima do ombro até a aljava; o arco já sobe para a frente
+		{
+			t = solta * 0.27,
+			pose = {
+				ombroD = A(2.75, 0.2, 0.35),
+				cotoveloD = A(2.1),
+				pulsoD = A(0.3),
+				pescoco = A(0, -0.35),
+				cintura = A(0, -0.35),
+				ombroE = A(1.2, 0.6),
+				cotoveloE = A(0.3),
+				flechaMao = A(0),
+				puxar = A(0),
+			},
+		},
+		{ t = solta * 0.36, pose = { flechaMao = A(1) } },
+		-- traz a flecha e encaixa na corda, já de lado para o alvo
+		{
+			t = solta * 0.6,
+			pose = {
+				ombroD = A(1.4, 1.1),
+				cotoveloD = A(1.3),
+				pulsoD = A(0),
+				pescoco = A(0, 0.75),
+				cintura = A(0, -0.85),
+				ombroE = A(1.57, 0.85),
+				cotoveloE = A(0),
+				pulsoE = A(0),
+				puxar = A(0.15),
+			},
+		},
+		{ t = solta * 0.62, pose = { flechaMao = A(0) } },
+		-- puxa até o rosto
+		{ t = solta * 0.93, pose = juntar(MIRA, { puxar = A(puxada), cintura = A(0.04, -0.9) }) },
+		-- solta: a mão voa para trás e o arco recua
+		{ t = solta, suave = "forte", pose = juntar(SOLTOU, extra.soltou or {}) },
+		{ t = solta + 0.09, pose = { ombroD = A(1.15, 1.5, 0.3), ombroE = A(1.6, 0.85) } },
+	}
+	if extra.antes then
+		for junta, valor in extra.antes do
+			quadros[5].pose[junta] = valor
+		end
+	end
+	return { voltar = solta + 0.24, quadros = quadros }
+end
+
+local arqueiro = {
+	ataque1 = cicloDeTiro(0.26, 1),
+	ataque2 = cicloDeTiro(0.26, 1),
+	-- Tiro final: puxa até o limite agachando e recua com o disparo
+	ataque3 = cicloDeTiro(0.34, 1.25, {
+		antes = { raiz = A(0, 0, 0, 0, -0.25, 0), quadrilE = A(0.45), joelhoE = A(-0.7), quadrilD = A(-0.2) },
+		soltou = { ombroD = A(1.1, 1.8, 0.6), raiz = A(0.1, 0, 0, 0, -0.15, 0.6), quadrilD = A(-0.4), joelhoD = A(-0.2) },
+	}),
+	-- Carregando: pega a flecha, encaixa e puxa até o limite, agachado
+	carregar = {
+		manter = true,
+		quadros = {
+			{ t = 0.07, pose = { ombroD = A(2.75, 0.2, 0.35), cotoveloD = A(2.1), pulsoD = A(0.3), pescoco = A(0, -0.35), ombroE = A(1.2, 0.6), flechaMao = A(0), puxar = A(0) } },
+			{ t = 0.09, pose = { flechaMao = A(1) } },
+			{ t = 0.17, pose = { ombroD = A(1.4, 1.1), cotoveloD = A(1.3), pescoco = A(0, 0.75), cintura = A(0, -0.85), ombroE = A(1.57, 0.85), cotoveloE = A(0), puxar = A(0.15) } },
+			{ t = 0.18, pose = { flechaMao = A(0) } },
+			{
+				t = 0.4,
+				pose = juntar(MIRA, {
+					puxar = A(1.2),
+					cintura = A(0.08, -0.95),
+					raiz = A(0, 0, 0, 0, -0.3, 0),
+					quadrilE = A(0.5),
+					joelhoE = A(-0.9),
+					tornozeloE = A(0.3),
+					quadrilD = A(-0.25),
+				}),
+			},
+		},
+	},
+	soltar = {
+		voltar = 0.45,
+		quadros = {
+			{ t = 0.04, suave = "forte", pose = juntar(SOLTOU, { ombroD = A(1, 1.8, 0.6), ombroE = A(1.95, 0.85), raiz = A(0.15, 0, 0, 0, -0.2, 0.9), quadrilD = A(-0.45), joelhoD = A(-0.2) }) },
+			{ t = 0.22, pose = { ombroD = A(0.9, 1.6, 0.5), raiz = A(0.08, 0, 0, 0, -0.1, 0.5) } },
+		},
+	},
+	-- Chuva de Flechas: mira para o alto e atira
+	habilidade = {
+		voltar = 0.55,
+		quadros = {
+			{ t = 0.12, pose = { cintura = A(0.25, -0.85), pescoco = A(-0.5, 0.75), ombroE = A(2.35, 0.85), cotoveloE = A(0), ombroD = A(2.2, 1.1), cotoveloD = A(2.2), puxar = A(1.1) } },
+			{ t = 0.18, suave = "forte", pose = { ombroD = A(2, 1.6, 0.4), cotoveloD = A(0.9), puxar = A(0) } },
+			{ t = 0.3, pose = { ombroE = A(2.2, 0.85) } },
+		},
+	},
+	-- Saraivada: gira atirando sem parar
+	supremo = {
+		continuo = function(tau)
+			local pose = table.clone(MIRA)
+			pose.raiz = A(0, tau * 10, 0, 0, -0.15, 0)
+			pose.puxar = A((math.sin(tau * 21) + 1) / 2)
+			return pose
+		end,
+	},
+}
+
+------------------------------------------------------------------------
+-- Assassino
+------------------------------------------------------------------------
+
+local assassino = {
+	-- Corte rápido com a adaga direita
+	ataque1 = {
+		voltar = 0.3,
+		trilha = { 0.04, 0.18 },
+		quadros = {
+			{ t = 0.04, pose = { ombroD = A(0.9, -1.2, 0.5), cotoveloD = A(1.2), pulsoD = A(-0.6), cintura = A(-0.35, -0.5), raiz = A(0, -0.15, 0, 0, -0.3, 0) } },
+			{
+				t = 0.09,
+				suave = "forte",
+				pose = {
+					ombroD = A(1.45, 1),
+					cotoveloD = A(0.2),
+					pulsoD = A(-0.9),
+					cintura = A(-0.4, 0.5),
+					raiz = A(-0.05, 0.2, 0, 0, -0.35, 0),
+					quadrilD = A(0.5),
+					joelhoD = A(-0.6),
+				},
+			},
+			{ t = 0.16, pose = { ombroD = A(1, 1.4), cotoveloD = A(0.7) } },
+		},
+	},
+	-- Corte rápido com a adaga esquerda
+	ataque2 = {
+		voltar = 0.3,
+		trilha = { 0.04, 0.18 },
+		quadros = {
+			{ t = 0.04, pose = { ombroE = A(0.9, 1.2, -0.5), cotoveloE = A(1.2), pulsoE = A(-0.6), cintura = A(-0.35, 0.5), raiz = A(0, 0.15, 0, 0, -0.3, 0) } },
+			{
+				t = 0.09,
+				suave = "forte",
+				pose = {
+					ombroE = A(1.45, -1),
+					cotoveloE = A(0.2),
+					pulsoE = A(-0.9),
+					cintura = A(-0.4, -0.5),
+					raiz = A(-0.05, -0.2, 0, 0, -0.35, 0),
+					quadrilE = A(0.5),
+					joelhoE = A(-0.6),
+				},
+			},
+			{ t = 0.16, pose = { ombroE = A(1, -1.4), cotoveloE = A(0.7) } },
+		},
+	},
+	-- Golpe final: salta e cruza as duas adagas para baixo
+	ataque3 = {
+		voltar = 0.46,
+		trilha = { 0.1, 0.32 },
+		quadros = {
+			{ t = 0.1, pose = { ombroD = A(2.4, 0.35), ombroE = A(2.4, -0.35), cotoveloD = A(1.1), cotoveloE = A(1.1), cintura = A(0.2), raiz = A(0.05, 0, 0, 0, 0.35, 0) } },
+			{
+				t = 0.2,
+				suave = "forte",
+				pose = {
+					ombroD = A(1.25, 0.55),
+					ombroE = A(1.25, -0.55),
+					cotoveloD = A(0.1),
+					cotoveloE = A(0.1),
+					cintura = A(-0.55),
+					raiz = A(-0.2, 0, 0, 0, -0.5, 0),
+					quadrilD = A(0.9),
+					joelhoD = A(-1),
+					quadrilE = A(-0.45),
+					joelhoE = A(-0.5),
+				},
+			},
+			{ t = 0.32, pose = { ombroD = A(1.1, 0.7), ombroE = A(1.1, -0.7) } },
+		},
+	},
+	-- Carregando: encolhido como uma mola, adagas para trás
+	carregar = {
+		manter = true,
+		quadros = {
+			{
+				t = 0.15,
+				pose = {
+					raiz = A(0, 0, 0, 0, -0.65, 0),
+					cintura = A(-0.6),
+					pescoco = A(0.5),
+					ombroD = A(-0.45, 0, 0.55),
+					ombroE = A(-0.45, 0, -0.55),
+					cotoveloD = A(0.5),
+					cotoveloE = A(0.5),
+					quadrilD = A(0.95),
+					joelhoD = A(-1.45),
+					tornozeloD = A(0.5),
+					quadrilE = A(-0.15),
+					joelhoE = A(-1),
+					tornozeloE = A(0.7),
+				},
+			},
+		},
+	},
+	-- Investida Letal: dispara para frente com as duas adagas esticadas
+	soltar = {
+		voltar = 0.48,
+		trilha = { 0, 0.3 },
+		quadros = {
+			{
+				t = 0.04,
+				suave = "forte",
+				pose = {
+					ombroD = A(1.6, -0.25),
+					ombroE = A(1.6, 0.25),
+					cotoveloD = A(0),
+					cotoveloE = A(0),
+					pulsoD = A(-1.4),
+					pulsoE = A(-1.4),
+					cintura = A(-0.55),
+					pescoco = A(0.5),
+					raiz = A(-0.3, 0, 0, 0, -0.55, 0),
+					quadrilD = A(1.05),
+					joelhoD = A(-0.7),
+					quadrilE = A(-0.85),
+					joelhoE = A(-0.25),
+				},
+			},
+			{ t = 0.26, pose = { ombroD = A(1.2, 0.6), ombroE = A(1.2, -0.6), cotoveloD = A(0.5), cotoveloE = A(0.5) } },
+		},
+	},
+	-- Passo Sombrio: agacha, some e reaparece cravando a adaga
+	habilidade = {
+		voltar = 0.42,
+		trilha = { 0.1, 0.3 },
+		quadros = {
+			{ t = 0.05, pose = { raiz = A(0, 0, 0, 0, -0.7, 0), cintura = A(-0.6), ombroD = A(-0.4, 0, 0.5), ombroE = A(-0.4, 0, -0.5), quadrilD = A(1), joelhoD = A(-1.5), quadrilE = A(0.6), joelhoE = A(-1.3) } },
+			{
+				t = 0.16,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.1, 0, 0, 0, -0.3, 0),
+					cintura = A(-0.45),
+					ombroD = A(1.55, 0.3),
+					cotoveloD = A(0.05),
+					pulsoD = A(-1.3),
+					ombroE = A(0.4, 0, -0.6),
+					quadrilD = A(0.7),
+					joelhoD = A(-0.8),
+					quadrilE = A(-0.3),
+					joelhoE = A(-0.4),
+				},
+			},
+		},
+	},
+	-- Lâminas da Noite: cortes em X sem parar
+	supremo = {
+		trilha = true,
+		continuo = function(tau)
+			local f = math.sin(tau * 24)
+			return {
+				raiz = A(-0.1, f * 0.35, 0, 0, -0.35, 0),
+				cintura = A(-0.45, f * 0.5),
+				ombroD = A(1.35, f * 1.1, 0.2),
+				cotoveloD = A(0.2),
+				pulsoD = A(-1),
+				ombroE = A(1.35, -f * 1.1, -0.2),
+				cotoveloE = A(0.2),
+				pulsoE = A(-1),
+				quadrilD = A(0.7),
+				joelhoD = A(-0.9),
+				quadrilE = A(-0.3),
+				joelhoE = A(-0.5),
+			}
+		end,
+	},
+}
+
+Poses.ACOES = { cavaleiro = cavaleiro, mago = mago, arqueiro = arqueiro, assassino = assassino }
+
+------------------------------------------------------------------------
+-- Esquivas (uma por classe) e reação ao levar dano
+------------------------------------------------------------------------
+
+Poses.ESQUIVAS = {
+	-- Investida: ombro e escudo à frente, passada longa
+	cavaleiro = {
+		duracao = 0.34,
+		quadros = {
+			{
+				t = 0.04,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.5, 0.35, 0, 0, -0.45, 0),
+					cintura = A(-0.2, 0.25),
+					pescoco = A(0.25, -0.4),
+					ombroE = A(1.25, 0.6, -0.15),
+					cotoveloE = A(1.3),
+					ombroD = A(-0.55, 0, 0.3),
+					cotoveloD = A(0.5),
+					quadrilD = A(0.9),
+					joelhoD = A(-1.1),
+					quadrilE = A(-0.6),
+					joelhoE = A(-0.5),
+				},
+			},
+			{ t = 0.22, pose = { raiz = A(-0.3, 0.2, 0, 0, -0.3, 0), quadrilD = A(0.5), joelhoD = A(-0.7), quadrilE = A(-0.3), joelhoE = A(-0.3) } },
+		},
+	},
+	-- Deslize arcano: corpo inclinado, braços abertos para trás, como se flutuasse
+	mago = {
+		duracao = 0.32,
+		quadros = {
+			{
+				t = 0.05,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.55, 0, 0, 0, -0.35, 0),
+					cintura = A(-0.25),
+					pescoco = A(0.35),
+					ombroD = A(-0.7, 0, 0.55),
+					ombroE = A(-0.7, 0, -0.55),
+					cotoveloD = A(0.2),
+					cotoveloE = A(0.2),
+					quadrilD = A(-0.35),
+					joelhoD = A(-0.6),
+					quadrilE = A(-0.5),
+					joelhoE = A(-0.9),
+					brilho = A(1),
+				},
+			},
+		},
+	},
+	-- Rolamento: encolhe e dá uma cambalhota para frente
+	arqueiro = {
+		duracao = 0.36,
+		quadros = {
+			{
+				t = 0.04,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.7, 0, 0, 0, -1.1, 0),
+					cintura = A(-0.6),
+					pescoco = A(-0.5),
+					ombroD = A(0.9, 0, 0.2),
+					cotoveloD = A(1.6),
+					ombroE = A(0.9, 0, -0.2),
+					cotoveloE = A(1.6),
+					quadrilD = A(1.6),
+					joelhoD = A(-2),
+					quadrilE = A(1.6),
+					joelhoE = A(-2),
+				},
+			},
+			{ t = 0.24, suave = "linear", pose = { raiz = A(-0.7 - PI * 2, 0, 0, 0, -1.1, 0) } },
+			{ t = 0.33, pose = { raiz = A(-PI * 2, 0, 0, 0, -0.3, 0), cintura = A(-0.15), pescoco = A(0), quadrilD = A(0.4), joelhoD = A(-0.6), quadrilE = A(-0.2), joelhoE = A(-0.3) } },
+		},
+	},
+	-- Passo de sombra: corrida baixa de ninja, braços para trás
+	assassino = {
+		duracao = 0.3,
+		quadros = {
+			{
+				t = 0.035,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.6, 0, 0, 0, -0.6, 0),
+					cintura = A(-0.3),
+					pescoco = A(0.6),
+					ombroD = A(-1.25, 0, 0.25),
+					ombroE = A(-1.25, 0, -0.25),
+					cotoveloD = A(0.1),
+					cotoveloE = A(0.1),
+					quadrilD = A(1.15),
+					joelhoD = A(-1.4),
+					quadrilE = A(-0.55),
+					joelhoE = A(-0.7),
+				},
+			},
+		},
+	},
+}
+
+-- Levou dano: o tronco é jogado para trás e os braços abrem
+Poses.ATINGIDO = {
+	voltar = 0.3,
+	quadros = {
+		{
+			t = 0.05,
+			suave = "forte",
+			pose = {
+				cintura = A(0.35, 0.15),
+				pescoco = A(0.3),
+				raiz = A(0.1, 0, 0, 0, 0, 0.25),
+				ombroD = A(0.1, 0, 0.5),
+				ombroE = A(0.2, 0, -0.5),
+			},
+		},
+	},
+}
+
+-- Escudo bloqueou um golpe: o braço do escudo é empurrado e o corpo escorrega para trás
+Poses.BLOQUEIO = {
+	voltar = 0.3,
+	quadros = {
+		{ t = 0.04, suave = "forte", pose = { ombroE = A(1.1, 1.2, 0.2), cotoveloE = A(1), cintura = A(0.2, 0.35), raiz = A(0.05, 0, 0, 0, 0, 0.5) } },
+	},
+}
+
+------------------------------------------------------------------------
+-- Interpolação
+------------------------------------------------------------------------
+
+local function suavizar(tipo: string?, a: number): number
+	if tipo == "linear" then
+		return a
+	elseif tipo == "forte" then
+		return 1 - (1 - a) ^ 4
+	end
+	return 1 - (1 - a) * (1 - a)
+end
+
+local function misturar(a, b, alfa: number)
+	return {
+		a[1] + (b[1] - a[1]) * alfa,
+		a[2] + (b[2] - a[2]) * alfa,
+		a[3] + (b[3] - a[3]) * alfa,
+		a[4] + (b[4] - a[4]) * alfa,
+		a[5] + (b[5] - a[5]) * alfa,
+		a[6] + (b[6] - a[6]) * alfa,
+		(a[7] or 1) + ((b[7] or 1) - (a[7] or 1)) * alfa,
+	}
+end
+Poses.misturar = misturar
+
+-- Junta todas as juntas usadas e, se a animação tem "voltar", cria o quadro final que solta
+-- todas elas (mesmos ângulos, peso 0: não desfaz giros)
+local function preparar(definicao)
+	if definicao.preparada then
+		return
+	end
+	local lista, vistas, ultimo = {}, {}, {}
+	for _, quadro in definicao.quadros do
+		for junta, valor in quadro.pose do
+			if not vistas[junta] then
+				vistas[junta] = true
+				table.insert(lista, junta)
+			end
+			ultimo[junta] = valor
+		end
+	end
+	if definicao.voltar then
+		local final = {}
+		for junta, valor in ultimo do
+			final[junta] = solto(valor)
+		end
+		table.insert(definicao.quadros, { t = definicao.voltar, pose = final })
+		definicao.duracao = definicao.duracao or definicao.voltar + 0.02
+	end
+	definicao.juntas = lista
+	definicao.preparada = true
+end
+Poses.preparar = preparar
+
+--[[ Pose da animação no tempo "tau", partindo da pose "base" (onde o corpo estava).
+	Juntas que estavam na base mas não são usadas aqui são soltas em 0,1s. ]]
+function Poses.amostrar(definicao, tau: number, base)
+	preparar(definicao)
+	local quadros = definicao.quadros
+	local indice = 0
+	for k, quadro in quadros do
+		if quadro.t <= tau then
+			indice = k
+		end
+	end
+	local pose = {}
+	for _, junta in definicao.juntas do
+		local inicio = base[junta] or SOLTO
+		for k = indice, 1, -1 do
+			local v = quadros[k].pose[junta]
+			if v then
+				inicio = v
+				break
+			end
+		end
+		-- próximo quadro que mexe nesta junta
+		local proximo, t0 = nil, 0
+		for k = indice + 1, #quadros do
+			if quadros[k].pose[junta] then
+				proximo = quadros[k]
+				break
+			end
+		end
+		if proximo then
+			for k = indice, 1, -1 do
+				if quadros[k].pose[junta] then
+					t0 = quadros[k].t
+					break
+				end
+			end
+			local alfa = suavizar(proximo.suave, math.clamp((tau - t0) / math.max(proximo.t - t0, 0.001), 0, 1))
+			pose[junta] = misturar(inicio, proximo.pose[junta], alfa)
+		else
+			pose[junta] = inicio
+		end
+	end
+	for junta, valor in base do
+		if pose[junta] == nil then
+			pose[junta] = misturar(valor, solto(valor), math.clamp(tau / 0.1, 0, 1))
+		end
+	end
+	return pose
+end
+
+return Poses
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX00000034">
+          <Properties>
             <string name="Name">UI</string>
             <ProtectedString name="Source"><![CDATA[-- Kit visual da interface: cores, fontes e componentes (painéis, botões, barras, medalhões).
 -- Estilo "fantasia sombria": painéis escuros, bordas douradas duplas e losangos nos cantos.
@@ -11296,7 +12370,7 @@ return UI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000034">
+        <Item class="ModuleScript" referent="RBX00000035">
           <Properties>
             <string name="Name">Vfx</string>
             <ProtectedString name="Source"><![CDATA[-- Efeitos visuais desenhados no computador do jogador: cortes, projéteis, explosões,
@@ -11614,41 +12688,6 @@ function Vfx.golpeInimigo(dados)
 	end
 end
 
-function Vfx.redemoinho(dados)
-	local raiz = raizDoJogador(dados.jogador)
-	if not raiz then
-		return
-	end
-	local cor = if dados.fogo then FOGO else dados.cor
-	local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
-	local b0, b1 = Instance.new("Attachment"), Instance.new("Attachment")
-	for _, a in { a0, a1, b0, b1 } do
-		a.Parent = terreno
-	end
-	local feixesA = { novoFeixe(a0, a1, cor:Lerp(BRANCO, 0.5), 0.8), novoFeixe(a0, a1, cor, 2.6) }
-	local feixesB = { novoFeixe(b0, b1, cor:Lerp(BRANCO, 0.5), 0.8), novoFeixe(b0, b1, cor, 2.6) }
-	for i, feixe in { feixesA[1], feixesA[2], feixesB[1], feixesB[2] } do
-		feixe.Transparency = sequencia({ { 0, 1 }, { 0.5, if i % 2 == 1 then 0 else 0.5 }, { 1, 0.1 } })
-	end
-	local inicio = os.clock()
-	local conexao
-	conexao = RunService.RenderStepped:Connect(function()
-		local t = os.clock() - inicio
-		if t > dados.duracao or not raiz.Parent then
-			conexao:Disconnect()
-			for _, a in { a0, a1, b0, b1 } do
-				a:Destroy()
-			end
-			return
-		end
-		local centro = CFrame.new(raiz.Position) * CFrame.Angles(0, -t * 14, 0)
-		posicionarArco(a0, a1, feixesA, centro, dados.raio * 0.8, 150)
-		posicionarArco(b0, b1, feixesB, centro * CFrame.Angles(0, math.pi, 0), dados.raio * 0.8, 150)
-		if math.random() < 0.3 then
-			particulas(raiz.Position + Vector3.new(math.random(-4, 4), -1, math.random(-4, 4)), { cor = cor, quantidade = 3, tamanho = 0.4, velocidade = 8, vida = 0.4 })
-		end
-	end)
-end
 
 function Vfx.rajada(dados)
 	local origem = CFrame.lookAt(dados.pos, dados.pos + dados.dir)
@@ -11745,11 +12784,243 @@ local function criarVisualProjetil(tipo: string, tamanho: number): (BasePart, Co
 	return p, cor
 end
 
+------------------------------------------------------------------------
+-- Magias com visual próprio: cada uma é um conjunto de peças que se mexem juntas.
+-- O construtor devolve a peça principal, a cor e uma lista de "extras":
+-- { parte = BasePart, cf = function(t) -> CFrame relativo à peça principal }.
+------------------------------------------------------------------------
+
+local function emissorEm(pai: Instance, propriedades)
+	local e = Instance.new("ParticleEmitter")
+	e.LightInfluence = 0
+	for chave, valor in propriedades do
+		(e :: any)[chave] = valor
+	end
+	e.Parent = pai
+	return e
+end
+
+local function luzEm(pai: Instance, cor: Color3, alcance: number, brilho: number)
+	local l = Instance.new("PointLight")
+	l.Color = cor
+	l.Range = alcance
+	l.Brightness = brilho
+	l.Parent = pai
+end
+
+local function anelDeMagia(raio: number, espessura: number, cor: Color3, transparencia: number): BasePart
+	-- cilindro bem fino e largo: parece um anel de energia visto de lado
+	return parte(Vector3.new(espessura, raio * 2, raio * 2), CFrame.new(), cor, transparencia, Enum.PartType.Cylinder)
+end
+
+local MAGIAS = {}
+
+-- Dardo Arcano: núcleo branco-violeta, aura, dois anéis girando em volta do caminho e faíscas
+MAGIAS.dardoArcano = function(escala: number)
+	local cor = Color3.fromRGB(190, 110, 255)
+	local nucleo = parte(Vector3.one * 0.7 * escala, CFrame.new(), cor:Lerp(BRANCO, 0.6), 0, Enum.PartType.Ball)
+	local aura = parte(Vector3.one * 1.5 * escala, CFrame.new(), cor, 0.55, Enum.PartType.Ball)
+	local anel1 = anelDeMagia(0.9 * escala, 0.08, cor:Lerp(BRANCO, 0.3), 0.2)
+	local anel2 = anelDeMagia(0.7 * escala, 0.08, cor, 0.3)
+	rastro(nucleo, cor, 0.8 * escala, 0.25)
+	emissorEm(nucleo, {
+		Color = ColorSequence.new(BRANCO, cor),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.25 * escala }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.25, 0.45),
+		Speed = NumberRange.new(1, 3),
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 55,
+	})
+	luzEm(nucleo, cor, 12, 2)
+	return nucleo, cor, {
+		{ parte = aura, cf = function(t)
+			return CFrame.new()
+		end },
+		{ parte = anel1, cf = function(t)
+			return CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(t * 14, 0, 0) * CFrame.Angles(0, 0, math.rad(25))
+		end },
+		{ parte = anel2, cf = function(t)
+			return CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(-t * 18, 0, 0) * CFrame.Angles(0, math.rad(35), 0)
+		end },
+	}
+end
+
+-- Lança de Gelo: cristal comprido girando, com cristais menores em volta e névoa gelada
+MAGIAS.lancaGelo = function(escala: number)
+	local cor = Color3.fromRGB(150, 225, 255)
+	local lanca = parte(Vector3.new(0.55, 0.55, 2.8) * escala, CFrame.new(), cor:Lerp(BRANCO, 0.4), 0.1, nil, Enum.Material.Glass)
+	local brilho = parte(Vector3.new(0.25, 0.25, 3.1) * escala, CFrame.new(), cor, 0, nil, Enum.Material.Neon)
+	local extras = { { parte = brilho, cf = function()
+		return CFrame.new()
+	end } }
+	for i = 1, 3 do
+		local lasca = parte(Vector3.new(0.25, 0.25, 0.9) * escala, CFrame.new(), cor:Lerp(BRANCO, 0.5), 0.15, nil, Enum.Material.Glass)
+		table.insert(extras, {
+			parte = lasca,
+			cf = function(t)
+				local a = t * 9 + i * (math.pi * 2 / 3)
+				return CFrame.new(math.cos(a) * 0.7 * escala, math.sin(a) * 0.7 * escala, 0.6 * escala)
+			end,
+		})
+	end
+	rastro(lanca, cor, 0.5 * escala, 0.3)
+	emissorEm(lanca, {
+		Color = ColorSequence.new(BRANCO, cor),
+		LightEmission = 0.6,
+		Transparency = sequencia({ { 0, 0.3 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 0.6 * escala }, { 1, 1.4 * escala } }),
+		Lifetime = NumberRange.new(0.4, 0.7),
+		Speed = NumberRange.new(0.5, 1.5),
+		Drag = 4,
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 35,
+	})
+	luzEm(lanca, cor, 10, 1.6)
+	return lanca, cor, extras, true
+end
+
+-- Bola de Fogo: núcleo amarelo, camada laranja pulsando, chamas, brasas e fumaça
+MAGIAS.bolaFogo = function(escala: number)
+	local cor = Color3.fromRGB(255, 130, 40)
+	local nucleo = parte(Vector3.one * 1.3 * escala, CFrame.new(), Color3.fromRGB(255, 240, 160), 0, Enum.PartType.Ball)
+	local camada = parte(Vector3.one * 2.2 * escala, CFrame.new(), cor, 0.35, Enum.PartType.Ball)
+	local fogo = Instance.new("Fire")
+	fogo.Size = 4 * escala
+	fogo.Heat = 0
+	fogo.Color = cor
+	fogo.SecondaryColor = Color3.fromRGB(255, 220, 90)
+	fogo.Parent = nucleo
+	emissorEm(nucleo, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 200, 80), Color3.fromRGB(255, 70, 20)),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.4 * escala }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.3, 0.6),
+		Speed = NumberRange.new(2, 5),
+		SpreadAngle = Vector2.new(180, 180),
+		Acceleration = Vector3.new(0, 6, 0),
+		Rate = 60,
+	})
+	emissorEm(nucleo, {
+		Color = ColorSequence.new(Color3.fromRGB(70, 60, 60)),
+		LightEmission = 0,
+		Transparency = sequencia({ { 0, 0.5 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 0.8 * escala }, { 1, 2.2 * escala } }),
+		Lifetime = NumberRange.new(0.5, 0.9),
+		Speed = NumberRange.new(0.5, 1.5),
+		Acceleration = Vector3.new(0, 3, 0),
+		Rate = 25,
+	})
+	rastro(nucleo, cor, 1.6 * escala, 0.3)
+	luzEm(nucleo, cor, 18, 3)
+	return nucleo, cor, {
+		{ parte = camada, cf = function(t)
+			return CFrame.Angles(t * 5, t * 7, 0)
+		end, pulso = 2.2 * escala },
+	}
+end
+
+-- Orbe do Vazio: núcleo escuro, borda violeta, três anéis em eixos diferentes e
+-- partículas sendo sugadas para dentro
+MAGIAS.orbeCarregado = function(escala: number)
+	local cor = Color3.fromRGB(170, 70, 255)
+	local nucleo = parte(Vector3.one * 1.4 * escala, CFrame.new(), Color3.fromRGB(18, 6, 30), 0, Enum.PartType.Ball, Enum.Material.SmoothPlastic)
+	local borda = parte(Vector3.one * 1.9 * escala, CFrame.new(), cor, 0.45, Enum.PartType.Ball, Enum.Material.ForceField)
+	local extras = { { parte = borda, cf = function()
+		return CFrame.new()
+	end } }
+	for i, giro in { Vector3.new(1, 0.3, 0), Vector3.new(0.2, 1, 0.4), Vector3.new(0.5, 0, 1) } do
+		local anel = anelDeMagia((1.3 + i * 0.25) * escala, 0.1, cor:Lerp(BRANCO, 0.2 * i), 0.15)
+		table.insert(extras, {
+			parte = anel,
+			cf = function(t)
+				return CFrame.Angles(t * giro.X * 6, t * giro.Y * 6, t * giro.Z * 6)
+			end,
+		})
+	end
+	emissorEm(nucleo, {
+		Color = ColorSequence.new(cor:Lerp(BRANCO, 0.5), cor),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.35 * escala }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.35, 0.5),
+		Speed = NumberRange.new(5, 8),
+		Shape = Enum.ParticleEmitterShape.Sphere,
+		ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface,
+		ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward,
+		Rate = 70,
+	})
+	rastro(nucleo, cor, 1.4 * escala, 0.35)
+	luzEm(nucleo, cor, 20, 3)
+	return nucleo, cor, extras
+end
+
+-- Flecha de verdade: haste de madeira, ponta de metal brilhante e penas atrás
+local function construirFlecha(escala: number, corPonta: Color3, corPenas: Color3, brilhoForte: boolean?)
+	local haste = parte(Vector3.new(0.14, 0.14, 2.6) * escala, CFrame.new(), Color3.fromRGB(150, 110, 70), 0, nil, Enum.Material.Wood)
+	local ponta = parte(Vector3.new(0.32, 0.12, 0.5) * escala, CFrame.new(), corPonta, 0, nil, Enum.Material.Neon)
+	local extras = {
+		{ parte = ponta, cf = function()
+			return CFrame.new(0, 0, -1.45 * escala) * CFrame.Angles(0, 0, math.rad(45))
+		end },
+	}
+	for i = 0, 1 do
+		local pena = parte(Vector3.new(0.04, 0.32, 0.6) * escala, CFrame.new(), corPenas, 0.05, nil, Enum.Material.Fabric)
+		table.insert(extras, { parte = pena, cf = function()
+			return CFrame.new(0, 0, 1.1 * escala) * CFrame.Angles(0, 0, math.rad(90 * i))
+		end })
+	end
+	rastro(haste, corPonta, 0.3 * escala, if brilhoForte then 0.3 else 0.15)
+	luzEm(haste, corPonta, if brilhoForte then 14 else 6, if brilhoForte then 2.5 else 1)
+	return haste, extras
+end
+
+MAGIAS.flecha = function(escala: number)
+	local cor = Color3.fromRGB(150, 255, 160)
+	local haste, extras = construirFlecha(escala, cor, Color3.fromRGB(240, 240, 230))
+	return haste, cor, extras
+end
+
+MAGIAS.flechaGrande = function(escala: number)
+	local cor = Color3.fromRGB(200, 255, 140)
+	local haste, extras = construirFlecha(escala, cor, cor, true)
+	return haste, cor, extras
+end
+
+-- Flecha carregada: dourada, com duas espirais de vento girando em volta
+MAGIAS.flechaCarregada = function(escala: number)
+	local cor = Color3.fromRGB(255, 225, 110)
+	local haste, extras = construirFlecha(escala, cor, cor, true)
+	for i = 0, 1 do
+		local espiral = anelDeMagia(0.7 * escala, 0.08, if i == 0 then BRANCO else cor, 0.25)
+		table.insert(extras, { parte = espiral, cf = function(t)
+			return CFrame.new(0, 0, (0.2 - i * 0.9) * escala) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles((t * 20) + i * math.pi, 0, 0)
+		end })
+	end
+	emissorEm(haste, {
+		Color = ColorSequence.new(BRANCO, cor),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.3 * escala }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.2, 0.35),
+		Speed = NumberRange.new(1, 3),
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 50,
+	})
+	return haste, cor, extras
+end
+
 function Vfx.projeteis(dados)
 	for _, info in dados.lista do
-		local visual, cor = criarVisualProjetil(info.tipo, info.tamanho or 1)
+		local construtor = MAGIAS[info.tipo]
+		local visual, cor, extras, girar
+		if construtor then
+			visual, cor, extras, girar = construtor(info.tamanho or 1)
+		else
+			visual, cor = criarVisualProjetil(info.tipo, info.tamanho or 1)
+		end
 		visual.CFrame = CFrame.lookAt(info.pos, info.pos + info.dir)
 		projeteis[info.id] = {
+			extras = extras,
+			nascimento = os.clock(),
 			parte = visual,
 			pos = info.pos,
 			dir = info.dir,
@@ -11758,7 +13029,7 @@ function Vfx.projeteis(dados)
 			percorrido = 0,
 			cor = cor,
 			tipo = info.tipo,
-			girar = info.tipo == "gelo",
+			girar = info.tipo == "gelo" or girar == true,
 		}
 	end
 end
@@ -11771,9 +13042,29 @@ local function removerProjetil(id: number, impacto: boolean, pos: Vector3?)
 	projeteis[id] = nil
 	local onde = pos or p.pos
 	p.parte.Transparency = 1
-	Debris:AddItem(p.parte, 0.3) -- deixa o rastro terminar
+	for _, desc in p.parte:GetDescendants() do
+		if desc:IsA("ParticleEmitter") or desc:IsA("Fire") then
+			desc.Enabled = false
+		end
+	end
+	Debris:AddItem(p.parte, 0.6) -- deixa o rastro e as partículas terminarem
+	for _, extra in p.extras or {} do
+		animar(extra.parte, 0.12, { Transparency = 1 })
+		Debris:AddItem(extra.parte, 0.15)
+	end
 	if impacto then
-		particulas(onde, { cor = p.cor, cor2 = BRANCO, quantidade = 10, tamanho = 0.45, velocidade = 16, vida = 0.35 })
+		if p.tipo == "lancaGelo" then
+			-- o cristal estilhaça
+			for _ = 1, 6 do
+				local lasca = parte(Vector3.new(0.25, 0.25, 0.7), CFrame.new(onde) * CFrame.Angles(math.random() * 6, math.random() * 6, 0), p.cor:Lerp(BRANCO, 0.4), 0.1, nil, Enum.Material.Glass)
+				lasca.Anchored = false
+				lasca.AssemblyLinearVelocity = Vector3.new(math.random(-14, 14), math.random(6, 18), math.random(-14, 14))
+				sumir({ lasca }, 0.3, 0.35)
+			end
+			particulas(onde, { cor = BRANCO, cor2 = p.cor, quantidade = 14, tamanho = 0.5, velocidade = 12, vida = 0.5, arrasto = 6 })
+		else
+			particulas(onde, { cor = p.cor, cor2 = BRANCO, quantidade = 10, tamanho = 0.45, velocidade = 16, vida = 0.35 })
+		end
 		clarao(onde, p.cor, 10, 0.2, 2)
 	end
 end
@@ -11804,6 +13095,15 @@ RunService.RenderStepped:Connect(function(dt)
 				cf *= CFrame.Angles(0, 0, os.clock() * 12)
 			end
 			p.parte.CFrame = cf
+			if p.extras then
+				local t = os.clock() - p.nascimento
+				for _, extra in p.extras do
+					extra.parte.CFrame = cf * extra.cf(t)
+					if extra.pulso then
+						extra.parte.Size = Vector3.one * extra.pulso * (1 + math.sin(t * 18) * 0.12)
+					end
+				end
+			end
 		end
 	end
 end)
@@ -11836,6 +13136,37 @@ function Vfx.explosao(dados)
 	if not leve then
 		Vfx.tremerEm(pos, if forte then 2.2 else 1, 0.3)
 	end
+end
+
+-- Orbe do Vazio: primeiro tudo é sugado para um ponto escuro, depois explode em violeta
+function Vfx.vazio(dados)
+	local pos, raio = dados.pos, dados.raio or 8
+	local cor = Color3.fromRGB(170, 70, 255)
+	local escuro = Color3.fromRGB(18, 6, 30)
+	-- esfera que encolhe (implosão)
+	local casca = parte(Vector3.one * raio * 2, CFrame.new(pos), cor, 0.6, Enum.PartType.Ball, Enum.Material.ForceField)
+	animar(casca, 0.18, { Size = Vector3.one * 1.5, Transparency = 0.1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	local nucleo = parte(Vector3.one * 1, CFrame.new(pos), escuro, 0, Enum.PartType.Ball, Enum.Material.SmoothPlastic)
+	animar(nucleo, 0.18, { Size = Vector3.one * 3 })
+	task.delay(0.18, function()
+		casca:Destroy()
+		nucleo:Destroy()
+		-- explosão: bola violeta, anéis em vários ângulos e lascas escuras
+		local bola = parte(Vector3.one * 2, CFrame.new(pos), cor:Lerp(BRANCO, 0.4), 0, Enum.PartType.Ball)
+		animar(bola, 0.35, { Size = Vector3.one * raio * 2.2, Transparency = 1, Color = cor })
+		Debris:AddItem(bola, 0.4)
+		for i = 1, 3 do
+			local anelVazio = parte(Vector3.new(0.3, 2, 2), CFrame.new(pos) * CFrame.Angles(math.random() * 3, math.random() * 3, math.random() * 3), cor, 0.1, Enum.PartType.Cylinder)
+			animar(anelVazio, 0.3 + i * 0.06, { Size = Vector3.new(0.05, raio * 2.6, raio * 2.6), Transparency = 1 })
+			Debris:AddItem(anelVazio, 0.5)
+		end
+		local chao = disco(pos - Vector3.new(0, 1.5, 0), 2, escuro, 0.3)
+		animar(chao, 0.5, { Size = Vector3.new(0.15, raio * 2.4, raio * 2.4), Transparency = 1 })
+		Debris:AddItem(chao, 0.55)
+		particulas(pos, { cor = cor:Lerp(BRANCO, 0.4), cor2 = escuro, quantidade = 34, tamanho = 0.8, velocidade = raio * 5, vida = 0.6, gravidade = 6 })
+		clarao(pos, cor, raio * 4, 0.45, 6)
+		Vfx.tremerEm(pos, 2, 0.3)
+	end)
 end
 
 function Vfx.impacto(dados)
@@ -11880,71 +13211,8 @@ function Vfx.impactoArea(dados)
 	end
 end
 
-function Vfx.meteoro(dados)
-	local alvo = dados.pos
-	local inicio = alvo + Vector3.new(-14, 48, -14)
-	local bola = parte(Vector3.one * 3.4, CFrame.new(inicio), FOGO, 0, Enum.PartType.Ball)
-	local f = Instance.new("Fire")
-	f.Size = 8
-	f.Heat = 0
-	f.Parent = bola
-	rastro(bola, FOGO, 2.6, 0.4)
-	local l = Instance.new("PointLight")
-	l.Color = FOGO
-	l.Range = 24
-	l.Brightness = 3
-	l.Parent = bola
-	animar(bola, dados.duracao, { CFrame = CFrame.new(alvo + Vector3.new(0, 1.5, 0)) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	Debris:AddItem(bola, dados.duracao + 0.05)
-	if dados.amigo then
-		local partes = anel(alvo + Vector3.new(0, 0.15, 0), dados.raio or 10, FOGO, 0.35, 24, 0.4)
-		sumir(partes, 0.2, dados.duracao)
-	end
-end
 
-function Vfx.chuvaFlechas(dados)
-	local centro, raio, duracao, cor = dados.pos, dados.raio, dados.duracao, dados.cor
-	local partes = anel(centro + Vector3.new(0, 0.15, 0), raio, cor, 0.35, 28, 0.45)
-	local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
-	table.insert(partes, fundo)
-	sumir(partes, 0.4, duracao)
-	task.spawn(function()
-		local fim = os.clock() + duracao
-		while os.clock() < fim do
-			local angulo = math.random() * math.pi * 2
-			local distancia = math.sqrt(math.random()) * raio
-			local chao = centro + Vector3.new(math.cos(angulo) * distancia, 0, math.sin(angulo) * distancia)
-			local topo = chao + Vector3.new(3, 26, 3)
-			local flecha = parte(Vector3.new(0.15, 0.15, 2.4), CFrame.lookAt(topo, chao), cor:Lerp(BRANCO, 0.3), 0)
-			local tween = animar(flecha, 0.22, { CFrame = CFrame.lookAt(chao + Vector3.new(0, 0.8, 0), chao + Vector3.new(-3, -26, -3)) }, Enum.EasingStyle.Linear)
-			tween.Completed:Once(function()
-				particulas(chao + Vector3.new(0, 0.3, 0), { cor = Color3.fromRGB(200, 185, 160), quantidade = 3, tamanho = 0.3, velocidade = 6, vida = 0.25, luz = 0 })
-				sumir({ flecha }, 0.3, 0.3)
-			end)
-			task.wait(0.035)
-		end
-	end)
-end
 
-function Vfx.julgamento(dados)
-	local pos, raio, cor = dados.pos, dados.raio, Color3.fromRGB(255, 220, 120)
-	local coluna = parte(Vector3.new(60, 6, 6), CFrame.new(pos + Vector3.new(0, 60, 0)) * EM_PE, cor, 0.1, Enum.PartType.Cylinder)
-	animar(coluna, 0.3, { CFrame = CFrame.new(pos + Vector3.new(0, 30, 0)) * EM_PE }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	task.delay(0.3, function()
-		animar(coluna, 0.5, { Size = Vector3.new(60, 0.5, 0.5), Transparency = 1 })
-		Debris:AddItem(coluna, 0.55)
-		for i = 0, 2 do
-			task.delay(i * 0.12, function()
-				local onda = disco(pos + Vector3.new(0, 0.25, 0), 3, if i == 0 then BRANCO else dados.cor or cor, 0.15)
-				animar(onda, 0.5, { Size = Vector3.new(0.15, raio * 2.2, raio * 2.2), Transparency = 1 })
-				Debris:AddItem(onda, 0.55)
-			end)
-		end
-		particulas(pos + Vector3.new(0, 1, 0), { cor = BRANCO, cor2 = cor, quantidade = 50, tamanho = 1, velocidade = 45, vida = 0.8, gravidade = 25 })
-		clarao(pos, cor, raio * 4, 0.6, 8)
-		Vfx.tremerEm(pos, 3.5, 0.5)
-	end)
-end
 
 local function zigueZague(de: Vector3, ate: Vector3, cor: Color3, espessura: number, desvio: number, segmentos: number)
 	local pontos = { de }
@@ -11966,17 +13234,6 @@ function Vfx.raio(dados)
 	clarao(dados.ate, Color3.fromRGB(255, 240, 120), 12, 0.2, 3)
 end
 
-function Vfx.raioCeu(dados)
-	local cor = dados.cor or Color3.fromRGB(200, 150, 255)
-	zigueZague(dados.pos + Vector3.new(math.random(-3, 3), 45, math.random(-3, 3)), dados.pos, cor:Lerp(BRANCO, 0.5), 0.6, 4, 7)
-	zigueZague(dados.pos + Vector3.new(0, 45, 0), dados.pos, cor, 1.4, 3, 6)
-	local onda = disco(dados.pos + Vector3.new(0, 0.2, 0), 1, cor, 0.2)
-	animar(onda, 0.3, { Size = Vector3.new(0.15, 10, 10), Transparency = 1 })
-	Debris:AddItem(onda, 0.35)
-	particulas(dados.pos + Vector3.new(0, 0.5, 0), { cor = BRANCO, cor2 = cor, quantidade = 12, velocidade = 20, vida = 0.35 })
-	clarao(dados.pos, cor, 22, 0.25, 6)
-	Vfx.tremerEm(dados.pos, 0.6, 0.15)
-end
 
 function Vfx.teleporte(dados)
 	local cor = Color3.fromRGB(130, 80, 220)
@@ -12154,10 +13411,63 @@ local function textoFlutuante(posicao: Vector3, texto: string, cor: Color3, tama
 	Debris:AddItem(a, 0.85)
 end
 
+-- Respingo de sangue: gotas que caem e mancham o chão (golpes do Assassino)
+local function respingoDeSangue(posicao: Vector3, forca: number, soGotas: boolean?)
+	local sangue = Color3.fromRGB(150, 0, 15)
+	if soGotas then
+		particulas(posicao, { cor = sangue, quantidade = 3, tamanho = 0.25, velocidade = 4, vida = 0.5, gravidade = 50, luz = 0 })
+		return
+	end
+	particulas(posicao + Vector3.new(0, 0.5, 0), {
+		cor = Color3.fromRGB(200, 20, 30),
+		cor2 = sangue,
+		quantidade = math.floor(10 * forca),
+		tamanho = 0.35 * forca,
+		velocidade = 14 * forca,
+		vida = 0.5,
+		gravidade = 60,
+		luz = 0,
+		espalhar = Vector2.new(60, 60),
+	})
+	-- mancha no chão que some devagar
+	if math.random() < 0.6 then
+		-- procura o chão logo abaixo
+		local parametros = RaycastParams.new()
+		parametros.FilterType = Enum.RaycastFilterType.Exclude
+		local ignorar: { Instance } = { pasta }
+		local visuais = workspace:FindFirstChild("InimigosVisuais")
+		if visuais then
+			table.insert(ignorar, visuais)
+		end
+		for _, player in Players:GetPlayers() do
+			if player.Character then
+				table.insert(ignorar, player.Character)
+			end
+		end
+		parametros.FilterDescendantsInstances = ignorar
+		local acerto = workspace:Raycast(posicao, Vector3.new(0, -15, 0), parametros)
+		if not acerto then
+			return
+		end
+		local tamanho = (1.2 + math.random() * 1.5) * forca
+		local chao = acerto.Position + Vector3.new(math.random() - 0.5, 0.04, math.random() - 0.5)
+		local mancha = disco(chao, tamanho, sangue, 0.25, 0.05)
+		mancha.Material = Enum.Material.SmoothPlastic
+		sumir({ mancha }, 1.5, 2.5)
+	end
+end
+
 function Vfx.dano(dados)
 	local critico = dados.critico
+	-- cada acerto seu dá um tranco leve na câmera (sensação de impacto)
+	if dados.autor == jogador and not critico then
+		Vfx.tremer(0.18, 0.05)
+	end
 	local cor = dados.cor or (if critico then Color3.fromRGB(255, 214, 70) else Color3.fromRGB(255, 250, 240))
 	textoFlutuante(dados.pos, if critico then dados.valor .. "!" else tostring(dados.valor), cor, if critico then 46 else 30, { pop = if critico then 2.2 else 1.5 })
+	if dados.sangue and dados.impacto then
+		respingoDeSangue(dados.impacto, if critico then 1.6 else 1, dados.sangue == "gota")
+	end
 	if dados.impacto then
 		particulas(dados.impacto, {
 			cor = if critico then Color3.fromRGB(255, 230, 120) else Color3.fromRGB(255, 240, 220),
@@ -12347,6 +13657,27 @@ function Vfx.passoSombrio(dados)
 	local cor = dados.cor
 	fumaca(de, cor, if dados.leve then 6 else 12)
 	fumaca(ate, cor, if dados.leve then 4 else 8)
+	-- silhueta escura que fica onde o Assassino estava
+	local raiz = raizDoJogador(dados.jogador)
+	local personagem = raiz and raiz.Parent
+	if personagem then
+		local deslocamento = de - ate
+		for _, peca in personagem:GetChildren() do
+			if peca:IsA("BasePart") and peca.Name ~= "HumanoidRootPart" and peca.Transparency < 1 then
+				local sombra = parte(peca.Size, peca.CFrame + deslocamento, Color3.fromRGB(40, 0, 20), 0.35, nil, Enum.Material.Neon)
+				animar(sombra, 0.4, { Transparency = 1 })
+				Debris:AddItem(sombra, 0.45)
+			end
+		end
+	end
+	-- corte em X vermelho onde ele aparece
+	local frente = Vector3.new(ate.X - de.X, 0, ate.Z - de.Z)
+	frente = if frente.Magnitude > 0.1 then frente.Unit else Vector3.new(0, 0, -1)
+	local origemX = CFrame.lookAt(ate, ate + frente)
+	arcoDeCorte(origemX * CFrame.Angles(0, 0, math.rad(45)), 3.2, 140, cor, { espessura = 1.1, duracao = 0.12 })
+	task.delay(0.05, function()
+		arcoDeCorte(origemX * CFrame.Angles(0, 0, math.rad(-45)), 3.2, 140, cor, { espessura = 1.1, duracao = 0.12, reverso = true })
+	end)
 	local distancia = (ate - de).Magnitude
 	if distancia > 1 then
 		local risco = parte(Vector3.new(0.35, 0.35, distancia), CFrame.lookAt((de + ate) / 2, ate), cor, 0.2, nil, Enum.Material.Neon)
@@ -12411,6 +13742,35 @@ function Vfx.zonaFogo(dados)
 	end)
 	sumir({ base }, 0.4, dados.duracao)
 	Debris:AddItem(area, dados.duracao + 1)
+end
+
+-- Escudo do Cavaleiro bloqueou um golpe: faíscas no escudo. Defesa perfeita: clarão dourado.
+function Vfx.defesa(dados)
+	local pos = dados.pos + Vector3.new(0, 0.6, 0)
+	local dir = dados.dir or Vector3.new(0, 0, -1)
+	local cor = if dados.perfeita then Color3.fromRGB(255, 214, 90) else Color3.fromRGB(150, 200, 255)
+	-- anel que sai do escudo para a frente
+	local anelEscudo = parte(Vector3.new(0.2, 2.5, 2.5), CFrame.lookAt(pos, pos + dir) * CFrame.Angles(0, math.rad(90), 0), cor, 0.2, Enum.PartType.Cylinder)
+	animar(anelEscudo, 0.25, { Size = Vector3.new(0.05, if dados.perfeita then 9 else 5, if dados.perfeita then 9 else 5), Transparency = 1 })
+	Debris:AddItem(anelEscudo, 0.3)
+	particulas(pos, {
+		cor = BRANCO,
+		cor2 = cor,
+		quantidade = if dados.perfeita then 26 else 12,
+		tamanho = 0.3,
+		velocidade = if dados.perfeita then 32 else 20,
+		vida = 0.3,
+		gravidade = 30,
+		espalhar = Vector2.new(70, 70),
+	})
+	clarao(pos, cor, if dados.perfeita then 22 else 12, 0.2, if dados.perfeita then 6 else 3)
+	if dados.perfeita then
+		local raiz = raizDoJogador(dados.jogador)
+		textoFlutuante((if raiz then raiz.Position else pos) + Vector3.new(0, 3.5, 0), "DEFESA PERFEITA!", cor, 34, { pop = 2 })
+	end
+	if dados.jogador == jogador then
+		Vfx.tremer(if dados.perfeita then 0.9 else 0.45, 0.12)
+	end
 end
 
 -- Escudo ganho com o Julgamento do Cavaleiro
@@ -12539,6 +13899,363 @@ function Vfx.estouro(posicao: Vector3, cor: Color3, quantidade: number, velocida
 	clarao(posicao, cor, 16, 0.3, 3)
 end
 
+
+------------------------------------------------------------------------
+-- Habilidades e supremos com efeitos elaborados
+------------------------------------------------------------------------
+
+-- Peças que giram em volta de um centro (anéis de vento, detritos...) até "duracao" acabar.
+-- cada item: { parte, raio, altura, velocidade, fase, inclinacao }
+local function orbitar(centroFn: () -> Vector3?, itens, duracao: number, aoTerminar: (() -> ())?)
+	local inicio = os.clock()
+	local conexao
+	conexao = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - inicio
+		local centro = centroFn()
+		if t > duracao or not centro then
+			conexao:Disconnect()
+			for _, item in itens do
+				animar(item.parte, 0.25, { Transparency = 1 })
+				Debris:AddItem(item.parte, 0.3)
+			end
+			if aoTerminar then
+				aoTerminar()
+			end
+			return
+		end
+		for _, item in itens do
+			local a = item.fase + t * item.velocidade
+			if item.anel then
+				-- anel deitado girando no próprio eixo, levemente inclinado
+				item.parte.CFrame = CFrame.new(centro + Vector3.new(0, item.altura, 0)) * CFrame.Angles(0, a, 0) * CFrame.Angles(item.inclinacao or 0, 0, 0) * EM_PE
+			else
+				item.parte.CFrame = CFrame.new(centro + Vector3.new(math.cos(a) * item.raio, item.altura + math.sin(t * 6 + item.fase) * 0.4, math.sin(a) * item.raio)) * CFrame.Angles(a, a * 1.3, 0)
+			end
+		end
+	end)
+end
+
+-- Redemoinho: tornado de vento em volta do Cavaleiro, com arcos de espada, poeira e
+-- pedrinhas girando
+function Vfx.redemoinho(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	local cor = if dados.fogo then FOGO else dados.cor
+	local raio = dados.raio
+	-- arcos da espada (dois, girando)
+	local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
+	local b0, b1 = Instance.new("Attachment"), Instance.new("Attachment")
+	for _, a in { a0, a1, b0, b1 } do
+		a.Parent = terreno
+	end
+	local feixesA = { novoFeixe(a0, a1, cor:Lerp(BRANCO, 0.5), 0.8), novoFeixe(a0, a1, cor, 2.6) }
+	local feixesB = { novoFeixe(b0, b1, cor:Lerp(BRANCO, 0.5), 0.8), novoFeixe(b0, b1, cor, 2.6) }
+	for i, feixe in { feixesA[1], feixesA[2], feixesB[1], feixesB[2] } do
+		feixe.Transparency = sequencia({ { 0, 1 }, { 0.5, if i % 2 == 1 then 0 else 0.5 }, { 1, 0.1 } })
+	end
+	-- tornado: anéis que alargam para cima, cada um girando numa velocidade
+	local itens = {}
+	for i = 0, 3 do
+		local largura = raio * (0.55 + i * 0.17) * 2
+		local anelVento = parte(Vector3.new(0.12, largura, largura), CFrame.new(), if i % 2 == 0 then BRANCO else cor, 0.55 + i * 0.08, Enum.PartType.Cylinder)
+		table.insert(itens, { parte = anelVento, anel = true, altura = -2 + i * 1.5, velocidade = 10 - i * 1.5, fase = i, inclinacao = math.rad(8 + i * 4) })
+	end
+	-- detritos girando
+	for i = 1, 8 do
+		local pedra = parte(Vector3.one * (0.3 + math.random() * 0.4), CFrame.new(), Color3.fromRGB(120, 110, 100), 0, nil, Enum.Material.Slate)
+		table.insert(itens, { parte = pedra, raio = raio * (0.5 + math.random() * 0.6), altura = -1.5 + math.random() * 4, velocidade = 7 + math.random() * 5, fase = i * 0.8 })
+	end
+	-- poeira no chão
+	local poeira = ancora(raiz.Position - Vector3.new(0, 2.6, 0))
+	local emissorPoeira = Instance.new("ParticleEmitter")
+	emissorPoeira.Color = ColorSequence.new(Color3.fromRGB(200, 185, 160))
+	emissorPoeira.LightInfluence = 1
+	emissorPoeira.Transparency = sequencia({ { 0, 0.4 }, { 1, 1 } })
+	emissorPoeira.Size = sequencia({ { 0, 1 }, { 1, 2.5 } })
+	emissorPoeira.Lifetime = NumberRange.new(0.5, 0.8)
+	emissorPoeira.Speed = NumberRange.new(10, 16)
+	emissorPoeira.SpreadAngle = Vector2.new(5, 180)
+	emissorPoeira.EmissionDirection = Enum.NormalId.Right
+	emissorPoeira.Rate = 50
+	emissorPoeira.Parent = poeira
+	local inicio = os.clock()
+	local conexao
+	conexao = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - inicio
+		if t > dados.duracao or not raiz.Parent then
+			conexao:Disconnect()
+			for _, a in { a0, a1, b0, b1 } do
+				a:Destroy()
+			end
+			emissorPoeira.Enabled = false
+			Debris:AddItem(poeira, 1)
+			return
+		end
+		local centro = CFrame.new(raiz.Position) * CFrame.Angles(0, -t * 14, 0)
+		posicionarArco(a0, a1, feixesA, centro, raio * 0.8, 150)
+		posicionarArco(b0, b1, feixesB, centro * CFrame.Angles(0, math.pi, 0), raio * 0.8, 150)
+		poeira.WorldCFrame = CFrame.new(raiz.Position - Vector3.new(0, 2.6, 0)) * CFrame.Angles(0, t * 9, 0)
+	end)
+	orbitar(function()
+		return if raiz.Parent then raiz.Position else nil
+	end, itens, dados.duracao)
+end
+
+-- Julgamento: uma espada de luz gigante cai do céu e crava no chão; o chão racha,
+-- pilares de luz sobem em volta e pedras voam
+function Vfx.julgamento(dados)
+	local pos, raio = dados.pos, dados.raio
+	local cor = Color3.fromRGB(255, 220, 120)
+	local corClasse = dados.cor or cor
+	local alto = pos + Vector3.new(0, 70, 0)
+	local lamina = parte(Vector3.new(1.6, 22, 0.5), CFrame.new(alto), cor:Lerp(BRANCO, 0.4), 0.05)
+	local guarda = parte(Vector3.new(7, 1, 1), CFrame.new(alto + Vector3.new(0, 11.5, 0)), cor, 0)
+	local cabo = parte(Vector3.new(0.9, 4, 0.9), CFrame.new(alto + Vector3.new(0, 14, 0)), corClasse, 0)
+	local aura = parte(Vector3.new(4, 26, 4), CFrame.new(alto + Vector3.new(0, 2, 0)), cor, 0.75, Enum.PartType.Ball)
+	luzEm(lamina, cor, 40, 4)
+	local partes = { lamina, guarda, cabo, aura }
+	local destino = pos + Vector3.new(0, 9, 0)
+	for _, p in partes do
+		animar(p, 0.32, { CFrame = p.CFrame - (alto - destino) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	end
+	task.delay(0.32, function()
+		sumir(partes, 0.5, 0.35)
+		-- ondas de choque
+		for i = 0, 2 do
+			task.delay(i * 0.12, function()
+				local onda = disco(pos + Vector3.new(0, 0.25, 0), 3, if i == 0 then BRANCO else corClasse, 0.15)
+				animar(onda, 0.5, { Size = Vector3.new(0.15, raio * 2.2, raio * 2.2), Transparency = 1 })
+				Debris:AddItem(onda, 0.55)
+			end)
+		end
+		-- rachaduras brilhantes saindo do centro
+		for i = 1, 10 do
+			local angulo = i / 10 * math.pi * 2 + math.random() * 0.3
+			local comprimento = raio * (0.6 + math.random() * 0.5)
+			local direcao = Vector3.new(math.cos(angulo), 0, math.sin(angulo))
+			local rachadura = parte(Vector3.new(0.35, 0.1, 0.1), CFrame.lookAt(pos + Vector3.new(0, 0.18, 0), pos + Vector3.new(0, 0.18, 0) + direcao), cor, 0)
+			animar(rachadura, 0.15, { Size = Vector3.new(0.35, 0.1, comprimento), CFrame = CFrame.lookAt(pos + direcao * comprimento / 2 + Vector3.new(0, 0.18, 0), pos + direcao * comprimento + Vector3.new(0, 0.18, 0)) })
+			sumir({ rachadura }, 0.8, 0.9)
+		end
+		-- pilares de luz em volta
+		for i = 1, 6 do
+			local angulo = i / 6 * math.pi * 2
+			local p = pos + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * raio * 0.75
+			task.delay(0.05 * i, function()
+				local pilar = parte(Vector3.new(1.4, 0.2, 1.4), CFrame.new(p), cor, 0.2)
+				animar(pilar, 0.2, { Size = Vector3.new(1, 18, 1), CFrame = CFrame.new(p + Vector3.new(0, 9, 0)) })
+				sumir({ pilar }, 0.4, 0.25)
+			end)
+		end
+		-- pedras voando
+		for _ = 1, 10 do
+			local pedra = parte(Vector3.one * (0.6 + math.random() * 0.8), CFrame.new(pos + Vector3.new(math.random(-3, 3), 0.8, math.random(-3, 3))), Color3.fromRGB(110, 100, 92), 0, nil, Enum.Material.Slate)
+			pedra.Anchored = false
+			pedra.AssemblyLinearVelocity = Vector3.new(math.random(-30, 30), math.random(25, 45), math.random(-30, 30))
+			pedra.AssemblyAngularVelocity = Vector3.new(math.random(-10, 10), math.random(-10, 10), math.random(-10, 10))
+			sumir({ pedra }, 0.4, 1.2)
+		end
+		particulas(pos + Vector3.new(0, 1, 0), { cor = BRANCO, cor2 = cor, quantidade = 50, tamanho = 1, velocidade = 45, vida = 0.8, gravidade = 25 })
+		clarao(pos, cor, raio * 4, 0.6, 8)
+		Vfx.tremerEm(pos, 3.5, 0.5)
+	end)
+end
+
+-- Meteoro: rocha em brasa girando, com fumaça e fogo, que cai e abre uma cratera
+function Vfx.meteoro(dados)
+	local alvo = dados.pos
+	local inicio = alvo + Vector3.new(-16, 55, -16)
+	local rocha = parte(Vector3.one * 3.2, CFrame.new(inicio), Color3.fromRGB(60, 40, 35), 0, Enum.PartType.Ball, Enum.Material.Basalt)
+	local brasa = parte(Vector3.one * 4.2, CFrame.new(inicio), FOGO, 0.45, Enum.PartType.Ball)
+	local fogo = Instance.new("Fire")
+	fogo.Size = 10
+	fogo.Heat = 0
+	fogo.Parent = rocha
+	emissorEm(rocha, {
+		Color = ColorSequence.new(Color3.fromRGB(80, 70, 70)),
+		LightEmission = 0,
+		Transparency = sequencia({ { 0, 0.3 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 2 }, { 1, 5 } }),
+		Lifetime = NumberRange.new(0.6, 1),
+		Speed = NumberRange.new(1, 3),
+		Rate = 40,
+	})
+	emissorEm(rocha, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 220, 120), FOGO),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.5 }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.3, 0.6),
+		Speed = NumberRange.new(4, 9),
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 50,
+	})
+	rastro(rocha, FOGO, 3, 0.5)
+	luzEm(rocha, FOGO, 30, 4)
+	local destino = alvo + Vector3.new(0, 1.5, 0)
+	animar(rocha, dados.duracao, { CFrame = CFrame.new(destino) * CFrame.Angles(6, 4, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	animar(brasa, dados.duracao, { CFrame = CFrame.new(destino) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	Debris:AddItem(rocha, dados.duracao + 0.05)
+	Debris:AddItem(brasa, dados.duracao + 0.05)
+	if dados.amigo then
+		local partes = anel(alvo + Vector3.new(0, 0.15, 0), dados.raio or 10, FOGO, 0.35, 24, 0.4)
+		sumir(partes, 0.2, dados.duracao)
+	end
+	task.delay(dados.duracao, function()
+		-- cratera: pedras que se erguem em volta do impacto
+		local raioCratera = (dados.raio or 10) * 0.55
+		for i = 1, 12 do
+			local angulo = i / 12 * math.pi * 2
+			local p = alvo + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * raioCratera
+			local bloco = parte(Vector3.new(1.6, 0.2, 1.2), CFrame.lookAt(p, alvo) * CFrame.Angles(math.rad(-35), 0, 0), Color3.fromRGB(70, 55, 50), 0, nil, Enum.Material.Basalt)
+			animar(bloco, 0.12, { Size = Vector3.new(1.6, 2.2, 1.2) }, Enum.EasingStyle.Back)
+			sumir({ bloco }, 0.6, 2.4)
+		end
+		-- coluna de fogo
+		local coluna = parte(Vector3.new(3, 1, 3), CFrame.new(alvo), Color3.fromRGB(255, 200, 90), 0.1, Enum.PartType.Ball)
+		animar(coluna, 0.3, { Size = Vector3.new(5, 16, 5), CFrame = CFrame.new(alvo + Vector3.new(0, 7, 0)), Transparency = 1, Color = FOGO })
+		Debris:AddItem(coluna, 0.35)
+		for _ = 1, 8 do
+			local pedaco = parte(Vector3.one * (0.5 + math.random() * 0.6), CFrame.new(alvo + Vector3.new(0, 1, 0)), Color3.fromRGB(255, 120, 40), 0, nil, Enum.Material.Neon)
+			pedaco.Anchored = false
+			pedaco.AssemblyLinearVelocity = Vector3.new(math.random(-25, 25), math.random(25, 45), math.random(-25, 25))
+			sumir({ pedaco }, 0.3, 0.9)
+		end
+	end)
+end
+
+-- Tempestade Arcana: nuvem escura sobre o Mago enquanto os raios caem
+local function nuvemDeTempestade(raiz: BasePart, cor: Color3, duracao: number)
+	local centro = raiz.Position + Vector3.new(0, 34, 0)
+	-- peça invisível e achatada: a fumaça escura nasce em toda a área dela
+	local nuvem = parte(Vector3.new(60, 8, 60), CFrame.new(centro), Color3.fromRGB(40, 30, 60), 1)
+	emissorEm(nuvem, {
+		Color = ColorSequence.new(Color3.fromRGB(50, 40, 70), Color3.fromRGB(30, 25, 45)),
+		LightEmission = 0,
+		Transparency = sequencia({ { 0, 1 }, { 0.3, 0.35 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 10 }, { 1, 16 } }),
+		Lifetime = NumberRange.new(2, 3),
+		Speed = NumberRange.new(0.5, 2),
+		Rotation = NumberRange.new(0, 360),
+		RotSpeed = NumberRange.new(-20, 20),
+		Shape = Enum.ParticleEmitterShape.Box,
+		Rate = 30,
+	})
+	emissorEm(nuvem, {
+		Color = ColorSequence.new(cor:Lerp(BRANCO, 0.5)),
+		LightEmission = 1,
+		Transparency = sequencia({ { 0, 0.2 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 6 }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.08, 0.15),
+		Shape = Enum.ParticleEmitterShape.Box,
+		Rate = 6,
+	})
+	task.delay(duracao, function()
+		for _, e in nuvem:GetChildren() do
+			if e:IsA("ParticleEmitter") then
+				e.Enabled = false
+			end
+		end
+		Debris:AddItem(nuvem, 3.5)
+	end)
+end
+
+-- Raio que vem do céu, com galhos que se abrem e marca queimada no chão
+function Vfx.raioCeu(dados)
+	local cor = dados.cor or Color3.fromRGB(200, 150, 255)
+	local topo = dados.pos + Vector3.new(math.random(-3, 3), 34, math.random(-3, 3))
+	zigueZague(topo, dados.pos, cor:Lerp(BRANCO, 0.6), 0.6, 4, 8)
+	zigueZague(topo, dados.pos, cor, 1.5, 3, 6)
+	-- galhos
+	for _ = 1, 2 do
+		local meio = topo:Lerp(dados.pos, 0.3 + math.random() * 0.4)
+		zigueZague(meio, meio + Vector3.new(math.random(-8, 8), -math.random(4, 9), math.random(-8, 8)), cor, 0.35, 2, 4)
+	end
+	local onda = disco(dados.pos + Vector3.new(0, 0.2, 0), 1, cor, 0.2)
+	animar(onda, 0.3, { Size = Vector3.new(0.15, 10, 10), Transparency = 1 })
+	Debris:AddItem(onda, 0.35)
+	local marca = disco(dados.pos + Vector3.new(0, 0.08, 0), 4, Color3.fromRGB(25, 20, 30), 0.3, 0.05)
+	marca.Material = Enum.Material.SmoothPlastic
+	sumir({ marca }, 1, 1.5)
+	particulas(dados.pos + Vector3.new(0, 0.5, 0), { cor = BRANCO, cor2 = cor, quantidade = 14, velocidade = 22, vida = 0.35 })
+	clarao(dados.pos, cor, 24, 0.25, 7)
+	Vfx.tremerEm(dados.pos, 0.6, 0.15)
+end
+
+-- Chuva de Flechas: um círculo mágico abre no céu e despeja flechas com rastro
+function Vfx.chuvaFlechas(dados)
+	local centro, raio, duracao, cor = dados.pos, dados.raio, dados.duracao, dados.cor
+	local partes = anel(centro + Vector3.new(0, 0.15, 0), raio, cor, 0.35, 28, 0.45)
+	local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
+	table.insert(partes, fundo)
+	sumir(partes, 0.4, duracao)
+	-- portal no céu
+	local ceu = centro + Vector3.new(4, 24, 4)
+	local portal = disco(ceu, 0.5, cor:Lerp(BRANCO, 0.3), 0.3)
+	animar(portal, 0.3, { Size = Vector3.new(0.2, raio * 2.2, raio * 2.2) }, Enum.EasingStyle.Back)
+	local runas = anel(ceu, raio * 1.15, cor, 0.2, 20, 0.3)
+	sumir(runas, 0.4, duracao)
+	orbitar(function()
+		return ceu
+	end, { { parte = portal, anel = true, altura = 0, velocidade = 2, fase = 0 } }, duracao)
+	task.spawn(function()
+		local fim = os.clock() + duracao
+		while os.clock() < fim do
+			local angulo = math.random() * math.pi * 2
+			local distancia = math.sqrt(math.random()) * raio
+			local chao = centro + Vector3.new(math.cos(angulo) * distancia, 0, math.sin(angulo) * distancia)
+			local topo = ceu + Vector3.new(math.cos(angulo) * distancia * 0.8, 0, math.sin(angulo) * distancia * 0.8)
+			local flecha = parte(Vector3.new(0.15, 0.15, 2.4), CFrame.lookAt(topo, chao), cor:Lerp(BRANCO, 0.3), 0)
+			rastro(flecha, cor, 0.25, 0.12)
+			local tween = animar(flecha, 0.22, { CFrame = CFrame.lookAt(chao + Vector3.new(0, 0.8, 0), chao + (chao - topo).Unit) }, Enum.EasingStyle.Linear)
+			tween.Completed:Once(function()
+				particulas(chao + Vector3.new(0, 0.3, 0), { cor = Color3.fromRGB(200, 185, 160), cor2 = cor, quantidade = 4, tamanho = 0.3, velocidade = 7, vida = 0.25, luz = 0 })
+				sumir({ flecha }, 0.3, 0.5)
+			end)
+			task.wait(0.035)
+		end
+	end)
+end
+
+-- Saraivada: vendaval verde girando em volta do Arqueiro enquanto ele atira
+local function vendaval(raiz: BasePart, cor: Color3, duracao: number)
+	local itens = {}
+	for i = 0, 2 do
+		local largura = 6 + i * 2.5
+		local anelVento = parte(Vector3.new(0.12, largura, largura), CFrame.new(), if i == 1 then BRANCO else cor, 0.5, Enum.PartType.Cylinder)
+		table.insert(itens, { parte = anelVento, anel = true, altura = -1.5 + i * 1.6, velocidade = 12 - i * 3, fase = i, inclinacao = math.rad(12 * (i - 1)) })
+	end
+	for i = 1, 6 do
+		local folha = parte(Vector3.new(0.4, 0.1, 0.7), CFrame.new(), cor, 0.1)
+		table.insert(itens, { parte = folha, raio = 3.5 + math.random() * 2, altura = -1 + math.random() * 3, velocidade = 9 + math.random() * 4, fase = i })
+	end
+	orbitar(function()
+		return if raiz.Parent then raiz.Position else nil
+	end, itens, duracao)
+end
+
+-- Ao usar um supremo: nome no ar + onda; Tempestade e Saraivada ganham efeitos que duram
+local supremoBase = Vfx.supremo
+function Vfx.supremo(dados)
+	supremoBase(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	if dados.nome == "Tempestade Arcana" then
+		nuvemDeTempestade(raiz, dados.cor, 5)
+	elseif dados.nome == "Saraivada" then
+		vendaval(raiz, dados.cor, 4)
+	elseif dados.nome == "Lâminas da Noite" then
+		-- uma lua vermelha aparece no alto
+		local lua = parte(Vector3.one * 6, CFrame.new(raiz.Position + Vector3.new(0, 30, 0)), Color3.fromRGB(255, 70, 90), 0.2, Enum.PartType.Ball)
+		luzEm(lua, Color3.fromRGB(255, 60, 80), 60, 2)
+		animar(lua, 0.5, { Size = Vector3.one * 12 }, Enum.EasingStyle.Back)
+		sumir({ lua }, 0.6, 3)
+	end
+end
+
 ------------------------------------------------------------------------
 -- Entrada
 ------------------------------------------------------------------------
@@ -12557,7 +14274,7 @@ return Vfx
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000035">
+        <Item class="ModuleScript" referent="RBX00000036">
           <Properties>
             <string name="Name">VisualInimigos</string>
             <ProtectedString name="Source"><![CDATA[-- Dá vida aos inimigos no computador do jogador: monta o modelo (Modelos.luau), anima
@@ -12566,6 +14283,7 @@ return Vfx
 
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
@@ -12884,7 +14602,24 @@ local function atualizarVida(v)
 	local maxima = v.modelo:GetAttribute("VidaMax") or 1
 	if vida < v.vidaAnterior then
 		v.flashAte = os.clock() + 0.07
-		v.impacto = 1
+		-- recua para longe de quem bateu (o jogador mais perto); golpes pesados recuam mais
+		local perdido = (v.vidaAnterior - vida) / math.max(1, maxima)
+		v.impacto = math.min(1.8, v.impacto + (if perdido >= 0.12 then 1.8 else 1))
+		local pos = v.raiz.Position
+		local melhor, distancia = nil, 60
+		for _, player in Players:GetPlayers() do
+			local raizJogador = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if raizJogador then
+				local d = (raizJogador.Position - pos).Magnitude
+				if d < distancia then
+					melhor, distancia = raizJogador, d
+				end
+			end
+		end
+		if melhor then
+			local fora = Vector3.new(pos.X - melhor.Position.X, 0, pos.Z - melhor.Position.Z)
+			v.recuo = if fora.Magnitude > 0.1 then fora.Unit else nil
+		end
 		if v.placa then
 			v.placa.Enabled = true
 		end
@@ -12926,6 +14661,26 @@ local function atualizarEstados(v)
 		e.Name = "Lento"
 	elseif not lento and gelo then
 		gelo:Destroy()
+	end
+
+	-- Sangrando (Assassino): gotas de sangue caindo, mais forte com mais cortes
+	local pilhas = modelo:GetAttribute("Sangrando") or 0
+	local gotas = ancora:FindFirstChild("Sangrando") :: ParticleEmitter?
+	if pilhas > 0 then
+		if not gotas then
+			gotas = emissor(ancora, Color3.fromRGB(150, 0, 15), {
+				LightEmission = 0,
+				Acceleration = Vector3.new(0, -40, 0),
+				Speed = NumberRange.new(1, 3),
+				Size = sequencia({ { 0, 0.22 * v.escala }, { 1, 0.12 * v.escala } }),
+				Lifetime = NumberRange.new(0.5, 0.8),
+				Shape = Enum.ParticleEmitterShape.Sphere,
+			});
+			(gotas :: ParticleEmitter).Name = "Sangrando"
+		end
+		(gotas :: ParticleEmitter).Rate = 8 + pilhas * 7
+	elseif gotas then
+		gotas:Destroy()
 	end
 
 	local atordoado = modelo:GetAttribute("Atordoado") == true
@@ -13198,7 +14953,7 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 		v.acao = ""
 	end
 	v.atordoado = v.estrelas ~= nil
-	v.impacto = math.max(0, v.impacto - dt * 6)
+	v.impacto = math.max(0, v.impacto - dt * 5)
 
 	local base = raizCF * CFrame.new(0, -v.alturaRaiz, 0)
 	if v.salto then
@@ -13209,6 +14964,12 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 			local p = v.salto.de:Lerp(v.salto.para, s) + Vector3.new(0, v.salto.altura * 4 * s * (1 - s), 0)
 			base = CFrame.new(p - Vector3.new(0, v.alturaRaiz, 0)) * raizCF.Rotation
 		end
+	end
+	-- recuo ao levar golpe: escorrega e inclina para longe de quem bateu
+	if v.recuo and v.impacto > 0.01 then
+		local forca = math.min(v.impacto, 1.8)
+		local eixo = Vector3.yAxis:Cross(v.recuo)
+		base = CFrame.new(base.Position + v.recuo * forca * 0.45 * v.escala) * CFrame.fromAxisAngle(eixo, forca * 0.2) * base.Rotation
 	end
 	local idade = agora - v.nascimento
 	if idade < 0.4 then
@@ -13364,7 +15125,7 @@ local function adicionar(modelo: Instance)
 		table.insert(v.conexoes, modelo:GetAttributeChangedSignal("Acao"):Connect(function()
 			atualizarAcao(v)
 		end))
-		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso" } do
+		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando" } do
 			table.insert(v.conexoes, modelo:GetAttributeChangedSignal(atributo):Connect(function()
 				atualizarEstados(v)
 			end))
@@ -13409,11 +15170,11 @@ return VisualInimigos
         </Item>
       </Item>
     </Item>
-    <Item class="StarterCharacterScripts" referent="RBX00000036">
+    <Item class="StarterCharacterScripts" referent="RBX00000037">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="RBX00000037">
+      <Item class="Script" referent="RBX00000038">
         <Properties>
           <string name="Name">Health</string>
           <ProtectedString name="Source"><![CDATA[-- Substitui o script "Health" padrão do Roblox, que regenera vida sozinho.

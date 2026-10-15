@@ -28,6 +28,12 @@ Config.DANO_CARGA_MIN = 1.6 -- multiplicador de dano com carga mínima
 Config.DANO_CARGA_MAX = 3.2 -- multiplicador de dano com carga cheia
 Config.VELOCIDADE_CARREGANDO = 0.5 -- anda mais devagar enquanto carrega
 
+-- Defesa com escudo (Cavaleiro): segure F, o botão direito do mouse ou L2
+Config.DEFESA_REDUCAO = 0.75 -- golpes de frente perdem 75% do dano
+Config.DEFESA_ANGULO = 65 -- protege golpes vindos até 65° para cada lado da frente
+Config.DEFESA_PERFEITA = 0.3 -- erguer o escudo até 0,3s antes do golpe: bloqueia tudo e atordoa
+Config.VELOCIDADE_DEFENDENDO = 0.45
+
 -- Supremo: a barra enche causando dano e derrotando inimigos
 Config.CARGA_MAXIMA = 100
 Config.CARGA_POR_ACERTO = 2.5

@@ -55,6 +55,10 @@ Cartas.lista = {
 	carta("perfurante", "Orbe Perfurante", "📌", "Epica", "mago", 2, "Orbes atravessam mais 2 inimigos", { perfuracao = 2 }),
 	carta("combustao", "Combustão", "💥", "Lendaria", "mago", 1, "Inimigos explodem ao morrer e ferem os vizinhos", { explosaoMorte = 1 }),
 	carta("arquimago", "Arquimago", "🧙", "Lendaria", "mago", 1, "Cada inimigo derrotado reduz 1s da recarga da habilidade", { arquimago = 1 }),
+	carta("fonteArcana", "Fonte Arcana", "💧", "Comum", "mago", 4, "A mana volta 35% mais rápido", { manaRegenPct = 0.35 }),
+	carta("reservatorio", "Reservatório Arcano", "🏺", "Comum", "mago", 3, "+40 de mana máxima", { manaPlana = 40 }),
+	carta("sifao", "Sifão de Almas", "👻", "Rara", "mago", 3, "Cada inimigo derrotado devolve 10 de mana", { manaAbate = 10 }),
+	carta("menteSerena", "Mente Serena", "🧘", "Epica", "mago", 2, "Magias custam 20% menos mana", { economiaMana = 0.2 }),
 
 	-- Arqueiro ---------------------------------------------------------------
 	carta("pontaAfiada", "Ponta Afiada", "📍", "Comum", "arqueiro", 5, "+15% de dano", { danoPct = 0.15 }),
@@ -73,9 +77,9 @@ Cartas.lista = {
 	carta("laminasAfiadas", "Lâminas Afiadas", "🔪", "Comum", "assassino", 5, "+15% de dano", { danoPct = 0.15 }),
 	carta("reflexos", "Reflexos", "⚡", "Comum", "assassino", 5, "Ataca 15% mais rápido", { ataqueVelPct = 0.15 }),
 	carta("sombraAgil", "Sombra Ágil", "💨", "Comum", "assassino", 3, "+10% de velocidade e esquiva 20% mais rápida", { velocidadePct = 0.1, esquivaPct = 0.2 }),
-	carta("venenoAdagas", "Lâminas Envenenadas", "🧪", "Rara", "assassino", 3, "Cada golpe envenena o inimigo por 3 segundos", { queimadura = 0.35 }),
+	carta("corteProfundo", "Corte Profundo", "🩸", "Rara", "assassino", 3, "O sangramento acumula +2 vezes e causa 40% a mais de dano", { sangrePilhas = 2, sangrePct = 0.4 }),
 	carta("pontoFraco", "Ponto Fraco", "🎯", "Rara", "assassino", 3, "Golpes pelas costas causam +40% de dano", { costasPct = 0.4 }),
-	carta("sangria", "Sangria", "🩸", "Rara", "assassino", 3, "Críticos curam 4 de vida", { curaCritico = 4 }),
+	carta("sangria", "Sede de Sangue", "🦇", "Rara", "assassino", 3, "Críticos curam 4 de vida", { curaCritico = 4 }),
 	carta("sombraPersistente", "Sombra Persistente", "🌑", "Epica", "assassino", 2, "O Passo Sombrio recarga 30% mais rápido", { recargaPct = 0.3 }),
 	carta("lequeAdagas", "Leque de Adagas", "🎴", "Epica", "assassino", 2, "O golpe final do combo arremessa 3 adagas em leque", { leque = 1 }),
 	carta("contraAtaque", "Contra-Ataque", "🔄", "Epica", "assassino", 1, "Depois de esquivar, o próximo golpe é crítico garantido", { contraAtaque = 1 }),

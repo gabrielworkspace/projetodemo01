@@ -719,7 +719,7 @@ local painelAjuda = UI.painel({ Size = UDim2.fromScale(1, 1), Parent = menuAjuda
 botaoFechar(menuAjuda)
 UI.titulo(painelAjuda, "COMO JOGAR", 16, 420, 52)
 local secoes = {
-	{ "🎮", "Controles", "Clique (segure) para atacar  •  E: habilidade  •  Q: esquiva  •  R: supremo\nNo celular, use os botões redondos à direita." },
+	{ "🎮", "Controles", "Clique: ataque (segure e solte: golpe carregado)  •  E: habilidade  •  Q: esquiva  •  R: supremo\nCavaleiro: segure F ou o botão direito para erguer o escudo. No celular, use os botões redondos." },
 	{ "⚔️", "Combo", "Todo terceiro ataque é um golpe final mais forte. A barra dourada enche lutando: com ela cheia, use o supremo!" },
 	{ "💨", "Esquiva", "Durante a esquiva você não leva dano e atravessa projéteis. Fuja das áreas vermelhas no chão!" },
 	{ "🃏", "Cartas", "Depois de cada sala, escolha 1 de 3 cartas. Cada classe tem cartas próprias, e algumas combinam muito bem." },

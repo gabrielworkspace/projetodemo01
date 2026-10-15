@@ -305,6 +305,17 @@ local barraCarga = UI.barra({
 })
 barraCarga.rotulo.Visible = false
 barraCarga.definir(0)
+-- Mana (só aparece para o Mago), logo acima do painel
+local barraMana = UI.barra({
+	Parent = barraAcoes,
+	Position = UDim2.fromOffset(106, -20),
+	Size = UDim2.fromOffset(440, 16),
+	Cor = Color3.fromRGB(70, 140, 255),
+	CorClara = Color3.fromRGB(160, 210, 255),
+	Fundo = Color3.fromRGB(12, 18, 36),
+	Raio = 5,
+})
+barraMana.quadro.Visible = false
 
 local linhaSlots = criar("Frame", {
 	Position = UDim2.fromOffset(106, 64),
@@ -378,7 +389,7 @@ slots.supremo.rotulo.Text = "Supremo"
 -- Versão celular: vida no topo e botões grandes à direita
 local vidaCelular = UI.painel({
 	Position = UDim2.fromOffset(16, 64),
-	Size = UDim2.fromOffset(280, 66),
+	Size = UDim2.fromOffset(280, 82),
 	Transparencia = 0.15,
 	SemCantos = true,
 	Visible = false,
@@ -395,6 +406,16 @@ local barraCargaCelular = UI.barra({
 	Raio = 4,
 })
 barraCargaCelular.rotulo.Visible = false
+local barraManaCelular = UI.barra({
+	Parent = vidaCelular,
+	Position = UDim2.fromOffset(12, 58),
+	Size = UDim2.fromOffset(256, 12),
+	Cor = Color3.fromRGB(70, 140, 255),
+	Fundo = Color3.fromRGB(12, 18, 36),
+	Raio = 4,
+})
+barraManaCelular.rotulo.Visible = false
+barraManaCelular.quadro.Visible = false
 barraCargaCelular.definir(0)
 
 local areaToque = criar("Frame", {
@@ -436,6 +457,8 @@ local toque = {
 	habilidade = botaoRedondo("habilidade", 78, UDim2.new(1, -150, 1, -128), "🌀"),
 	esquiva = botaoRedondo("esquiva", 70, UDim2.new(1, -168, 1, -40), "💨"),
 	supremo = botaoRedondo("supremo", 74, UDim2.new(1, -66, 1, -178), "⚡"),
+	-- só aparece para o Cavaleiro (segurar ergue o escudo)
+	defesa = botaoRedondo("defesa", 66, UDim2.new(1, -226, 1, -112), "🛡️"),
 }
 
 -- Caído / espectador
@@ -568,6 +591,7 @@ local function atualizarClasseNaBarra()
 	toque.ataque.rotulo.Text = classe.ataque.icone
 	toque.habilidade.rotulo.Text = classe.habilidade.icone
 	toque.supremo.rotulo.Text = classe.supremo.icone
+	toque.defesa.botao.Visible = classe.id == "cavaleiro"
 	barraVida.cor(classe.cor:Lerp(cores.vida, 0.65))
 end
 
@@ -959,6 +983,14 @@ function Hud.iniciar()
 	atualizarPerfil()
 
 	local pulsoVida = 0
+	local manaExibida = 0
+	local semManaAte = 0
+	Estado.Mudou:Connect(function(chave)
+		if chave == "semMana" then
+			semManaAte = os.clock() + 0.4
+			Hud.aviso("💧 Sem mana!")
+		end
+	end)
 	RunService.RenderStepped:Connect(function(dt)
 		local personagem = jogador.Character
 		local humanoid = personagem and personagem:FindFirstChildOfClass("Humanoid")
@@ -977,6 +1009,22 @@ function Hud.iniciar()
 		end
 		if Estado.modo ~= "partida" then
 			return
+		end
+
+		-- mana: a barra corre suave até o valor do servidor; pisca vermelha quando falta
+		local temMana = Estado.manaMax > 0
+		barraMana.quadro.Visible = temMana
+		barraManaCelular.quadro.Visible = temMana
+		if temMana then
+			manaExibida += (Estado.mana - manaExibida) * math.min(1, dt * 12)
+			local fracaoMana = math.clamp(manaExibida / Estado.manaMax, 0, 1)
+			local textoMana = "💧 " .. math.floor(manaExibida) .. " / " .. math.floor(Estado.manaMax)
+			barraMana.definir(fracaoMana, textoMana)
+			barraManaCelular.definir(fracaoMana)
+			local alerta = math.max(0, semManaAte - os.clock()) / 0.4
+			local corFundo = Color3.fromRGB(12, 18, 36):Lerp(Color3.fromRGB(150, 20, 30), alerta)
+			barraMana.quadro.BackgroundColor3 = corFundo
+			barraManaCelular.quadro.BackgroundColor3 = corFundo
 		end
 
 		local carga = math.clamp(Estado.carga / math.max(Estado.cargaMax, 1), 0, 1)

@@ -116,7 +116,16 @@ local manipuladores = {
 		Estado.stats = dados
 		Estado.carga = dados.carga or Estado.carga
 		Estado.cargaMax = dados.cargaMax or Estado.cargaMax
+		Estado.mana = dados.mana or 0
+		Estado.manaMax = dados.manaMax or 0
 		Estado.avisar("stats")
+	end,
+	mana = function(dados)
+		Estado.mana = dados.valor
+		Estado.manaMax = dados.max
+	end,
+	semMana = function()
+		Estado.avisar("semMana")
 	end,
 	carga = function(dados)
 		Estado.carga = dados.valor

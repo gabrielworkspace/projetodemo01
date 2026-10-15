@@ -90,7 +90,7 @@ function Combate.calcularStats(estado)
 		rouboVida = e("rouboVida"),
 		regen = e("regen"),
 		multOuro = (1 + e("ouroPct")) * (if e("ouroMult") > 0 then 2 else 1),
-		armadura = math.min(classe.armadura + e("armadura"), 0.6),
+		armadura = math.clamp(classe.armadura + e("armadura"), -0.5, 0.6),
 		espinhos = e("espinhos"),
 		escudo = e("escudo") > 0,
 		investida = e("investida"),
@@ -116,7 +116,15 @@ function Combate.calcularStats(estado)
 		recarga = classe.habilidade.recarga * (1 - math.min(e("recargaPct"), 0.6)),
 		recargaEsquiva = Config.ESQUIVA_RECARGA * (classe.esquivaMult or 1) * (1 - math.min(e("esquivaPct"), 0.6)),
 		multCarga = 1 + e("cargaPct"),
+		-- Mago
+		manaMax = if classe.mana then classe.mana + e("manaPlana") else 0,
+		manaRegen = (classe.manaRegen or 0) * (1 + e("manaRegenPct")),
+		custoMana = 1 - math.min(e("economiaMana"), 0.5),
+		manaAbate = e("manaAbate"),
 		-- Assassino
+		sangueDps = if classe.sangramento then classe.sangramento.dps * (1 + e("sangrePct")) else 0,
+		sangueMax = if classe.sangramento then classe.sangramento.maxPilhas + e("sangrePilhas") else 0,
+		sangueDuracao = if classe.sangramento then classe.sangramento.duracao else 0,
 		costas = (classe.ataque.costas or 0) + e("costasPct"),
 		curaCritico = e("curaCritico"),
 		leque = e("leque"),
@@ -124,6 +132,8 @@ function Combate.calcularStats(estado)
 		execucao = e("execucao") > 0,
 		milCortes = e("milCortes") > 0,
 	}
+	-- mana: começa cheia e nunca passa do máximo
+	estado.mana = math.min(estado.mana or estado.stats.manaMax, estado.stats.manaMax)
 	return estado.stats
 end
 
@@ -140,7 +150,49 @@ function Combate.enviarStats(estado)
 		arco = classe.ataque.arco,
 		carga = estado.carga,
 		cargaMax = Config.CARGA_MAXIMA,
+		mana = estado.mana,
+		manaMax = stats.manaMax,
+		manaRegen = stats.manaRegen,
+		custoMana = stats.custoMana,
 	})
+end
+
+------------------------------------------------------------------------
+-- Mana (Mago)
+------------------------------------------------------------------------
+
+function Combate.enviarMana(estado, forcar: boolean?)
+	if estado.stats.manaMax <= 0 then
+		return
+	end
+	local anterior = estado.manaEnviada or -100
+	if forcar or math.abs(estado.mana - anterior) >= 2 or (estado.mana >= estado.stats.manaMax and anterior < estado.stats.manaMax) then
+		estado.manaEnviada = estado.mana
+		Remotos.enviar(estado.player, "mana", { valor = estado.mana, max = estado.stats.manaMax })
+	end
+end
+
+-- Gasta mana; sem mana suficiente, avisa o jogador e devolve false
+function Combate.gastarMana(estado, custo: number): boolean
+	if estado.stats.manaMax <= 0 then
+		return true
+	end
+	custo *= estado.stats.custoMana
+	if estado.mana < custo then
+		Remotos.enviar(estado.player, "semMana", {})
+		return false
+	end
+	estado.mana -= custo
+	Combate.enviarMana(estado, true)
+	return true
+end
+
+function Combate.ganharMana(estado, quantidade: number)
+	if estado.stats.manaMax <= 0 then
+		return
+	end
+	estado.mana = math.min(estado.stats.manaMax, estado.mana + quantidade)
+	Combate.enviarMana(estado)
 end
 
 function Combate.aplicarVelocidade(estado)
@@ -155,6 +207,9 @@ function Combate.aplicarVelocidade(estado)
 	local fator = if os.clock() < (estado.lentoAte or 0) then estado.lentoFator or 1 else 1
 	if estado.carregandoDesde then
 		fator *= Config.VELOCIDADE_CARREGANDO
+	end
+	if estado.defendendoDesde then
+		fator *= Config.VELOCIDADE_DEFENDENDO
 	end
 	if os.clock() < (estado.rapidoAte or 0) then
 		fator *= 1.3
@@ -242,6 +297,23 @@ local function queimar(inimigo, danoPorSegundo: number, estado)
 	inimigo.modelo:SetAttribute("Queimando", true)
 end
 
+local COR_SANGUE = Color3.fromRGB(200, 20, 35)
+
+-- Assassino: cada golpe abre mais um corte (pilha); o inimigo perde vida enquanto sangra
+local function sangrar(inimigo, estado)
+	local stats = estado.stats
+	local sangue = inimigo.sangue
+	if not sangue or os.clock() > sangue.ate then
+		sangue = { pilhas = 0 }
+		inimigo.sangue = sangue
+	end
+	sangue.pilhas = math.min(stats.sangueMax, sangue.pilhas + 1)
+	sangue.ate = os.clock() + stats.sangueDuracao
+	sangue.dps = stats.dano * stats.sangueDps
+	sangue.fonte = estado
+	inimigo.modelo:SetAttribute("Sangrando", sangue.pilhas)
+end
+
 local function desacelerar(inimigo, fator: number, duracao: number)
 	inimigo.lentoAte = os.clock() + duracao
 	inimigo.lentoFator = math.min(inimigo.lentoFator or 1, fator)
@@ -311,6 +383,7 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		critico = opcoes.critico == true,
 		cor = opcoes.cor,
 		autor = estado and estado.player,
+		sangue = opcoes.sangue or (estado ~= nil and opcoes.principal == true and estado.stats.sangueMax > 0),
 	})
 
 	if opcoes.empurrar and not inimigo.pesado and inimigo.vida > 0 then
@@ -327,6 +400,9 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		end
 		if stats.queimadura > 0 then
 			queimar(inimigo, stats.dano * stats.queimadura, estado)
+		end
+		if stats.sangueMax > 0 and opcoes.principal then
+			sangrar(inimigo, estado)
 		end
 		if stats.raios > 0 and opcoes.principal then
 			correnteEletrica(run, inimigo, estado, stats.raios, stats.dano * 0.5)
@@ -433,6 +509,7 @@ function Combate.derrubar(run, estado)
 	humanoid.UseJumpPower = true
 	humanoid.JumpPower = 0
 	estado.carregandoDesde = nil
+	estado.defendendoDesde = nil
 	humanoid.Sit = true
 	Combate.aplicarVelocidade(estado)
 	definirCaidoNoPersonagem(estado, true)
@@ -485,6 +562,32 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 	end
 	if agora < (estado.resistenteAte or 0) then
 		dano *= 0.6
+	end
+
+	-- Escudo erguido (Cavaleiro): golpes vindos da frente perdem quase todo o dano.
+	-- Erguido logo antes do golpe, é uma defesa perfeita: bloqueia tudo e atordoa quem atacou.
+	if estado.defendendoDesde and not opcoes.ambiente then
+		local origem = opcoes.origem or (fonte and fonte.raiz and fonte.raiz.Position)
+		if origem then
+			local paraFonte = planar(origem - raiz.Position)
+			local frente = planar(raiz.CFrame.LookVector)
+			local deFrente = paraFonte.Magnitude < 0.5
+				or (frente.Magnitude > 0.1 and paraFonte.Unit:Dot(frente.Unit) >= math.cos(math.rad(Config.DEFESA_ANGULO)))
+			if deFrente then
+				local perfeita = agora - estado.defendendoDesde <= Config.DEFESA_PERFEITA
+				local direcaoEscudo = if frente.Magnitude > 0.1 then frente.Unit else Vector3.new(0, 0, -1)
+				Vfx.partida(run, "defesa", { jogador = estado.player, perfeita = perfeita, pos = raiz.Position + direcaoEscudo * 1.8, dir = direcaoEscudo })
+				animar(run, estado, "bloqueou", nil)
+				if perfeita then
+					if fonte and fonte.vivo then
+						Combate.atordoar(fonte, 1.2)
+					end
+					Combate.adicionarCarga(estado, 6)
+					return
+				end
+				dano *= 1 - Config.DEFESA_REDUCAO
+			end
+		end
 	end
 	dano = math.max(1, math.floor(dano * (1 - estado.stats.armadura) + 0.5))
 
@@ -543,8 +646,9 @@ local function pelasCostas(inimigo, origem: Vector3): boolean
 end
 
 local laminasNoturnas
+local feiticoDoMago
 
-local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vector3, mult: number, final: boolean)
+local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vector3, mult: number, final: boolean, combo: number)
 	local stats = estado.stats
 	local arco = classe.ataque.arco * (if final then 1.25 else 1)
 	local alcance = stats.alcance * (if final then 1.15 else 1)
@@ -556,7 +660,7 @@ local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vecto
 		alcance = alcance,
 		arco = arco,
 		cor = classe.cor,
-		combo = estado.combo,
+		combo = combo,
 	}, estado.player)
 
 	local limite = math.cos(math.rad(arco / 2))
@@ -700,6 +804,80 @@ local function disparoDeClasse(run, estado, classe, raiz: BasePart, direcao: Vec
 	Projeteis.disparar(run, lista)
 end
 
+-- Mago: cada golpe do combo é uma magia diferente
+--   1º Dardo Arcano: rápido e preciso, pequena explosão arcana
+--   2º Lança de Gelo: atravessa um inimigo a mais e deixa lento
+--   3º Bola de Fogo: lenta e grande, explode e queima
+local MAGIAS_DO_COMBO = { "dardoArcano", "lancaGelo", "bolaFogo" }
+local COR_ARCANA = Color3.fromRGB(190, 110, 255)
+local COR_GELO = Color3.fromRGB(150, 225, 255)
+
+-- Ponto de onde a magia sai: o cristal do cajado, à frente e à direita do corpo
+local function pontaDoCajado(raiz: BasePart, direcao: Vector3): Vector3
+	local direita = Vector3.new(-direcao.Z, 0, direcao.X)
+	return raiz.Position + direcao * 2.5 + Vector3.new(0, 1.4, 0) + direita * 0.5
+end
+
+feiticoDoMago = function(run, estado, classe, raiz: BasePart, direcao: Vector3, mult: number, combo: number)
+	local stats = estado.stats
+	local tipo = MAGIAS_DO_COMBO[combo] or "dardoArcano"
+	local origem = pontaDoCajado(raiz, direcao)
+	local quantidade = stats.projeteis
+	local lista = {}
+	for i = 1, quantidade do
+		local angulo = math.rad((i - (quantidade + 1) / 2) * 13)
+		local dir = CFrame.Angles(0, angulo, 0):VectorToWorldSpace(direcao)
+		local critico = math.random() < stats.critico
+		local dano = stats.dano * mult * (if critico then stats.multCritico else 1)
+		local magia = {
+			lado = "jogador",
+			tipo = tipo,
+			pos = origem,
+			dir = dir,
+			alcance = stats.alcance,
+			tamanho = stats.tamanho,
+			ricochete = stats.ricochete,
+			perfuracao = stats.perfuracao,
+		}
+		if tipo == "dardoArcano" then
+			magia.velocidade = 80
+			magia.raio = 1 * stats.tamanho
+			magia.explosao = stats.explosao * 0.7
+			magia.aoAcertar = function(inimigo, _, projetil)
+				Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, empurrar = projetil.dir * 14 })
+			end
+			magia.aoExplodir = function(pos: Vector3, principal)
+				Vfx.partida(run, "explosao", { pos = pos, raio = magia.explosao, cor = COR_ARCANA, leve = true })
+				Combate.danoEmArea(run, pos, magia.explosao, dano * 0.5, estado, { semEfeitos = true, exceto = principal, cor = COR_ARCANA })
+			end
+		elseif tipo == "lancaGelo" then
+			magia.velocidade = 72
+			magia.raio = 0.9 * stats.tamanho
+			magia.perfuracao += 1
+			magia.aoAcertar = function(inimigo, _, projetil)
+				Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, cor = COR_GELO, lento = 0.55, empurrar = projetil.dir * 10 })
+			end
+		else
+			magia.velocidade = 50
+			magia.tamanho = stats.tamanho * 1.4
+			magia.raio = 1.6 * stats.tamanho
+			magia.explosao = math.max(stats.explosao, 4) * 1.8
+			magia.aoAcertar = function(inimigo, _, projetil)
+				Combate.danoAoInimigo(run, inimigo, dano, estado, { critico = critico, principal = true, queimar = true, cor = COR_FOGO, empurrar = projetil.dir * 30 })
+			end
+			magia.aoExplodir = function(pos: Vector3, principal)
+				Vfx.partida(run, "explosao", { pos = pos, raio = magia.explosao, cor = COR_FOGO, forte = true })
+				Combate.danoEmArea(run, pos, magia.explosao, dano * 0.6, estado, { semEfeitos = true, exceto = principal, queimar = true, cor = COR_FOGO, empurrarForca = 30 })
+			end
+		end
+		if not magia.explosao or magia.explosao <= 0 then
+			magia.explosao = nil
+		end
+		table.insert(lista, magia)
+	end
+	Projeteis.disparar(run, lista)
+end
+
 local function rajadaDoDragao(run, estado, raiz: BasePart, direcao: Vector3)
 	local stats = estado.stats
 	local alcance = stats.alcance * 2.2
@@ -717,7 +895,7 @@ local function rajadaDoDragao(run, estado, raiz: BasePart, direcao: Vector3)
 end
 
 function Combate.atacar(run, estado, direcao: any)
-	if not podeAgir(run, estado) or estado.carregandoDesde then
+	if not podeAgir(run, estado) or estado.carregandoDesde or estado.defendendoDesde then
 		return
 	end
 	local stats = estado.stats
@@ -730,6 +908,10 @@ function Combate.atacar(run, estado, direcao: any)
 	if agora - estado.ultimoAtaque > stats.intervalo * 2.6 + 0.3 then
 		estado.combo = 0
 	end
+	local custos = classe.custos
+	if custos and not Combate.gastarMana(estado, if estado.combo % 3 + 1 == 3 then custos.final else custos.ataque) then
+		return
+	end
 	estado.combo = estado.combo % 3 + 1
 	local final = estado.combo == 3
 	estado.ultimoFoiFinal = final
@@ -737,17 +919,28 @@ function Combate.atacar(run, estado, direcao: any)
 
 	local raiz = raizDe(estado) :: BasePart
 	local dir = direcaoValida(direcao, raiz)
-	local mult = classe.ataque.combo[estado.combo] or 1
-	animar(run, estado, "ataque", { combo = estado.combo }, estado.player)
+	local combo = estado.combo
+	local mult = classe.ataque.combo[combo] or 1
+	animar(run, estado, "ataque", { combo = combo }, estado.player)
 
-	if classe.ataque.tipo == "corte" then
-		golpeDeEspada(run, estado, classe, raiz, dir, mult, final)
-	else
-		disparoDeClasse(run, estado, classe, raiz, dir, mult, final)
-	end
-	if stats.dragao > 0 then
-		rajadaDoDragao(run, estado, raiz, dir)
-	end
+	-- o golpe acontece quando a arma chega no alvo, no meio da animação
+	local impacto = classe.ataque.impacto and classe.ataque.impacto[combo] or 0
+	task.delay(impacto, function()
+		if not podeAgir(run, estado) or estado.defendendoDesde then
+			return
+		end
+		local raizAgora = raizDe(estado) :: BasePart
+		if classe.ataque.tipo == "corte" then
+			golpeDeEspada(run, estado, classe, raizAgora, dir, mult, final, combo)
+		elseif classe.id == "mago" then
+			feiticoDoMago(run, estado, classe, raizAgora, dir, mult, combo)
+		else
+			disparoDeClasse(run, estado, classe, raizAgora, dir, mult, final)
+		end
+		if stats.dragao > 0 then
+			rajadaDoDragao(run, estado, raizAgora, dir)
+		end
+	end)
 end
 
 ------------------------------------------------------------------------
@@ -755,7 +948,12 @@ end
 ------------------------------------------------------------------------
 
 function Combate.carregar(run, estado)
-	if not podeAgir(run, estado) or estado.carregandoDesde then
+	if not podeAgir(run, estado) or estado.carregandoDesde or estado.defendendoDesde then
+		return
+	end
+	local custos = Classes.obter(estado.classe).custos
+	if custos and estado.mana < custos.carregado * estado.stats.custoMana then
+		Remotos.enviar(estado.player, "semMana", {})
 		return
 	end
 	estado.carregandoDesde = os.clock()
@@ -814,15 +1012,36 @@ local function golpeCarregado(run, estado, classe, raiz: BasePart, direcao: Vect
 			rajadaDoDragao(run, estado, raiz, direcao)
 		end
 	elseif classe.id == "mago" then
-		-- Orbe enorme e lento que explode forte (atravessa tudo com a carga cheia)
+		-- Orbe do Vazio: lento, puxa os inimigos em volta enquanto voa e explode forte
+		-- (atravessa tudo com a carga cheia)
+		local custos = classe.custos
+		if custos then
+			estado.mana = math.max(0, estado.mana - custos.carregado * stats.custoMana)
+			Combate.enviarMana(estado, true)
+		end
 		local tamanho = (1.8 + 1.4 * fracao) * stats.tamanho
 		local explosao = math.max(stats.explosao, 4) * (1.6 + 1.4 * fracao)
 		local dano = stats.dano * mult
+		local raioPuxao = 9 + 5 * fracao
+		local proximoPuxao = 0
 		Projeteis.disparar(run, {
 			{
 				lado = "jogador",
 				tipo = "orbeCarregado",
-				pos = raiz.Position + direcao * 2 + Vector3.new(0, 1, 0),
+				pos = pontaDoCajado(raiz, direcao),
+				aoMover = function(projetil)
+					local agora = os.clock()
+					if agora < proximoPuxao then
+						return
+					end
+					proximoPuxao = agora + 0.1
+					for _, inimigo in inimigosVivos(run) do
+						local delta = planar(projetil.pos - inimigo.raiz.Position)
+						if not inimigo.pesado and delta.Magnitude > 1 and delta.Magnitude <= raioPuxao then
+							inimigo.raiz.AssemblyLinearVelocity = delta.Unit * 24 + Vector3.new(0, 2, 0)
+						end
+					end
+				end,
 				dir = direcao,
 				velocidade = 42,
 				alcance = stats.alcance * 1.1,
@@ -834,7 +1053,7 @@ local function golpeCarregado(run, estado, classe, raiz: BasePart, direcao: Vect
 					Combate.danoAoInimigo(run, inimigo, dano, estado, { principal = true, empurrar = projetil.dir * 30 })
 				end,
 				aoExplodir = function(pos: Vector3, principal)
-					Vfx.partida(run, "explosao", { pos = pos, raio = explosao, cor = classe.cor, forte = true })
+					Vfx.partida(run, "vazio", { pos = pos, raio = explosao })
 					Combate.danoEmArea(run, pos, explosao, dano * 0.7, estado, { semEfeitos = true, exceto = principal, cor = classe.cor, empurrarForca = 35 })
 				end,
 			},
@@ -908,6 +1127,31 @@ function Combate.soltar(run, estado, direcao: any)
 	local classe = Classes.obter(estado.classe)
 	animar(run, estado, "soltar", { fracao = fracao }, estado.player)
 	golpeCarregado(run, estado, classe, raiz, dir, fracao)
+end
+
+------------------------------------------------------------------------
+-- Defesa com escudo (Cavaleiro): segurar ergue o escudo, soltar abaixa
+------------------------------------------------------------------------
+
+function Combate.defender(run, estado, ativo: boolean)
+	if estado.classe ~= "cavaleiro" then
+		return
+	end
+	if ativo then
+		if not podeAgir(run, estado) or estado.defendendoDesde then
+			return
+		end
+		if estado.carregandoDesde then
+			Combate.cancelarCarga(run, estado)
+		end
+		estado.defendendoDesde = os.clock()
+		Combate.aplicarVelocidade(estado)
+		animar(run, estado, "defender", nil, estado.player)
+	elseif estado.defendendoDesde then
+		estado.defendendoDesde = nil
+		Combate.aplicarVelocidade(estado)
+		animar(run, estado, "pararDefesa", nil, estado.player)
+	end
 end
 
 ------------------------------------------------------------------------
@@ -1101,6 +1345,10 @@ function Combate.habilidade(run, estado, direcao: any)
 		return
 	end
 	local stats = estado.stats
+	local custos = Classes.obter(estado.classe).custos
+	if custos and not Combate.gastarMana(estado, custos.habilidade) then
+		return
+	end
 	estado.habilidadeProntaEm = agora + stats.recarga
 	Remotos.enviar(estado.player, "recarga", { tipo = "habilidade", restante = stats.recarga, total = stats.recarga })
 
@@ -1357,7 +1605,16 @@ end
 function Combate.tick(run, dt: number)
 	local agora = os.clock()
 	for _, inimigo in inimigosVivos(run) do
-		if inimigo.queimaAte then
+		local sangue = inimigo.sangue
+		if sangue then
+			if agora < sangue.ate then
+				Combate.danoAoInimigo(run, inimigo, sangue.dps * sangue.pilhas * dt, sangue.fonte, { semEfeitos = true, cor = COR_SANGUE, sangue = "gota" })
+			else
+				inimigo.sangue = nil
+				inimigo.modelo:SetAttribute("Sangrando", 0)
+			end
+		end
+		if inimigo.vivo and inimigo.queimaAte then
 			if agora < inimigo.queimaAte then
 				Combate.danoAoInimigo(run, inimigo, inimigo.queimaDps * dt, inimigo.queimaFonte, { semEfeitos = true, cor = COR_FOGO })
 			else
@@ -1375,6 +1632,9 @@ function Combate.tick(run, dt: number)
 			else
 				if estado.stats.regen > 0 then
 					Combate.curar(run, estado, estado.stats.regen * dt, true)
+				end
+				if estado.stats.manaMax > 0 and estado.mana < estado.stats.manaMax then
+					Combate.ganharMana(estado, estado.stats.manaRegen * dt)
 				end
 				local raiz = raizDe(estado)
 				if raiz and run.sala and Masmorra.naLava(run.sala, raiz.Position) then
@@ -1398,7 +1658,10 @@ end
 
 -- Ao começar cada sala
 function Combate.novaSala(estado)
+	estado.mana = estado.stats.manaMax
+	Combate.enviarMana(estado, true)
 	estado.carregandoDesde = nil
+	estado.defendendoDesde = nil
 	estado.escudoAtivo = estado.stats.escudo
 	estado.invulneravelAte = os.clock() + 1.5
 	estado.lentoAte = nil

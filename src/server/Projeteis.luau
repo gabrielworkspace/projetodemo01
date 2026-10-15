@@ -30,7 +30,8 @@ Projeteis.distanciaAoSegmento = distanciaAoSegmento
 	perfuracao, ricochete           (quantos inimigos atravessa / quica)
 	explosao                        (raio da explosão ao terminar, opcional)
 	aoAcertar(alvo, pos, projetil)  alvo = inimigo (lado jogador) ou estado do jogador (lado inimigo)
-	aoExplodir(pos, alvoPrincipal)  ]]
+	aoExplodir(pos, alvoPrincipal)
+	aoMover(projetil, dt)           (chamado a cada passo, opcional)  ]]
 function Projeteis.disparar(run, lista)
 	local visuais = {}
 	for _, dados in lista do
@@ -51,6 +52,7 @@ function Projeteis.disparar(run, lista)
 			explosao = dados.explosao,
 			aoAcertar = dados.aoAcertar,
 			aoExplodir = dados.aoExplodir,
+			aoMover = dados.aoMover,
 			atingidos = {},
 		}
 		run.projeteis[projetil] = true
@@ -145,6 +147,9 @@ function Projeteis.atualizar(run, dt: number)
 		local fim = inicio + projetil.dir * passo
 		projetil.pos = fim
 		projetil.percorrido += passo
+		if projetil.aoMover then
+			projetil.aoMover(projetil, dt)
+		end
 
 		-- Quem está no caminho deste passo, em ordem
 		local candidatos = {}

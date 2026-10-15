@@ -313,41 +313,6 @@ function Vfx.golpeInimigo(dados)
 	end
 end
 
-function Vfx.redemoinho(dados)
-	local raiz = raizDoJogador(dados.jogador)
-	if not raiz then
-		return
-	end
-	local cor = if dados.fogo then FOGO else dados.cor
-	local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
-	local b0, b1 = Instance.new("Attachment"), Instance.new("Attachment")
-	for _, a in { a0, a1, b0, b1 } do
-		a.Parent = terreno
-	end
-	local feixesA = { novoFeixe(a0, a1, cor:Lerp(BRANCO, 0.5), 0.8), novoFeixe(a0, a1, cor, 2.6) }
-	local feixesB = { novoFeixe(b0, b1, cor:Lerp(BRANCO, 0.5), 0.8), novoFeixe(b0, b1, cor, 2.6) }
-	for i, feixe in { feixesA[1], feixesA[2], feixesB[1], feixesB[2] } do
-		feixe.Transparency = sequencia({ { 0, 1 }, { 0.5, if i % 2 == 1 then 0 else 0.5 }, { 1, 0.1 } })
-	end
-	local inicio = os.clock()
-	local conexao
-	conexao = RunService.RenderStepped:Connect(function()
-		local t = os.clock() - inicio
-		if t > dados.duracao or not raiz.Parent then
-			conexao:Disconnect()
-			for _, a in { a0, a1, b0, b1 } do
-				a:Destroy()
-			end
-			return
-		end
-		local centro = CFrame.new(raiz.Position) * CFrame.Angles(0, -t * 14, 0)
-		posicionarArco(a0, a1, feixesA, centro, dados.raio * 0.8, 150)
-		posicionarArco(b0, b1, feixesB, centro * CFrame.Angles(0, math.pi, 0), dados.raio * 0.8, 150)
-		if math.random() < 0.3 then
-			particulas(raiz.Position + Vector3.new(math.random(-4, 4), -1, math.random(-4, 4)), { cor = cor, quantidade = 3, tamanho = 0.4, velocidade = 8, vida = 0.4 })
-		end
-	end)
-end
 
 function Vfx.rajada(dados)
 	local origem = CFrame.lookAt(dados.pos, dados.pos + dados.dir)
@@ -444,11 +409,243 @@ local function criarVisualProjetil(tipo: string, tamanho: number): (BasePart, Co
 	return p, cor
 end
 
+------------------------------------------------------------------------
+-- Magias com visual próprio: cada uma é um conjunto de peças que se mexem juntas.
+-- O construtor devolve a peça principal, a cor e uma lista de "extras":
+-- { parte = BasePart, cf = function(t) -> CFrame relativo à peça principal }.
+------------------------------------------------------------------------
+
+local function emissorEm(pai: Instance, propriedades)
+	local e = Instance.new("ParticleEmitter")
+	e.LightInfluence = 0
+	for chave, valor in propriedades do
+		(e :: any)[chave] = valor
+	end
+	e.Parent = pai
+	return e
+end
+
+local function luzEm(pai: Instance, cor: Color3, alcance: number, brilho: number)
+	local l = Instance.new("PointLight")
+	l.Color = cor
+	l.Range = alcance
+	l.Brightness = brilho
+	l.Parent = pai
+end
+
+local function anelDeMagia(raio: number, espessura: number, cor: Color3, transparencia: number): BasePart
+	-- cilindro bem fino e largo: parece um anel de energia visto de lado
+	return parte(Vector3.new(espessura, raio * 2, raio * 2), CFrame.new(), cor, transparencia, Enum.PartType.Cylinder)
+end
+
+local MAGIAS = {}
+
+-- Dardo Arcano: núcleo branco-violeta, aura, dois anéis girando em volta do caminho e faíscas
+MAGIAS.dardoArcano = function(escala: number)
+	local cor = Color3.fromRGB(190, 110, 255)
+	local nucleo = parte(Vector3.one * 0.7 * escala, CFrame.new(), cor:Lerp(BRANCO, 0.6), 0, Enum.PartType.Ball)
+	local aura = parte(Vector3.one * 1.5 * escala, CFrame.new(), cor, 0.55, Enum.PartType.Ball)
+	local anel1 = anelDeMagia(0.9 * escala, 0.08, cor:Lerp(BRANCO, 0.3), 0.2)
+	local anel2 = anelDeMagia(0.7 * escala, 0.08, cor, 0.3)
+	rastro(nucleo, cor, 0.8 * escala, 0.25)
+	emissorEm(nucleo, {
+		Color = ColorSequence.new(BRANCO, cor),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.25 * escala }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.25, 0.45),
+		Speed = NumberRange.new(1, 3),
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 55,
+	})
+	luzEm(nucleo, cor, 12, 2)
+	return nucleo, cor, {
+		{ parte = aura, cf = function(t)
+			return CFrame.new()
+		end },
+		{ parte = anel1, cf = function(t)
+			return CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(t * 14, 0, 0) * CFrame.Angles(0, 0, math.rad(25))
+		end },
+		{ parte = anel2, cf = function(t)
+			return CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(-t * 18, 0, 0) * CFrame.Angles(0, math.rad(35), 0)
+		end },
+	}
+end
+
+-- Lança de Gelo: cristal comprido girando, com cristais menores em volta e névoa gelada
+MAGIAS.lancaGelo = function(escala: number)
+	local cor = Color3.fromRGB(150, 225, 255)
+	local lanca = parte(Vector3.new(0.55, 0.55, 2.8) * escala, CFrame.new(), cor:Lerp(BRANCO, 0.4), 0.1, nil, Enum.Material.Glass)
+	local brilho = parte(Vector3.new(0.25, 0.25, 3.1) * escala, CFrame.new(), cor, 0, nil, Enum.Material.Neon)
+	local extras = { { parte = brilho, cf = function()
+		return CFrame.new()
+	end } }
+	for i = 1, 3 do
+		local lasca = parte(Vector3.new(0.25, 0.25, 0.9) * escala, CFrame.new(), cor:Lerp(BRANCO, 0.5), 0.15, nil, Enum.Material.Glass)
+		table.insert(extras, {
+			parte = lasca,
+			cf = function(t)
+				local a = t * 9 + i * (math.pi * 2 / 3)
+				return CFrame.new(math.cos(a) * 0.7 * escala, math.sin(a) * 0.7 * escala, 0.6 * escala)
+			end,
+		})
+	end
+	rastro(lanca, cor, 0.5 * escala, 0.3)
+	emissorEm(lanca, {
+		Color = ColorSequence.new(BRANCO, cor),
+		LightEmission = 0.6,
+		Transparency = sequencia({ { 0, 0.3 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 0.6 * escala }, { 1, 1.4 * escala } }),
+		Lifetime = NumberRange.new(0.4, 0.7),
+		Speed = NumberRange.new(0.5, 1.5),
+		Drag = 4,
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 35,
+	})
+	luzEm(lanca, cor, 10, 1.6)
+	return lanca, cor, extras, true
+end
+
+-- Bola de Fogo: núcleo amarelo, camada laranja pulsando, chamas, brasas e fumaça
+MAGIAS.bolaFogo = function(escala: number)
+	local cor = Color3.fromRGB(255, 130, 40)
+	local nucleo = parte(Vector3.one * 1.3 * escala, CFrame.new(), Color3.fromRGB(255, 240, 160), 0, Enum.PartType.Ball)
+	local camada = parte(Vector3.one * 2.2 * escala, CFrame.new(), cor, 0.35, Enum.PartType.Ball)
+	local fogo = Instance.new("Fire")
+	fogo.Size = 4 * escala
+	fogo.Heat = 0
+	fogo.Color = cor
+	fogo.SecondaryColor = Color3.fromRGB(255, 220, 90)
+	fogo.Parent = nucleo
+	emissorEm(nucleo, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 200, 80), Color3.fromRGB(255, 70, 20)),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.4 * escala }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.3, 0.6),
+		Speed = NumberRange.new(2, 5),
+		SpreadAngle = Vector2.new(180, 180),
+		Acceleration = Vector3.new(0, 6, 0),
+		Rate = 60,
+	})
+	emissorEm(nucleo, {
+		Color = ColorSequence.new(Color3.fromRGB(70, 60, 60)),
+		LightEmission = 0,
+		Transparency = sequencia({ { 0, 0.5 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 0.8 * escala }, { 1, 2.2 * escala } }),
+		Lifetime = NumberRange.new(0.5, 0.9),
+		Speed = NumberRange.new(0.5, 1.5),
+		Acceleration = Vector3.new(0, 3, 0),
+		Rate = 25,
+	})
+	rastro(nucleo, cor, 1.6 * escala, 0.3)
+	luzEm(nucleo, cor, 18, 3)
+	return nucleo, cor, {
+		{ parte = camada, cf = function(t)
+			return CFrame.Angles(t * 5, t * 7, 0)
+		end, pulso = 2.2 * escala },
+	}
+end
+
+-- Orbe do Vazio: núcleo escuro, borda violeta, três anéis em eixos diferentes e
+-- partículas sendo sugadas para dentro
+MAGIAS.orbeCarregado = function(escala: number)
+	local cor = Color3.fromRGB(170, 70, 255)
+	local nucleo = parte(Vector3.one * 1.4 * escala, CFrame.new(), Color3.fromRGB(18, 6, 30), 0, Enum.PartType.Ball, Enum.Material.SmoothPlastic)
+	local borda = parte(Vector3.one * 1.9 * escala, CFrame.new(), cor, 0.45, Enum.PartType.Ball, Enum.Material.ForceField)
+	local extras = { { parte = borda, cf = function()
+		return CFrame.new()
+	end } }
+	for i, giro in { Vector3.new(1, 0.3, 0), Vector3.new(0.2, 1, 0.4), Vector3.new(0.5, 0, 1) } do
+		local anel = anelDeMagia((1.3 + i * 0.25) * escala, 0.1, cor:Lerp(BRANCO, 0.2 * i), 0.15)
+		table.insert(extras, {
+			parte = anel,
+			cf = function(t)
+				return CFrame.Angles(t * giro.X * 6, t * giro.Y * 6, t * giro.Z * 6)
+			end,
+		})
+	end
+	emissorEm(nucleo, {
+		Color = ColorSequence.new(cor:Lerp(BRANCO, 0.5), cor),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.35 * escala }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.35, 0.5),
+		Speed = NumberRange.new(5, 8),
+		Shape = Enum.ParticleEmitterShape.Sphere,
+		ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface,
+		ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward,
+		Rate = 70,
+	})
+	rastro(nucleo, cor, 1.4 * escala, 0.35)
+	luzEm(nucleo, cor, 20, 3)
+	return nucleo, cor, extras
+end
+
+-- Flecha de verdade: haste de madeira, ponta de metal brilhante e penas atrás
+local function construirFlecha(escala: number, corPonta: Color3, corPenas: Color3, brilhoForte: boolean?)
+	local haste = parte(Vector3.new(0.14, 0.14, 2.6) * escala, CFrame.new(), Color3.fromRGB(150, 110, 70), 0, nil, Enum.Material.Wood)
+	local ponta = parte(Vector3.new(0.32, 0.12, 0.5) * escala, CFrame.new(), corPonta, 0, nil, Enum.Material.Neon)
+	local extras = {
+		{ parte = ponta, cf = function()
+			return CFrame.new(0, 0, -1.45 * escala) * CFrame.Angles(0, 0, math.rad(45))
+		end },
+	}
+	for i = 0, 1 do
+		local pena = parte(Vector3.new(0.04, 0.32, 0.6) * escala, CFrame.new(), corPenas, 0.05, nil, Enum.Material.Fabric)
+		table.insert(extras, { parte = pena, cf = function()
+			return CFrame.new(0, 0, 1.1 * escala) * CFrame.Angles(0, 0, math.rad(90 * i))
+		end })
+	end
+	rastro(haste, corPonta, 0.3 * escala, if brilhoForte then 0.3 else 0.15)
+	luzEm(haste, corPonta, if brilhoForte then 14 else 6, if brilhoForte then 2.5 else 1)
+	return haste, extras
+end
+
+MAGIAS.flecha = function(escala: number)
+	local cor = Color3.fromRGB(150, 255, 160)
+	local haste, extras = construirFlecha(escala, cor, Color3.fromRGB(240, 240, 230))
+	return haste, cor, extras
+end
+
+MAGIAS.flechaGrande = function(escala: number)
+	local cor = Color3.fromRGB(200, 255, 140)
+	local haste, extras = construirFlecha(escala, cor, cor, true)
+	return haste, cor, extras
+end
+
+-- Flecha carregada: dourada, com duas espirais de vento girando em volta
+MAGIAS.flechaCarregada = function(escala: number)
+	local cor = Color3.fromRGB(255, 225, 110)
+	local haste, extras = construirFlecha(escala, cor, cor, true)
+	for i = 0, 1 do
+		local espiral = anelDeMagia(0.7 * escala, 0.08, if i == 0 then BRANCO else cor, 0.25)
+		table.insert(extras, { parte = espiral, cf = function(t)
+			return CFrame.new(0, 0, (0.2 - i * 0.9) * escala) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles((t * 20) + i * math.pi, 0, 0)
+		end })
+	end
+	emissorEm(haste, {
+		Color = ColorSequence.new(BRANCO, cor),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.3 * escala }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.2, 0.35),
+		Speed = NumberRange.new(1, 3),
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 50,
+	})
+	return haste, cor, extras
+end
+
 function Vfx.projeteis(dados)
 	for _, info in dados.lista do
-		local visual, cor = criarVisualProjetil(info.tipo, info.tamanho or 1)
+		local construtor = MAGIAS[info.tipo]
+		local visual, cor, extras, girar
+		if construtor then
+			visual, cor, extras, girar = construtor(info.tamanho or 1)
+		else
+			visual, cor = criarVisualProjetil(info.tipo, info.tamanho or 1)
+		end
 		visual.CFrame = CFrame.lookAt(info.pos, info.pos + info.dir)
 		projeteis[info.id] = {
+			extras = extras,
+			nascimento = os.clock(),
 			parte = visual,
 			pos = info.pos,
 			dir = info.dir,
@@ -457,7 +654,7 @@ function Vfx.projeteis(dados)
 			percorrido = 0,
 			cor = cor,
 			tipo = info.tipo,
-			girar = info.tipo == "gelo",
+			girar = info.tipo == "gelo" or girar == true,
 		}
 	end
 end
@@ -470,9 +667,29 @@ local function removerProjetil(id: number, impacto: boolean, pos: Vector3?)
 	projeteis[id] = nil
 	local onde = pos or p.pos
 	p.parte.Transparency = 1
-	Debris:AddItem(p.parte, 0.3) -- deixa o rastro terminar
+	for _, desc in p.parte:GetDescendants() do
+		if desc:IsA("ParticleEmitter") or desc:IsA("Fire") then
+			desc.Enabled = false
+		end
+	end
+	Debris:AddItem(p.parte, 0.6) -- deixa o rastro e as partículas terminarem
+	for _, extra in p.extras or {} do
+		animar(extra.parte, 0.12, { Transparency = 1 })
+		Debris:AddItem(extra.parte, 0.15)
+	end
 	if impacto then
-		particulas(onde, { cor = p.cor, cor2 = BRANCO, quantidade = 10, tamanho = 0.45, velocidade = 16, vida = 0.35 })
+		if p.tipo == "lancaGelo" then
+			-- o cristal estilhaça
+			for _ = 1, 6 do
+				local lasca = parte(Vector3.new(0.25, 0.25, 0.7), CFrame.new(onde) * CFrame.Angles(math.random() * 6, math.random() * 6, 0), p.cor:Lerp(BRANCO, 0.4), 0.1, nil, Enum.Material.Glass)
+				lasca.Anchored = false
+				lasca.AssemblyLinearVelocity = Vector3.new(math.random(-14, 14), math.random(6, 18), math.random(-14, 14))
+				sumir({ lasca }, 0.3, 0.35)
+			end
+			particulas(onde, { cor = BRANCO, cor2 = p.cor, quantidade = 14, tamanho = 0.5, velocidade = 12, vida = 0.5, arrasto = 6 })
+		else
+			particulas(onde, { cor = p.cor, cor2 = BRANCO, quantidade = 10, tamanho = 0.45, velocidade = 16, vida = 0.35 })
+		end
 		clarao(onde, p.cor, 10, 0.2, 2)
 	end
 end
@@ -503,6 +720,15 @@ RunService.RenderStepped:Connect(function(dt)
 				cf *= CFrame.Angles(0, 0, os.clock() * 12)
 			end
 			p.parte.CFrame = cf
+			if p.extras then
+				local t = os.clock() - p.nascimento
+				for _, extra in p.extras do
+					extra.parte.CFrame = cf * extra.cf(t)
+					if extra.pulso then
+						extra.parte.Size = Vector3.one * extra.pulso * (1 + math.sin(t * 18) * 0.12)
+					end
+				end
+			end
 		end
 	end
 end)
@@ -535,6 +761,37 @@ function Vfx.explosao(dados)
 	if not leve then
 		Vfx.tremerEm(pos, if forte then 2.2 else 1, 0.3)
 	end
+end
+
+-- Orbe do Vazio: primeiro tudo é sugado para um ponto escuro, depois explode em violeta
+function Vfx.vazio(dados)
+	local pos, raio = dados.pos, dados.raio or 8
+	local cor = Color3.fromRGB(170, 70, 255)
+	local escuro = Color3.fromRGB(18, 6, 30)
+	-- esfera que encolhe (implosão)
+	local casca = parte(Vector3.one * raio * 2, CFrame.new(pos), cor, 0.6, Enum.PartType.Ball, Enum.Material.ForceField)
+	animar(casca, 0.18, { Size = Vector3.one * 1.5, Transparency = 0.1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	local nucleo = parte(Vector3.one * 1, CFrame.new(pos), escuro, 0, Enum.PartType.Ball, Enum.Material.SmoothPlastic)
+	animar(nucleo, 0.18, { Size = Vector3.one * 3 })
+	task.delay(0.18, function()
+		casca:Destroy()
+		nucleo:Destroy()
+		-- explosão: bola violeta, anéis em vários ângulos e lascas escuras
+		local bola = parte(Vector3.one * 2, CFrame.new(pos), cor:Lerp(BRANCO, 0.4), 0, Enum.PartType.Ball)
+		animar(bola, 0.35, { Size = Vector3.one * raio * 2.2, Transparency = 1, Color = cor })
+		Debris:AddItem(bola, 0.4)
+		for i = 1, 3 do
+			local anelVazio = parte(Vector3.new(0.3, 2, 2), CFrame.new(pos) * CFrame.Angles(math.random() * 3, math.random() * 3, math.random() * 3), cor, 0.1, Enum.PartType.Cylinder)
+			animar(anelVazio, 0.3 + i * 0.06, { Size = Vector3.new(0.05, raio * 2.6, raio * 2.6), Transparency = 1 })
+			Debris:AddItem(anelVazio, 0.5)
+		end
+		local chao = disco(pos - Vector3.new(0, 1.5, 0), 2, escuro, 0.3)
+		animar(chao, 0.5, { Size = Vector3.new(0.15, raio * 2.4, raio * 2.4), Transparency = 1 })
+		Debris:AddItem(chao, 0.55)
+		particulas(pos, { cor = cor:Lerp(BRANCO, 0.4), cor2 = escuro, quantidade = 34, tamanho = 0.8, velocidade = raio * 5, vida = 0.6, gravidade = 6 })
+		clarao(pos, cor, raio * 4, 0.45, 6)
+		Vfx.tremerEm(pos, 2, 0.3)
+	end)
 end
 
 function Vfx.impacto(dados)
@@ -579,71 +836,8 @@ function Vfx.impactoArea(dados)
 	end
 end
 
-function Vfx.meteoro(dados)
-	local alvo = dados.pos
-	local inicio = alvo + Vector3.new(-14, 48, -14)
-	local bola = parte(Vector3.one * 3.4, CFrame.new(inicio), FOGO, 0, Enum.PartType.Ball)
-	local f = Instance.new("Fire")
-	f.Size = 8
-	f.Heat = 0
-	f.Parent = bola
-	rastro(bola, FOGO, 2.6, 0.4)
-	local l = Instance.new("PointLight")
-	l.Color = FOGO
-	l.Range = 24
-	l.Brightness = 3
-	l.Parent = bola
-	animar(bola, dados.duracao, { CFrame = CFrame.new(alvo + Vector3.new(0, 1.5, 0)) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	Debris:AddItem(bola, dados.duracao + 0.05)
-	if dados.amigo then
-		local partes = anel(alvo + Vector3.new(0, 0.15, 0), dados.raio or 10, FOGO, 0.35, 24, 0.4)
-		sumir(partes, 0.2, dados.duracao)
-	end
-end
 
-function Vfx.chuvaFlechas(dados)
-	local centro, raio, duracao, cor = dados.pos, dados.raio, dados.duracao, dados.cor
-	local partes = anel(centro + Vector3.new(0, 0.15, 0), raio, cor, 0.35, 28, 0.45)
-	local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
-	table.insert(partes, fundo)
-	sumir(partes, 0.4, duracao)
-	task.spawn(function()
-		local fim = os.clock() + duracao
-		while os.clock() < fim do
-			local angulo = math.random() * math.pi * 2
-			local distancia = math.sqrt(math.random()) * raio
-			local chao = centro + Vector3.new(math.cos(angulo) * distancia, 0, math.sin(angulo) * distancia)
-			local topo = chao + Vector3.new(3, 26, 3)
-			local flecha = parte(Vector3.new(0.15, 0.15, 2.4), CFrame.lookAt(topo, chao), cor:Lerp(BRANCO, 0.3), 0)
-			local tween = animar(flecha, 0.22, { CFrame = CFrame.lookAt(chao + Vector3.new(0, 0.8, 0), chao + Vector3.new(-3, -26, -3)) }, Enum.EasingStyle.Linear)
-			tween.Completed:Once(function()
-				particulas(chao + Vector3.new(0, 0.3, 0), { cor = Color3.fromRGB(200, 185, 160), quantidade = 3, tamanho = 0.3, velocidade = 6, vida = 0.25, luz = 0 })
-				sumir({ flecha }, 0.3, 0.3)
-			end)
-			task.wait(0.035)
-		end
-	end)
-end
 
-function Vfx.julgamento(dados)
-	local pos, raio, cor = dados.pos, dados.raio, Color3.fromRGB(255, 220, 120)
-	local coluna = parte(Vector3.new(60, 6, 6), CFrame.new(pos + Vector3.new(0, 60, 0)) * EM_PE, cor, 0.1, Enum.PartType.Cylinder)
-	animar(coluna, 0.3, { CFrame = CFrame.new(pos + Vector3.new(0, 30, 0)) * EM_PE }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	task.delay(0.3, function()
-		animar(coluna, 0.5, { Size = Vector3.new(60, 0.5, 0.5), Transparency = 1 })
-		Debris:AddItem(coluna, 0.55)
-		for i = 0, 2 do
-			task.delay(i * 0.12, function()
-				local onda = disco(pos + Vector3.new(0, 0.25, 0), 3, if i == 0 then BRANCO else dados.cor or cor, 0.15)
-				animar(onda, 0.5, { Size = Vector3.new(0.15, raio * 2.2, raio * 2.2), Transparency = 1 })
-				Debris:AddItem(onda, 0.55)
-			end)
-		end
-		particulas(pos + Vector3.new(0, 1, 0), { cor = BRANCO, cor2 = cor, quantidade = 50, tamanho = 1, velocidade = 45, vida = 0.8, gravidade = 25 })
-		clarao(pos, cor, raio * 4, 0.6, 8)
-		Vfx.tremerEm(pos, 3.5, 0.5)
-	end)
-end
 
 local function zigueZague(de: Vector3, ate: Vector3, cor: Color3, espessura: number, desvio: number, segmentos: number)
 	local pontos = { de }
@@ -665,17 +859,6 @@ function Vfx.raio(dados)
 	clarao(dados.ate, Color3.fromRGB(255, 240, 120), 12, 0.2, 3)
 end
 
-function Vfx.raioCeu(dados)
-	local cor = dados.cor or Color3.fromRGB(200, 150, 255)
-	zigueZague(dados.pos + Vector3.new(math.random(-3, 3), 45, math.random(-3, 3)), dados.pos, cor:Lerp(BRANCO, 0.5), 0.6, 4, 7)
-	zigueZague(dados.pos + Vector3.new(0, 45, 0), dados.pos, cor, 1.4, 3, 6)
-	local onda = disco(dados.pos + Vector3.new(0, 0.2, 0), 1, cor, 0.2)
-	animar(onda, 0.3, { Size = Vector3.new(0.15, 10, 10), Transparency = 1 })
-	Debris:AddItem(onda, 0.35)
-	particulas(dados.pos + Vector3.new(0, 0.5, 0), { cor = BRANCO, cor2 = cor, quantidade = 12, velocidade = 20, vida = 0.35 })
-	clarao(dados.pos, cor, 22, 0.25, 6)
-	Vfx.tremerEm(dados.pos, 0.6, 0.15)
-end
 
 function Vfx.teleporte(dados)
 	local cor = Color3.fromRGB(130, 80, 220)
@@ -853,10 +1036,63 @@ local function textoFlutuante(posicao: Vector3, texto: string, cor: Color3, tama
 	Debris:AddItem(a, 0.85)
 end
 
+-- Respingo de sangue: gotas que caem e mancham o chão (golpes do Assassino)
+local function respingoDeSangue(posicao: Vector3, forca: number, soGotas: boolean?)
+	local sangue = Color3.fromRGB(150, 0, 15)
+	if soGotas then
+		particulas(posicao, { cor = sangue, quantidade = 3, tamanho = 0.25, velocidade = 4, vida = 0.5, gravidade = 50, luz = 0 })
+		return
+	end
+	particulas(posicao + Vector3.new(0, 0.5, 0), {
+		cor = Color3.fromRGB(200, 20, 30),
+		cor2 = sangue,
+		quantidade = math.floor(10 * forca),
+		tamanho = 0.35 * forca,
+		velocidade = 14 * forca,
+		vida = 0.5,
+		gravidade = 60,
+		luz = 0,
+		espalhar = Vector2.new(60, 60),
+	})
+	-- mancha no chão que some devagar
+	if math.random() < 0.6 then
+		-- procura o chão logo abaixo
+		local parametros = RaycastParams.new()
+		parametros.FilterType = Enum.RaycastFilterType.Exclude
+		local ignorar: { Instance } = { pasta }
+		local visuais = workspace:FindFirstChild("InimigosVisuais")
+		if visuais then
+			table.insert(ignorar, visuais)
+		end
+		for _, player in Players:GetPlayers() do
+			if player.Character then
+				table.insert(ignorar, player.Character)
+			end
+		end
+		parametros.FilterDescendantsInstances = ignorar
+		local acerto = workspace:Raycast(posicao, Vector3.new(0, -15, 0), parametros)
+		if not acerto then
+			return
+		end
+		local tamanho = (1.2 + math.random() * 1.5) * forca
+		local chao = acerto.Position + Vector3.new(math.random() - 0.5, 0.04, math.random() - 0.5)
+		local mancha = disco(chao, tamanho, sangue, 0.25, 0.05)
+		mancha.Material = Enum.Material.SmoothPlastic
+		sumir({ mancha }, 1.5, 2.5)
+	end
+end
+
 function Vfx.dano(dados)
 	local critico = dados.critico
+	-- cada acerto seu dá um tranco leve na câmera (sensação de impacto)
+	if dados.autor == jogador and not critico then
+		Vfx.tremer(0.18, 0.05)
+	end
 	local cor = dados.cor or (if critico then Color3.fromRGB(255, 214, 70) else Color3.fromRGB(255, 250, 240))
 	textoFlutuante(dados.pos, if critico then dados.valor .. "!" else tostring(dados.valor), cor, if critico then 46 else 30, { pop = if critico then 2.2 else 1.5 })
+	if dados.sangue and dados.impacto then
+		respingoDeSangue(dados.impacto, if critico then 1.6 else 1, dados.sangue == "gota")
+	end
 	if dados.impacto then
 		particulas(dados.impacto, {
 			cor = if critico then Color3.fromRGB(255, 230, 120) else Color3.fromRGB(255, 240, 220),
@@ -1046,6 +1282,27 @@ function Vfx.passoSombrio(dados)
 	local cor = dados.cor
 	fumaca(de, cor, if dados.leve then 6 else 12)
 	fumaca(ate, cor, if dados.leve then 4 else 8)
+	-- silhueta escura que fica onde o Assassino estava
+	local raiz = raizDoJogador(dados.jogador)
+	local personagem = raiz and raiz.Parent
+	if personagem then
+		local deslocamento = de - ate
+		for _, peca in personagem:GetChildren() do
+			if peca:IsA("BasePart") and peca.Name ~= "HumanoidRootPart" and peca.Transparency < 1 then
+				local sombra = parte(peca.Size, peca.CFrame + deslocamento, Color3.fromRGB(40, 0, 20), 0.35, nil, Enum.Material.Neon)
+				animar(sombra, 0.4, { Transparency = 1 })
+				Debris:AddItem(sombra, 0.45)
+			end
+		end
+	end
+	-- corte em X vermelho onde ele aparece
+	local frente = Vector3.new(ate.X - de.X, 0, ate.Z - de.Z)
+	frente = if frente.Magnitude > 0.1 then frente.Unit else Vector3.new(0, 0, -1)
+	local origemX = CFrame.lookAt(ate, ate + frente)
+	arcoDeCorte(origemX * CFrame.Angles(0, 0, math.rad(45)), 3.2, 140, cor, { espessura = 1.1, duracao = 0.12 })
+	task.delay(0.05, function()
+		arcoDeCorte(origemX * CFrame.Angles(0, 0, math.rad(-45)), 3.2, 140, cor, { espessura = 1.1, duracao = 0.12, reverso = true })
+	end)
 	local distancia = (ate - de).Magnitude
 	if distancia > 1 then
 		local risco = parte(Vector3.new(0.35, 0.35, distancia), CFrame.lookAt((de + ate) / 2, ate), cor, 0.2, nil, Enum.Material.Neon)
@@ -1110,6 +1367,35 @@ function Vfx.zonaFogo(dados)
 	end)
 	sumir({ base }, 0.4, dados.duracao)
 	Debris:AddItem(area, dados.duracao + 1)
+end
+
+-- Escudo do Cavaleiro bloqueou um golpe: faíscas no escudo. Defesa perfeita: clarão dourado.
+function Vfx.defesa(dados)
+	local pos = dados.pos + Vector3.new(0, 0.6, 0)
+	local dir = dados.dir or Vector3.new(0, 0, -1)
+	local cor = if dados.perfeita then Color3.fromRGB(255, 214, 90) else Color3.fromRGB(150, 200, 255)
+	-- anel que sai do escudo para a frente
+	local anelEscudo = parte(Vector3.new(0.2, 2.5, 2.5), CFrame.lookAt(pos, pos + dir) * CFrame.Angles(0, math.rad(90), 0), cor, 0.2, Enum.PartType.Cylinder)
+	animar(anelEscudo, 0.25, { Size = Vector3.new(0.05, if dados.perfeita then 9 else 5, if dados.perfeita then 9 else 5), Transparency = 1 })
+	Debris:AddItem(anelEscudo, 0.3)
+	particulas(pos, {
+		cor = BRANCO,
+		cor2 = cor,
+		quantidade = if dados.perfeita then 26 else 12,
+		tamanho = 0.3,
+		velocidade = if dados.perfeita then 32 else 20,
+		vida = 0.3,
+		gravidade = 30,
+		espalhar = Vector2.new(70, 70),
+	})
+	clarao(pos, cor, if dados.perfeita then 22 else 12, 0.2, if dados.perfeita then 6 else 3)
+	if dados.perfeita then
+		local raiz = raizDoJogador(dados.jogador)
+		textoFlutuante((if raiz then raiz.Position else pos) + Vector3.new(0, 3.5, 0), "DEFESA PERFEITA!", cor, 34, { pop = 2 })
+	end
+	if dados.jogador == jogador then
+		Vfx.tremer(if dados.perfeita then 0.9 else 0.45, 0.12)
+	end
 end
 
 -- Escudo ganho com o Julgamento do Cavaleiro
@@ -1236,6 +1522,363 @@ end
 function Vfx.estouro(posicao: Vector3, cor: Color3, quantidade: number, velocidade: number)
 	particulas(posicao, { cor = cor:Lerp(BRANCO, 0.3), cor2 = cor, quantidade = quantidade, tamanho = 0.7, velocidade = velocidade, vida = 0.6, gravidade = 20 })
 	clarao(posicao, cor, 16, 0.3, 3)
+end
+
+
+------------------------------------------------------------------------
+-- Habilidades e supremos com efeitos elaborados
+------------------------------------------------------------------------
+
+-- Peças que giram em volta de um centro (anéis de vento, detritos...) até "duracao" acabar.
+-- cada item: { parte, raio, altura, velocidade, fase, inclinacao }
+local function orbitar(centroFn: () -> Vector3?, itens, duracao: number, aoTerminar: (() -> ())?)
+	local inicio = os.clock()
+	local conexao
+	conexao = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - inicio
+		local centro = centroFn()
+		if t > duracao or not centro then
+			conexao:Disconnect()
+			for _, item in itens do
+				animar(item.parte, 0.25, { Transparency = 1 })
+				Debris:AddItem(item.parte, 0.3)
+			end
+			if aoTerminar then
+				aoTerminar()
+			end
+			return
+		end
+		for _, item in itens do
+			local a = item.fase + t * item.velocidade
+			if item.anel then
+				-- anel deitado girando no próprio eixo, levemente inclinado
+				item.parte.CFrame = CFrame.new(centro + Vector3.new(0, item.altura, 0)) * CFrame.Angles(0, a, 0) * CFrame.Angles(item.inclinacao or 0, 0, 0) * EM_PE
+			else
+				item.parte.CFrame = CFrame.new(centro + Vector3.new(math.cos(a) * item.raio, item.altura + math.sin(t * 6 + item.fase) * 0.4, math.sin(a) * item.raio)) * CFrame.Angles(a, a * 1.3, 0)
+			end
+		end
+	end)
+end
+
+-- Redemoinho: tornado de vento em volta do Cavaleiro, com arcos de espada, poeira e
+-- pedrinhas girando
+function Vfx.redemoinho(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	local cor = if dados.fogo then FOGO else dados.cor
+	local raio = dados.raio
+	-- arcos da espada (dois, girando)
+	local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
+	local b0, b1 = Instance.new("Attachment"), Instance.new("Attachment")
+	for _, a in { a0, a1, b0, b1 } do
+		a.Parent = terreno
+	end
+	local feixesA = { novoFeixe(a0, a1, cor:Lerp(BRANCO, 0.5), 0.8), novoFeixe(a0, a1, cor, 2.6) }
+	local feixesB = { novoFeixe(b0, b1, cor:Lerp(BRANCO, 0.5), 0.8), novoFeixe(b0, b1, cor, 2.6) }
+	for i, feixe in { feixesA[1], feixesA[2], feixesB[1], feixesB[2] } do
+		feixe.Transparency = sequencia({ { 0, 1 }, { 0.5, if i % 2 == 1 then 0 else 0.5 }, { 1, 0.1 } })
+	end
+	-- tornado: anéis que alargam para cima, cada um girando numa velocidade
+	local itens = {}
+	for i = 0, 3 do
+		local largura = raio * (0.55 + i * 0.17) * 2
+		local anelVento = parte(Vector3.new(0.12, largura, largura), CFrame.new(), if i % 2 == 0 then BRANCO else cor, 0.55 + i * 0.08, Enum.PartType.Cylinder)
+		table.insert(itens, { parte = anelVento, anel = true, altura = -2 + i * 1.5, velocidade = 10 - i * 1.5, fase = i, inclinacao = math.rad(8 + i * 4) })
+	end
+	-- detritos girando
+	for i = 1, 8 do
+		local pedra = parte(Vector3.one * (0.3 + math.random() * 0.4), CFrame.new(), Color3.fromRGB(120, 110, 100), 0, nil, Enum.Material.Slate)
+		table.insert(itens, { parte = pedra, raio = raio * (0.5 + math.random() * 0.6), altura = -1.5 + math.random() * 4, velocidade = 7 + math.random() * 5, fase = i * 0.8 })
+	end
+	-- poeira no chão
+	local poeira = ancora(raiz.Position - Vector3.new(0, 2.6, 0))
+	local emissorPoeira = Instance.new("ParticleEmitter")
+	emissorPoeira.Color = ColorSequence.new(Color3.fromRGB(200, 185, 160))
+	emissorPoeira.LightInfluence = 1
+	emissorPoeira.Transparency = sequencia({ { 0, 0.4 }, { 1, 1 } })
+	emissorPoeira.Size = sequencia({ { 0, 1 }, { 1, 2.5 } })
+	emissorPoeira.Lifetime = NumberRange.new(0.5, 0.8)
+	emissorPoeira.Speed = NumberRange.new(10, 16)
+	emissorPoeira.SpreadAngle = Vector2.new(5, 180)
+	emissorPoeira.EmissionDirection = Enum.NormalId.Right
+	emissorPoeira.Rate = 50
+	emissorPoeira.Parent = poeira
+	local inicio = os.clock()
+	local conexao
+	conexao = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - inicio
+		if t > dados.duracao or not raiz.Parent then
+			conexao:Disconnect()
+			for _, a in { a0, a1, b0, b1 } do
+				a:Destroy()
+			end
+			emissorPoeira.Enabled = false
+			Debris:AddItem(poeira, 1)
+			return
+		end
+		local centro = CFrame.new(raiz.Position) * CFrame.Angles(0, -t * 14, 0)
+		posicionarArco(a0, a1, feixesA, centro, raio * 0.8, 150)
+		posicionarArco(b0, b1, feixesB, centro * CFrame.Angles(0, math.pi, 0), raio * 0.8, 150)
+		poeira.WorldCFrame = CFrame.new(raiz.Position - Vector3.new(0, 2.6, 0)) * CFrame.Angles(0, t * 9, 0)
+	end)
+	orbitar(function()
+		return if raiz.Parent then raiz.Position else nil
+	end, itens, dados.duracao)
+end
+
+-- Julgamento: uma espada de luz gigante cai do céu e crava no chão; o chão racha,
+-- pilares de luz sobem em volta e pedras voam
+function Vfx.julgamento(dados)
+	local pos, raio = dados.pos, dados.raio
+	local cor = Color3.fromRGB(255, 220, 120)
+	local corClasse = dados.cor or cor
+	local alto = pos + Vector3.new(0, 70, 0)
+	local lamina = parte(Vector3.new(1.6, 22, 0.5), CFrame.new(alto), cor:Lerp(BRANCO, 0.4), 0.05)
+	local guarda = parte(Vector3.new(7, 1, 1), CFrame.new(alto + Vector3.new(0, 11.5, 0)), cor, 0)
+	local cabo = parte(Vector3.new(0.9, 4, 0.9), CFrame.new(alto + Vector3.new(0, 14, 0)), corClasse, 0)
+	local aura = parte(Vector3.new(4, 26, 4), CFrame.new(alto + Vector3.new(0, 2, 0)), cor, 0.75, Enum.PartType.Ball)
+	luzEm(lamina, cor, 40, 4)
+	local partes = { lamina, guarda, cabo, aura }
+	local destino = pos + Vector3.new(0, 9, 0)
+	for _, p in partes do
+		animar(p, 0.32, { CFrame = p.CFrame - (alto - destino) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	end
+	task.delay(0.32, function()
+		sumir(partes, 0.5, 0.35)
+		-- ondas de choque
+		for i = 0, 2 do
+			task.delay(i * 0.12, function()
+				local onda = disco(pos + Vector3.new(0, 0.25, 0), 3, if i == 0 then BRANCO else corClasse, 0.15)
+				animar(onda, 0.5, { Size = Vector3.new(0.15, raio * 2.2, raio * 2.2), Transparency = 1 })
+				Debris:AddItem(onda, 0.55)
+			end)
+		end
+		-- rachaduras brilhantes saindo do centro
+		for i = 1, 10 do
+			local angulo = i / 10 * math.pi * 2 + math.random() * 0.3
+			local comprimento = raio * (0.6 + math.random() * 0.5)
+			local direcao = Vector3.new(math.cos(angulo), 0, math.sin(angulo))
+			local rachadura = parte(Vector3.new(0.35, 0.1, 0.1), CFrame.lookAt(pos + Vector3.new(0, 0.18, 0), pos + Vector3.new(0, 0.18, 0) + direcao), cor, 0)
+			animar(rachadura, 0.15, { Size = Vector3.new(0.35, 0.1, comprimento), CFrame = CFrame.lookAt(pos + direcao * comprimento / 2 + Vector3.new(0, 0.18, 0), pos + direcao * comprimento + Vector3.new(0, 0.18, 0)) })
+			sumir({ rachadura }, 0.8, 0.9)
+		end
+		-- pilares de luz em volta
+		for i = 1, 6 do
+			local angulo = i / 6 * math.pi * 2
+			local p = pos + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * raio * 0.75
+			task.delay(0.05 * i, function()
+				local pilar = parte(Vector3.new(1.4, 0.2, 1.4), CFrame.new(p), cor, 0.2)
+				animar(pilar, 0.2, { Size = Vector3.new(1, 18, 1), CFrame = CFrame.new(p + Vector3.new(0, 9, 0)) })
+				sumir({ pilar }, 0.4, 0.25)
+			end)
+		end
+		-- pedras voando
+		for _ = 1, 10 do
+			local pedra = parte(Vector3.one * (0.6 + math.random() * 0.8), CFrame.new(pos + Vector3.new(math.random(-3, 3), 0.8, math.random(-3, 3))), Color3.fromRGB(110, 100, 92), 0, nil, Enum.Material.Slate)
+			pedra.Anchored = false
+			pedra.AssemblyLinearVelocity = Vector3.new(math.random(-30, 30), math.random(25, 45), math.random(-30, 30))
+			pedra.AssemblyAngularVelocity = Vector3.new(math.random(-10, 10), math.random(-10, 10), math.random(-10, 10))
+			sumir({ pedra }, 0.4, 1.2)
+		end
+		particulas(pos + Vector3.new(0, 1, 0), { cor = BRANCO, cor2 = cor, quantidade = 50, tamanho = 1, velocidade = 45, vida = 0.8, gravidade = 25 })
+		clarao(pos, cor, raio * 4, 0.6, 8)
+		Vfx.tremerEm(pos, 3.5, 0.5)
+	end)
+end
+
+-- Meteoro: rocha em brasa girando, com fumaça e fogo, que cai e abre uma cratera
+function Vfx.meteoro(dados)
+	local alvo = dados.pos
+	local inicio = alvo + Vector3.new(-16, 55, -16)
+	local rocha = parte(Vector3.one * 3.2, CFrame.new(inicio), Color3.fromRGB(60, 40, 35), 0, Enum.PartType.Ball, Enum.Material.Basalt)
+	local brasa = parte(Vector3.one * 4.2, CFrame.new(inicio), FOGO, 0.45, Enum.PartType.Ball)
+	local fogo = Instance.new("Fire")
+	fogo.Size = 10
+	fogo.Heat = 0
+	fogo.Parent = rocha
+	emissorEm(rocha, {
+		Color = ColorSequence.new(Color3.fromRGB(80, 70, 70)),
+		LightEmission = 0,
+		Transparency = sequencia({ { 0, 0.3 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 2 }, { 1, 5 } }),
+		Lifetime = NumberRange.new(0.6, 1),
+		Speed = NumberRange.new(1, 3),
+		Rate = 40,
+	})
+	emissorEm(rocha, {
+		Color = ColorSequence.new(Color3.fromRGB(255, 220, 120), FOGO),
+		LightEmission = 1,
+		Size = sequencia({ { 0, 0.5 }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.3, 0.6),
+		Speed = NumberRange.new(4, 9),
+		SpreadAngle = Vector2.new(180, 180),
+		Rate = 50,
+	})
+	rastro(rocha, FOGO, 3, 0.5)
+	luzEm(rocha, FOGO, 30, 4)
+	local destino = alvo + Vector3.new(0, 1.5, 0)
+	animar(rocha, dados.duracao, { CFrame = CFrame.new(destino) * CFrame.Angles(6, 4, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	animar(brasa, dados.duracao, { CFrame = CFrame.new(destino) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	Debris:AddItem(rocha, dados.duracao + 0.05)
+	Debris:AddItem(brasa, dados.duracao + 0.05)
+	if dados.amigo then
+		local partes = anel(alvo + Vector3.new(0, 0.15, 0), dados.raio or 10, FOGO, 0.35, 24, 0.4)
+		sumir(partes, 0.2, dados.duracao)
+	end
+	task.delay(dados.duracao, function()
+		-- cratera: pedras que se erguem em volta do impacto
+		local raioCratera = (dados.raio or 10) * 0.55
+		for i = 1, 12 do
+			local angulo = i / 12 * math.pi * 2
+			local p = alvo + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * raioCratera
+			local bloco = parte(Vector3.new(1.6, 0.2, 1.2), CFrame.lookAt(p, alvo) * CFrame.Angles(math.rad(-35), 0, 0), Color3.fromRGB(70, 55, 50), 0, nil, Enum.Material.Basalt)
+			animar(bloco, 0.12, { Size = Vector3.new(1.6, 2.2, 1.2) }, Enum.EasingStyle.Back)
+			sumir({ bloco }, 0.6, 2.4)
+		end
+		-- coluna de fogo
+		local coluna = parte(Vector3.new(3, 1, 3), CFrame.new(alvo), Color3.fromRGB(255, 200, 90), 0.1, Enum.PartType.Ball)
+		animar(coluna, 0.3, { Size = Vector3.new(5, 16, 5), CFrame = CFrame.new(alvo + Vector3.new(0, 7, 0)), Transparency = 1, Color = FOGO })
+		Debris:AddItem(coluna, 0.35)
+		for _ = 1, 8 do
+			local pedaco = parte(Vector3.one * (0.5 + math.random() * 0.6), CFrame.new(alvo + Vector3.new(0, 1, 0)), Color3.fromRGB(255, 120, 40), 0, nil, Enum.Material.Neon)
+			pedaco.Anchored = false
+			pedaco.AssemblyLinearVelocity = Vector3.new(math.random(-25, 25), math.random(25, 45), math.random(-25, 25))
+			sumir({ pedaco }, 0.3, 0.9)
+		end
+	end)
+end
+
+-- Tempestade Arcana: nuvem escura sobre o Mago enquanto os raios caem
+local function nuvemDeTempestade(raiz: BasePart, cor: Color3, duracao: number)
+	local centro = raiz.Position + Vector3.new(0, 34, 0)
+	-- peça invisível e achatada: a fumaça escura nasce em toda a área dela
+	local nuvem = parte(Vector3.new(60, 8, 60), CFrame.new(centro), Color3.fromRGB(40, 30, 60), 1)
+	emissorEm(nuvem, {
+		Color = ColorSequence.new(Color3.fromRGB(50, 40, 70), Color3.fromRGB(30, 25, 45)),
+		LightEmission = 0,
+		Transparency = sequencia({ { 0, 1 }, { 0.3, 0.35 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 10 }, { 1, 16 } }),
+		Lifetime = NumberRange.new(2, 3),
+		Speed = NumberRange.new(0.5, 2),
+		Rotation = NumberRange.new(0, 360),
+		RotSpeed = NumberRange.new(-20, 20),
+		Shape = Enum.ParticleEmitterShape.Box,
+		Rate = 30,
+	})
+	emissorEm(nuvem, {
+		Color = ColorSequence.new(cor:Lerp(BRANCO, 0.5)),
+		LightEmission = 1,
+		Transparency = sequencia({ { 0, 0.2 }, { 1, 1 } }),
+		Size = sequencia({ { 0, 6 }, { 1, 0 } }),
+		Lifetime = NumberRange.new(0.08, 0.15),
+		Shape = Enum.ParticleEmitterShape.Box,
+		Rate = 6,
+	})
+	task.delay(duracao, function()
+		for _, e in nuvem:GetChildren() do
+			if e:IsA("ParticleEmitter") then
+				e.Enabled = false
+			end
+		end
+		Debris:AddItem(nuvem, 3.5)
+	end)
+end
+
+-- Raio que vem do céu, com galhos que se abrem e marca queimada no chão
+function Vfx.raioCeu(dados)
+	local cor = dados.cor or Color3.fromRGB(200, 150, 255)
+	local topo = dados.pos + Vector3.new(math.random(-3, 3), 34, math.random(-3, 3))
+	zigueZague(topo, dados.pos, cor:Lerp(BRANCO, 0.6), 0.6, 4, 8)
+	zigueZague(topo, dados.pos, cor, 1.5, 3, 6)
+	-- galhos
+	for _ = 1, 2 do
+		local meio = topo:Lerp(dados.pos, 0.3 + math.random() * 0.4)
+		zigueZague(meio, meio + Vector3.new(math.random(-8, 8), -math.random(4, 9), math.random(-8, 8)), cor, 0.35, 2, 4)
+	end
+	local onda = disco(dados.pos + Vector3.new(0, 0.2, 0), 1, cor, 0.2)
+	animar(onda, 0.3, { Size = Vector3.new(0.15, 10, 10), Transparency = 1 })
+	Debris:AddItem(onda, 0.35)
+	local marca = disco(dados.pos + Vector3.new(0, 0.08, 0), 4, Color3.fromRGB(25, 20, 30), 0.3, 0.05)
+	marca.Material = Enum.Material.SmoothPlastic
+	sumir({ marca }, 1, 1.5)
+	particulas(dados.pos + Vector3.new(0, 0.5, 0), { cor = BRANCO, cor2 = cor, quantidade = 14, velocidade = 22, vida = 0.35 })
+	clarao(dados.pos, cor, 24, 0.25, 7)
+	Vfx.tremerEm(dados.pos, 0.6, 0.15)
+end
+
+-- Chuva de Flechas: um círculo mágico abre no céu e despeja flechas com rastro
+function Vfx.chuvaFlechas(dados)
+	local centro, raio, duracao, cor = dados.pos, dados.raio, dados.duracao, dados.cor
+	local partes = anel(centro + Vector3.new(0, 0.15, 0), raio, cor, 0.35, 28, 0.45)
+	local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
+	table.insert(partes, fundo)
+	sumir(partes, 0.4, duracao)
+	-- portal no céu
+	local ceu = centro + Vector3.new(4, 24, 4)
+	local portal = disco(ceu, 0.5, cor:Lerp(BRANCO, 0.3), 0.3)
+	animar(portal, 0.3, { Size = Vector3.new(0.2, raio * 2.2, raio * 2.2) }, Enum.EasingStyle.Back)
+	local runas = anel(ceu, raio * 1.15, cor, 0.2, 20, 0.3)
+	sumir(runas, 0.4, duracao)
+	orbitar(function()
+		return ceu
+	end, { { parte = portal, anel = true, altura = 0, velocidade = 2, fase = 0 } }, duracao)
+	task.spawn(function()
+		local fim = os.clock() + duracao
+		while os.clock() < fim do
+			local angulo = math.random() * math.pi * 2
+			local distancia = math.sqrt(math.random()) * raio
+			local chao = centro + Vector3.new(math.cos(angulo) * distancia, 0, math.sin(angulo) * distancia)
+			local topo = ceu + Vector3.new(math.cos(angulo) * distancia * 0.8, 0, math.sin(angulo) * distancia * 0.8)
+			local flecha = parte(Vector3.new(0.15, 0.15, 2.4), CFrame.lookAt(topo, chao), cor:Lerp(BRANCO, 0.3), 0)
+			rastro(flecha, cor, 0.25, 0.12)
+			local tween = animar(flecha, 0.22, { CFrame = CFrame.lookAt(chao + Vector3.new(0, 0.8, 0), chao + (chao - topo).Unit) }, Enum.EasingStyle.Linear)
+			tween.Completed:Once(function()
+				particulas(chao + Vector3.new(0, 0.3, 0), { cor = Color3.fromRGB(200, 185, 160), cor2 = cor, quantidade = 4, tamanho = 0.3, velocidade = 7, vida = 0.25, luz = 0 })
+				sumir({ flecha }, 0.3, 0.5)
+			end)
+			task.wait(0.035)
+		end
+	end)
+end
+
+-- Saraivada: vendaval verde girando em volta do Arqueiro enquanto ele atira
+local function vendaval(raiz: BasePart, cor: Color3, duracao: number)
+	local itens = {}
+	for i = 0, 2 do
+		local largura = 6 + i * 2.5
+		local anelVento = parte(Vector3.new(0.12, largura, largura), CFrame.new(), if i == 1 then BRANCO else cor, 0.5, Enum.PartType.Cylinder)
+		table.insert(itens, { parte = anelVento, anel = true, altura = -1.5 + i * 1.6, velocidade = 12 - i * 3, fase = i, inclinacao = math.rad(12 * (i - 1)) })
+	end
+	for i = 1, 6 do
+		local folha = parte(Vector3.new(0.4, 0.1, 0.7), CFrame.new(), cor, 0.1)
+		table.insert(itens, { parte = folha, raio = 3.5 + math.random() * 2, altura = -1 + math.random() * 3, velocidade = 9 + math.random() * 4, fase = i })
+	end
+	orbitar(function()
+		return if raiz.Parent then raiz.Position else nil
+	end, itens, duracao)
+end
+
+-- Ao usar um supremo: nome no ar + onda; Tempestade e Saraivada ganham efeitos que duram
+local supremoBase = Vfx.supremo
+function Vfx.supremo(dados)
+	supremoBase(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	if dados.nome == "Tempestade Arcana" then
+		nuvemDeTempestade(raiz, dados.cor, 5)
+	elseif dados.nome == "Saraivada" then
+		vendaval(raiz, dados.cor, 4)
+	elseif dados.nome == "Lâminas da Noite" then
+		-- uma lua vermelha aparece no alto
+		local lua = parte(Vector3.one * 6, CFrame.new(raiz.Position + Vector3.new(0, 30, 0)), Color3.fromRGB(255, 70, 90), 0.2, Enum.PartType.Ball)
+		luzEm(lua, Color3.fromRGB(255, 60, 80), 60, 2)
+		animar(lua, 0.5, { Size = Vector3.one * 12 }, Enum.EasingStyle.Back)
+		sumir({ lua }, 0.6, 3)
+	end
 end
 
 ------------------------------------------------------------------------

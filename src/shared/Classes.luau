@@ -39,6 +39,7 @@ Classes.dados = {
 			tipo = "corte",
 			arco = 140,
 			combo = { 1, 1.1, 1.9 }, -- o terceiro golpe é o finalizador
+			impacto = { 0.13, 0.13, 0.27 }, -- quando a lâmina chega no alvo em cada golpe (segundos)
 			nome = "Combo de Espada",
 			icone = "⚔️",
 		},
@@ -64,8 +65,8 @@ Classes.dados = {
 		icone = "🔮",
 		cor = Color3.fromRGB(180, 96, 255),
 		descricao = "Ataca de longe com orbes que explodem e controla o campo com fogo e raios.",
-		forte = "Enorme dano em área e controle de grupos",
-		fraco = "Pouquíssima vida e ataque lento",
+		forte = "Enorme dano em área, magias de fogo, gelo e arcano",
+		fraco = "Pouca vida, ataque lento e depende de mana",
 		notas = { Vida = 1, Dano = 5, Alcance = 4, Velocidade = 2 },
 
 		vida = 80,
@@ -74,6 +75,10 @@ Classes.dados = {
 		intervalo = 0.52,
 		alcance = 50,
 		armadura = 0,
+		-- Mana: toda magia gasta mana, que volta sozinha com o tempo
+		mana = 100,
+		manaRegen = 14, -- por segundo
+		custos = { ataque = 7, final = 14, carregado = 22, habilidade = 30 },
 
 		ataque = {
 			tipo = "projetil",
@@ -82,7 +87,8 @@ Classes.dados = {
 			raio = 1.3,
 			explosao = 4,
 			combo = { 1, 1, 1.7 },
-			nome = "Orbe Arcano",
+			impacto = { 0.15, 0.15, 0.28 },
+			nome = "Dardo, Gelo e Fogo",
 			icone = "✨",
 		},
 		habilidade = {
@@ -112,9 +118,9 @@ Classes.dados = {
 		notas = { Vida = 3, Dano = 3, Alcance = 5, Velocidade = 4 },
 
 		vida = 100,
-		dano = 15,
+		dano = 22, -- cada tiro tira a flecha da aljava: mais lento, mas mais forte
 		velocidade = 20,
-		intervalo = 0.32,
+		intervalo = 0.5,
 		alcance = 60,
 		armadura = 0,
 		critico = 0.05,
@@ -126,6 +132,7 @@ Classes.dados = {
 			raio = 0.9,
 			explosao = 0,
 			combo = { 1, 1, 2 },
+			impacto = { 0.26, 0.26, 0.34 },
 			nome = "Flechada",
 			icone = "🎯",
 		},
@@ -150,17 +157,19 @@ Classes.dados = {
 		titulo = "A Lâmina na Sombra",
 		icone = "🗡️",
 		cor = Color3.fromRGB(235, 60, 90),
-		descricao = "Duas adagas, muitos críticos e golpes pelas costas. Some e reaparece atrás do alvo.",
-		forte = "Mata um alvo de cada vez, críticos e esquiva rápida",
-		fraco = "Pouca vida, alcance curtíssimo, quase nada de área",
-		notas = { Vida = 2, Dano = 5, Alcance = 1, Velocidade = 5 },
+		descricao = "Duas adagas que fazem sangrar, muitos críticos e golpes pelas costas.",
+		forte = "Sangramento, críticos, o mais rápido de todos",
+		fraco = "Defesa baixa: leva 15% a mais de dano; pouca vida",
+		notas = { Vida = 1, Dano = 5, Alcance = 1, Velocidade = 5 },
 
 		vida = 85,
 		dano = 15,
-		velocidade = 21,
+		velocidade = 23,
 		intervalo = 0.26,
 		alcance = 7.5,
-		armadura = 0,
+		armadura = -0.15, -- defesa baixa: leva mais dano
+		-- cada golpe abre um corte: o inimigo sangra (acumula até maxPilhas vezes)
+		sangramento = { dps = 0.14, duracao = 4, maxPilhas = 5 },
 		critico = 0.15,
 		esquivaMult = 0.7,
 		ameacaMult = 0.6,
@@ -169,6 +178,7 @@ Classes.dados = {
 			tipo = "corte",
 			arco = 95,
 			combo = { 1, 1, 2.4 },
+			impacto = { 0.09, 0.09, 0.2 },
 			costas = 0.5, -- +50% de dano acertando o inimigo pelas costas
 			nome = "Dança das Adagas",
 			icone = "🗡️",

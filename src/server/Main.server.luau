@@ -60,7 +60,7 @@ game:BindToClose(function()
 	Dados.salvarTodos()
 end)
 
-local ACOES_DE_COMBATE = { atacar = true, carregar = true, soltar = true, cancelar = true, habilidade = true, esquiva = true, supremo = true }
+local ACOES_DE_COMBATE = { atacar = true, carregar = true, soltar = true, cancelar = true, defender = true, habilidade = true, esquiva = true, supremo = true }
 
 Remotos.Acao.OnServerEvent:Connect(function(player, tipo, dados, extra)
 	if type(tipo) ~= "string" then

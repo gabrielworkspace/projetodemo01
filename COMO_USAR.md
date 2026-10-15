@@ -21,23 +21,30 @@ Tudo é criado por código quando o jogo começa (terreno, salas, monstros, inte
 | Habilidade | E | Botão de cima | X |
 | Esquiva | Q | Botão 💨 | B |
 | Supremo | R (com a barra dourada cheia) | Botão do topo | Y |
+| Defender com o escudo (Cavaleiro) | Segurar F ou o botão direito | Segurar 🛡️ | Segurar L2 |
 
 ## As classes
 
 | Classe | Estilo | Ponto forte | Ponto fraco | Habilidade (E) | Supremo (R) |
 |---|---|---|---|---|---|
-| 🛡️ Cavaleiro | Corpo a corpo, tanque, atrai os inimigos | Muita vida e armadura, protege o grupo | Lento, esquiva demora mais, só bate de perto | Redemoinho (puxa os inimigos e recebe 40% menos dano) | Julgamento (atordoa e dá escudo aos aliados) |
-| 🔮 Mago | Orbes que explodem | Dano em área e controle | Pouquíssima vida, ataque lento | Meteoro (deixa o chão em chamas) | Tempestade Arcana (raios que deixam lento) |
-| 🏹 Arqueiro | Atira de longe sem parar | Maior alcance, muito ágil | Flechas perdem força em inimigos colados | Chuva de Flechas (salta para trás antes) | Saraivada (corre 30% mais rápido) |
-| 🗡️ Assassino | Duas adagas, críticos, golpes pelas costas | Mata um alvo por vez, esquiva rápida | Pouca vida, alcance curtíssimo, quase sem área | Passo Sombrio (aparece atrás do alvo com crítico garantido) | Lâminas da Noite (intocável, salta entre até 10 inimigos) |
+| 🛡️ Cavaleiro | Espada e escudo, tanque, atrai os inimigos | Muita vida e armadura, defende com o escudo | Lento, esquiva demora mais, só bate de perto | Redemoinho (tornado que puxa os inimigos; recebe 40% menos dano) | Julgamento (espada de luz do céu: atordoa e dá escudo aos aliados) |
+| 🔮 Mago | Cajado e magias diferentes a cada golpe | Dano em área, fogo, gelo e arcano | Pouca vida, ataque lento, depende de mana | Meteoro (gasta mana; deixa o chão em chamas) | Tempestade Arcana (nuvem com raios que deixam lento) |
+| 🏹 Arqueiro | Tira cada flecha da aljava e atira de longe | Maior alcance, muito ágil, flechas fortes | Flechas perdem força em inimigos colados | Chuva de Flechas (salta para trás antes) | Saraivada (vendaval em volta; corre 30% mais rápido) |
+| 🗡️ Assassino | Duas adagas, sangramento, golpes pelas costas | O mais rápido, críticos, faz sangrar | Defesa baixa (leva 15% a mais de dano), pouca vida | Passo Sombrio (aparece atrás do alvo com crítico garantido) | Lâminas da Noite (intocável, salta entre até 10 inimigos) |
 
-**Golpe carregado** (segure o ataque e solte): Cavaleiro gira a espada, Mago lança um orbe gigante, Arqueiro dispara uma flecha perfurante e Assassino avança cortando tudo numa linha (Investida Letal).
+**Escudo (Cavaleiro):** segurando a defesa, golpes vindos da frente perdem 75% do dano. Erguendo o escudo logo antes do golpe (até 0,3s), é uma **defesa perfeita**: não leva dano nenhum e atordoa quem atacou. Com o escudo erguido o Cavaleiro anda devagar e não ataca.
+
+**Mana (Mago):** toda magia gasta mana, que volta sozinha com o tempo e enche ao entrar numa sala nova. O combo é Dardo Arcano → Lança de Gelo (deixa lento) → Bola de Fogo (explode e queima), e o golpe carregado é o Orbe do Vazio, que puxa os inimigos enquanto voa. Cartas como Fonte Arcana, Reservatório Arcano, Sifão de Almas e Mente Serena ajudam na mana.
+
+**Sangramento (Assassino):** cada golpe abre um corte e o inimigo sangra por 4 segundos, acumulando até 5 vezes.
+
+**Golpe carregado** (segure o ataque e solte): Cavaleiro gira a espada, Mago lança o Orbe do Vazio, Arqueiro dispara uma flecha perfurante e Assassino avança cortando tudo numa linha (Investida Letal).
 
 **Pelas costas:** o Assassino causa +50% de dano acertando o inimigo por trás. Funciona muito bem junto com o Cavaleiro, que atrai a atenção.
 
 Cada classe também tem uma **pose própria** parada: o Cavaleiro em guarda, o Mago ereto conjurando luz, o Arqueiro relaxado olhando em volta e o Assassino agachado e inclinado.
 
-Cada classe tem **11 cartas próprias**, e existem **11 cartas universais**.
+Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de mana), e existem **11 cartas universais**.
 
 ## Mecânicas
 
@@ -63,7 +70,8 @@ Cada classe tem **11 cartas próprias**, e existem **11 cartas universais**.
 | `src/shared/Classes.luau` | Números das quatro classes |
 | `src/shared/Cartas.luau` | Cartas e seus efeitos |
 | `src/server/Inimigos.luau` | Vida, dano e ataques de inimigos e chefes |
-| `src/server/Combate.luau` | Combos, habilidades, supremos, esquiva, dano |
+| `src/server/Combate.luau` | Combos, habilidades, supremos, esquiva, escudo, mana, sangramento, dano |
+| `src/client/Poses.luau` | Poses e golpes de cada classe (quadros-chave das animações) |
 | `src/server/Masmorra.luau` | Construção e decoração das salas |
 | `src/server/Lobby.luau` | Acampamento, altares, portal, mercador |
 | `src/client/Modelos.luau` | **Aparência dos inimigos** (peças, cores, armas) |

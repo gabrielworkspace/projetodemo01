@@ -118,6 +118,9 @@ function Run:aoMorrerInimigo(inimigo, estadoMatador)
 		if stats.arquimago then
 			Combate.reduzirRecarga(estadoMatador, 1)
 		end
+		if stats.manaAbate > 0 then
+			Combate.ganharMana(estadoMatador, stats.manaAbate)
+		end
 		-- Carta Combustão: explosões em cadeia
 		if stats.explosaoMorte > 0 then
 			task.delay(0.12, function()
@@ -781,7 +784,7 @@ end
 -- No lobby os ataques são só para exibir a classe: os outros jogadores veem a animação
 local cargaNoLobby = {} -- [Player] = momento em que começou a carregar
 
-local function animacaoNoLobby(player: Player, tipo: string, extra: any)
+local function animacaoNoLobby(player: Player, tipo: string, extra: any, ativo: any)
 	local dados = { jogador = player, classe = player:GetAttribute("Classe") or "cavaleiro" }
 	if tipo == "atacar" then
 		dados.acao = "ataque"
@@ -802,6 +805,11 @@ local function animacaoNoLobby(player: Player, tipo: string, extra: any)
 		dados.acao = "cancelar"
 	elseif tipo == "esquiva" then
 		dados.acao = "esquiva"
+	elseif tipo == "defender" then
+		if dados.classe ~= "cavaleiro" then
+			return
+		end
+		dados.acao = if ativo == true then "defender" else "pararDefesa"
 	else
 		return
 	end
@@ -813,7 +821,7 @@ function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any, extra
 	local run = partidaDoJogador[player]
 	local estado = run and run.jogadores[player]
 	if not estado then
-		animacaoNoLobby(player, tipo, extra)
+		animacaoNoLobby(player, tipo, extra, direcao)
 		return
 	end
 	if tipo == "atacar" then
@@ -824,6 +832,8 @@ function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any, extra
 		Combate.soltar(run, estado, direcao)
 	elseif tipo == "cancelar" then
 		Combate.cancelarCarga(run, estado)
+	elseif tipo == "defender" then
+		Combate.defender(run, estado, direcao == true)
 	elseif tipo == "habilidade" then
 		Combate.habilidade(run, estado, direcao)
 	elseif tipo == "esquiva" then

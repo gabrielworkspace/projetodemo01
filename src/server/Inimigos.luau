@@ -509,8 +509,11 @@ local function ataqueDisparo(run, inimigo, ataque, alvo, agora: number): boolean
 				velocidade = ataque.velocidade or 45,
 				alcance = (ataque.alcance or 45) * 1.3,
 				raio = 1.1,
-				aoAcertar = function(estado)
-					Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoesDoEfeito(inimigo, ataque.efeito))
+				aoAcertar = function(estado, _, projetil)
+					-- o golpe vem de onde o projétil estava (para o escudo saber se foi de frente)
+					local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+					opcoes.origem = projetil.pos - projetil.dir * 4
+					Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
 				end,
 			})
 		end
@@ -550,8 +553,11 @@ local function ataqueRajada(run, inimigo, ataque, agora: number): boolean
 				velocidade = ataque.velocidade or 35,
 				alcance = 70,
 				raio = 1.2,
-				aoAcertar = function(estado)
-					Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoesDoEfeito(inimigo, ataque.efeito))
+				aoAcertar = function(estado, _, projetil)
+					-- o golpe vem de onde o projétil estava (para o escudo saber se foi de frente)
+					local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+					opcoes.origem = projetil.pos - projetil.dir * 4
+					Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
 				end,
 			})
 		end
@@ -724,7 +730,9 @@ local function ataqueArea(run, inimigo, ataque, agora: number): boolean
 				Vfx.partida(run, "impactoArea", { pos = ponto, raio = raio, visual = ataque.visual })
 				for _, info in jogadoresAtingiveis(run) do
 					if planar(info.raiz.Position - ponto).Magnitude <= raio + 1 then
-						Combate.danoAoJogador(run, info.estado, inimigo.dano * (ataque.mult or 1), nil, opcoesDoEfeito(inimigo, ataque.efeito))
+						local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+						opcoes.origem = ponto
+						Combate.danoAoJogador(run, info.estado, inimigo.dano * (ataque.mult or 1), nil, opcoes)
 					end
 				end
 			end)
@@ -1012,7 +1020,7 @@ function Inimigos.morrer(run, inimigo)
 			Vfx.partida(run, "explosao", { pos = chao, raio = raio, cor = Color3.fromRGB(255, 120, 40), forte = true })
 			for _, info in jogadoresAtingiveis(run) do
 				if planar(info.raiz.Position - chao).Magnitude <= raio + 1 then
-					Combate.danoAoJogador(run, info.estado, inimigo.dano * 1.5, nil, {})
+					Combate.danoAoJogador(run, info.estado, inimigo.dano * 1.5, nil, { origem = chao })
 				end
 			end
 		end)

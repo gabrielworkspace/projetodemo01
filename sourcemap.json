@@ -208,6 +208,13 @@
                   ]
                 },
                 {
+                  "name": "Poses",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Poses.luau"
+                  ]
+                },
+                {
                   "name": "UI",
                   "className": "ModuleScript",
                   "filePaths": [

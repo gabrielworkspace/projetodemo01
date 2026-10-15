@@ -4,6 +4,7 @@
 
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
@@ -322,7 +323,24 @@ local function atualizarVida(v)
 	local maxima = v.modelo:GetAttribute("VidaMax") or 1
 	if vida < v.vidaAnterior then
 		v.flashAte = os.clock() + 0.07
-		v.impacto = 1
+		-- recua para longe de quem bateu (o jogador mais perto); golpes pesados recuam mais
+		local perdido = (v.vidaAnterior - vida) / math.max(1, maxima)
+		v.impacto = math.min(1.8, v.impacto + (if perdido >= 0.12 then 1.8 else 1))
+		local pos = v.raiz.Position
+		local melhor, distancia = nil, 60
+		for _, player in Players:GetPlayers() do
+			local raizJogador = player.Character and player.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if raizJogador then
+				local d = (raizJogador.Position - pos).Magnitude
+				if d < distancia then
+					melhor, distancia = raizJogador, d
+				end
+			end
+		end
+		if melhor then
+			local fora = Vector3.new(pos.X - melhor.Position.X, 0, pos.Z - melhor.Position.Z)
+			v.recuo = if fora.Magnitude > 0.1 then fora.Unit else nil
+		end
 		if v.placa then
 			v.placa.Enabled = true
 		end
@@ -364,6 +382,26 @@ local function atualizarEstados(v)
 		e.Name = "Lento"
 	elseif not lento and gelo then
 		gelo:Destroy()
+	end
+
+	-- Sangrando (Assassino): gotas de sangue caindo, mais forte com mais cortes
+	local pilhas = modelo:GetAttribute("Sangrando") or 0
+	local gotas = ancora:FindFirstChild("Sangrando") :: ParticleEmitter?
+	if pilhas > 0 then
+		if not gotas then
+			gotas = emissor(ancora, Color3.fromRGB(150, 0, 15), {
+				LightEmission = 0,
+				Acceleration = Vector3.new(0, -40, 0),
+				Speed = NumberRange.new(1, 3),
+				Size = sequencia({ { 0, 0.22 * v.escala }, { 1, 0.12 * v.escala } }),
+				Lifetime = NumberRange.new(0.5, 0.8),
+				Shape = Enum.ParticleEmitterShape.Sphere,
+			});
+			(gotas :: ParticleEmitter).Name = "Sangrando"
+		end
+		(gotas :: ParticleEmitter).Rate = 8 + pilhas * 7
+	elseif gotas then
+		gotas:Destroy()
 	end
 
 	local atordoado = modelo:GetAttribute("Atordoado") == true
@@ -636,7 +674,7 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 		v.acao = ""
 	end
 	v.atordoado = v.estrelas ~= nil
-	v.impacto = math.max(0, v.impacto - dt * 6)
+	v.impacto = math.max(0, v.impacto - dt * 5)
 
 	local base = raizCF * CFrame.new(0, -v.alturaRaiz, 0)
 	if v.salto then
@@ -647,6 +685,12 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 			local p = v.salto.de:Lerp(v.salto.para, s) + Vector3.new(0, v.salto.altura * 4 * s * (1 - s), 0)
 			base = CFrame.new(p - Vector3.new(0, v.alturaRaiz, 0)) * raizCF.Rotation
 		end
+	end
+	-- recuo ao levar golpe: escorrega e inclina para longe de quem bateu
+	if v.recuo and v.impacto > 0.01 then
+		local forca = math.min(v.impacto, 1.8)
+		local eixo = Vector3.yAxis:Cross(v.recuo)
+		base = CFrame.new(base.Position + v.recuo * forca * 0.45 * v.escala) * CFrame.fromAxisAngle(eixo, forca * 0.2) * base.Rotation
 	end
 	local idade = agora - v.nascimento
 	if idade < 0.4 then
@@ -802,7 +846,7 @@ local function adicionar(modelo: Instance)
 		table.insert(v.conexoes, modelo:GetAttributeChangedSignal("Acao"):Connect(function()
 			atualizarAcao(v)
 		end))
-		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso" } do
+		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando" } do
 			table.insert(v.conexoes, modelo:GetAttributeChangedSignal(atributo):Connect(function()
 				atualizarEstados(v)
 			end))

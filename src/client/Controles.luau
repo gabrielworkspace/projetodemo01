@@ -1,6 +1,6 @@
 -- Controles: tocar para atacar (mira no mouse; no celular mira sozinha no inimigo mais próximo),
--- segurar para carregar e soltar para um golpe forte, habilidade (E), esquiva (Q), supremo (R)
--- e os botões de toque no celular.
+-- segurar para carregar e soltar para um golpe forte, habilidade (E), esquiva (Q), supremo (R),
+-- defesa com escudo do Cavaleiro (F / botão direito / L2) e os botões de toque no celular.
 
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
@@ -28,6 +28,7 @@ local segurandoAtaque = false
 local segurouEm = 0
 local carregando = false
 local cargaComecou = 0
+local defendendo = false
 local ultimoAtaque = 0
 local comboLocal = 0
 local ultimoFoiFinal = false
@@ -116,12 +117,28 @@ local function impulso(direcao: Vector3, velocidade: number, duracao: number)
 	Debris:AddItem(anexo, duracao)
 end
 
+-- Mago: tem mana para esta magia? (o servidor confere de novo; aqui é só para não animar à toa)
+local function temMana(tipoCusto: string): boolean
+	local stats = Estado.stats
+	if Estado.modo ~= "partida" or not stats or (stats.manaMax or 0) <= 0 then
+		return true
+	end
+	local custos = Classes.obter(stats.classe).custos
+	local custo = if custos then (custos[tipoCusto] or 0) * (stats.custoMana or 1) else 0
+	if Estado.mana < custo then
+		Estado.avisar("semMana")
+		return false
+	end
+	Estado.mana -= custo
+	return true
+end
+
 local function podeLutar(): boolean
 	return not Estado.caido and not Estado.morto and Estado.menusAbertos == 0
 end
 
 local function tentarAtacar()
-	if not podeLutar() then
+	if not podeLutar() or defendendo then
 		return
 	end
 	local raiz = personagem()
@@ -139,6 +156,10 @@ local function tentarAtacar()
 	if agora - ultimoAtaque > intervalo * 2.6 + 0.3 then
 		comboLocal = 0
 	end
+	if not temMana(if comboLocal % 3 + 1 == 3 then "final" else "ataque") then
+		ultimoAtaque = agora - intervalo * 0.5 -- não fica repetindo o aviso a cada quadro
+		return
+	end
 	comboLocal = comboLocal % 3 + 1
 	ultimoFoiFinal = comboLocal == 3
 	ultimoAtaque = agora
@@ -154,16 +175,24 @@ local function tentarAtacar()
 	if naPartida then
 		local classe = Classes.obter(stats.classe)
 		if classe.ataque.tipo == "corte" then
-			local final = comboLocal == 3
-			Vfx.corte({
-				jogador = jogador,
-				pos = raiz.Position,
-				dir = direcao,
-				alcance = stats.alcance * (if final then 1.15 else 1),
-				arco = stats.arco * (if final then 1.25 else 1),
-				cor = classe.cor,
-				combo = comboLocal,
-			})
+			-- o rastro do corte aparece quando a lâmina passa na frente (não no clique)
+			local combo = comboLocal
+			local final = combo == 3
+			task.delay(classe.ataque.impacto and classe.ataque.impacto[combo] or 0, function()
+				local raizAgora = personagem()
+				if not raizAgora then
+					return
+				end
+				Vfx.corte({
+					jogador = jogador,
+					pos = raizAgora.Position,
+					dir = direcao,
+					alcance = stats.alcance * (if final then 1.15 else 1),
+					arco = stats.arco * (if final then 1.25 else 1),
+					cor = classe.cor,
+					combo = combo,
+				})
+			end)
 		end
 	end
 end
@@ -173,6 +202,13 @@ end
 ------------------------------------------------------------------------
 
 local function comecarCarga()
+	local stats = Estado.stats
+	local custos = stats and Classes.obter(stats.classe).custos
+	if custos and Estado.modo == "partida" and Estado.mana < custos.carregado * (stats.custoMana or 1) then
+		Estado.avisar("semMana")
+		segurouEm = os.clock() + 999 -- só tenta de novo ao segurar outra vez
+		return
+	end
 	carregando = true
 	cargaComecou = os.clock()
 	Acao:FireServer("carregar")
@@ -237,6 +273,38 @@ local function soltarCarga()
 	end
 end
 
+------------------------------------------------------------------------
+-- Defesa com escudo (só o Cavaleiro)
+------------------------------------------------------------------------
+
+local function minhaClasse(): string
+	return if Estado.stats then Estado.stats.classe else Estado.perfil.classe
+end
+
+local function defender(ativo: boolean)
+	if ativo == defendendo then
+		return
+	end
+	if ativo then
+		if minhaClasse() ~= "cavaleiro" or not podeLutar() then
+			return
+		end
+		cancelarCarga()
+		defendendo = true
+		Acao:FireServer("defender", true)
+		if jogador.Character then
+			Animacoes.tocar(jogador.Character, "defender", nil)
+		end
+	else
+		defendendo = false
+		Acao:FireServer("defender", false)
+		if jogador.Character then
+			Animacoes.tocar(jogador.Character, "pararDefesa", nil)
+		end
+	end
+end
+Controles.defender = defender
+
 local function usarHabilidade()
 	if Estado.modo ~= "partida" or not podeLutar() then
 		return
@@ -244,6 +312,10 @@ local function usarHabilidade()
 	if os.clock() < Estado.habilidadeFim - 0.1 then
 		return
 	end
+	if not temMana("habilidade") then
+		return
+	end
+	defender(false)
 	local direcao = direcaoDaMira()
 	mirar(direcao)
 	Acao:FireServer("habilidade", direcao)
@@ -273,8 +345,9 @@ local function esquivar()
 	if agora < Estado.esquivaFim then
 		return
 	end
-	-- esquivar cancela a carga (segure de novo para recomeçar)
+	-- esquivar cancela a carga e abaixa o escudo (segure de novo para recomeçar)
 	cancelarCarga()
+	defender(false)
 	segurouEm = agora
 	local recarga = if Estado.stats then Estado.stats.recargaEsquiva else Config.ESQUIVA_RECARGA
 	Estado.esquivaFim = agora + recarga
@@ -330,6 +403,7 @@ end
 function Controles.pararAtaque()
 	segurandoAtaque = false
 	cancelarCarga()
+	defender(false)
 end
 
 -- Liga os botões de toque criados pelo HUD
@@ -356,6 +430,13 @@ function Controles.ligarBotoes(botoes)
 	aoTocar(botoes.habilidade, usarHabilidade)
 	aoTocar(botoes.esquiva, esquivar)
 	aoTocar(botoes.supremo, usarSupremo)
+	if botoes.defesa then
+		aoTocar(botoes.defesa, function()
+			defender(true)
+		end, function()
+			defender(false)
+		end)
+	end
 end
 
 function Controles.iniciar()
@@ -372,16 +453,29 @@ function Controles.iniciar()
 			esquivar()
 		elseif tecla == Enum.KeyCode.R or tecla == Enum.KeyCode.ButtonY then
 			usarSupremo()
+		elseif tecla == Enum.KeyCode.F or tecla == Enum.KeyCode.ButtonL2 or tipo == Enum.UserInputType.MouseButton2 then
+			defender(true)
 		end
 	end)
 	UserInputService.InputEnded:Connect(function(entrada)
 		if entrada.UserInputType == Enum.UserInputType.MouseButton1 or entrada.KeyCode == Enum.KeyCode.ButtonR2 then
 			Controles.segurarAtaque(false)
+		elseif entrada.KeyCode == Enum.KeyCode.F or entrada.KeyCode == Enum.KeyCode.ButtonL2 or entrada.UserInputType == Enum.UserInputType.MouseButton2 then
+			defender(false)
 		end
 	end)
 
 	RunService.Heartbeat:Connect(function()
 		local agora = os.clock()
+		if defendendo then
+			-- o escudo acompanha a mira (protege o lado para onde você aponta)
+			if not podeLutar() or minhaClasse() ~= "cavaleiro" then
+				defender(false)
+			else
+				direcaoAtual = direcaoDaMira()
+				mirandoAte = math.max(mirandoAte, agora + 0.1)
+			end
+		end
 		if carregando then
 			local _, humanoidAtual = personagem()
 			if not podeLutar() or not humanoidAtual or humanoidAtual.Health <= 0 then
@@ -390,7 +484,7 @@ function Controles.iniciar()
 				-- enquanto carrega, o corpo acompanha a mira
 				mirandoAte = math.max(mirandoAte, agora + 0.1)
 			end
-		elseif segurandoAtaque and agora - segurouEm >= Config.CARGA_ATAQUE_COMECA and podeLutar() and personagem() then
+		elseif segurandoAtaque and not defendendo and agora - segurouEm >= Config.CARGA_ATAQUE_COMECA and podeLutar() and personagem() then
 			comecarCarga()
 		end
 		local raiz, humanoid = personagem()

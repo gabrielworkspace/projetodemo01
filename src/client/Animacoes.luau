@@ -1,14 +1,7 @@
 -- Animações dos personagens feitas por código (não precisam de arquivos de animação).
---
--- Cada animação é uma lista de "quadros-chave": em cada tempo, o ângulo de algumas juntas
--- (ombro, cotovelo, cintura...). Entre os quadros, os ângulos são suavizados. A animação é
--- aplicada por cima da animação padrão do Roblox (andar, pular), então as pernas continuam
--- andando enquanto os braços atacam.
---
--- Ângulos em radianos, no espaço da peça "pai" (X = direita, Y = cima, Z = trás):
---   rx > 0 leva o braço/perna para FRENTE (1,57 = esticado para frente; 3,14 = para cima)
---   ry > 0 gira para a ESQUERDA (visto de cima)   rz > 0 abre o braço direito para o lado
---   no tronco, rx < 0 inclina para frente
+-- As poses e os golpes ficam em Poses.luau; aqui elas são aplicadas nas juntas do personagem,
+-- por cima da animação padrão do Roblox (andar, pular). Também cuida dos detalhes das armas
+-- (rastro da lâmina, corda e flecha do arco, brilho do cajado, partículas de carga).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,6 +12,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
 
 local Vfx = require(script.Parent.Vfx)
+local Poses = require(script.Parent.Poses)
 
 local Animacoes = {}
 
@@ -28,7 +22,6 @@ pasta.Name = "AnimacoesLocais"
 pasta.Parent = workspace
 
 local PESO_POSTURA = 0.75
-local ZERO = { 0, 0, 0, 0, 0, 0 }
 local OURO = Color3.fromRGB(255, 214, 90)
 
 -- Junta lógica -> { peça que contém o Motor6D, nome do Motor6D }
@@ -58,633 +51,15 @@ local JUNTAS_R6 = {
 	quadrilE = { "Torso", "Left Hip" },
 }
 
--- Ângulos (rx, ry, rz) e deslocamento (px, py, pz)
-local function A(rx: number?, ry: number?, rz: number?, px: number?, py: number?, pz: number?)
-	return { rx or 0, ry or 0, rz or 0, px or 0, py or 0, pz or 0 }
-end
-
-local function juntar(base, extra)
-	local resultado = table.clone(base)
-	for chave, valor in extra do
-		resultado[chave] = valor
-	end
-	return resultado
-end
-
-------------------------------------------------------------------------
--- Posturas (como cada classe segura a arma parada) e animações
-------------------------------------------------------------------------
-
--- Postura: vale sempre (andando ou parado) e mexe só da cintura para cima
-local POSTURAS = {
-	cavaleiro = { ombroD = A(0.35, 0, 0.12), cotoveloD = A(0.6), ombroE = A(0.55, 0.35, -0.1), cotoveloE = A(1.1), pescoco = A(-0.05) },
-	mago = { ombroD = A(0.25, 0, 0.1), cotoveloD = A(0.8), pulsoD = A(-1.05), ombroE = A(0.15, 0, -0.12), cintura = A(0.06) },
-	arqueiro = { ombroE = A(0.45, 0.2, -0.1), cotoveloE = A(0.3), ombroD = A(0.15, 0, 0.1) },
-	-- o Assassino anda sempre curvado, com as adagas baixas e à frente
-	assassino = {
-		cintura = A(-0.3),
-		pescoco = A(0.22),
-		ombroD = A(0.55, 0, 0.3),
-		cotoveloD = A(1.2),
-		pulsoD = A(-0.3),
-		ombroE = A(0.75, 0.25, -0.3),
-		cotoveloE = A(1.35),
-		pulsoE = A(-0.3),
-	},
-}
-
--- Pose parada: o corpo todo, só quando o personagem está quase sem se mexer.
--- "t" é o tempo em segundos (para respirar e balançar de leve).
-local PARADO = {
-	-- Guarda firme: base larga, escudo à frente, espada pronta
-	cavaleiro = function(t: number)
-		local respirar = math.sin(t * 1.6) * 0.025
-		return {
-			raiz = A(0, 0.3, 0, 0, -0.22, 0),
-			cintura = A(-0.04 + respirar, -0.22),
-			pescoco = A(-0.05, -0.08),
-			ombroE = A(0.95, 0.55, -0.1),
-			cotoveloE = A(1.25),
-			ombroD = A(0.4, 0, 0.3),
-			cotoveloD = A(0.75),
-			pulsoD = A(-0.45),
-			quadrilD = A(0.32, 0, 0.14),
-			joelhoD = A(-0.5),
-			tornozeloD = A(0.18),
-			quadrilE = A(-0.12, 0, -0.14),
-			joelhoE = A(-0.32),
-			tornozeloE = A(0.18),
-		}
-	end,
-	-- Ereto e confiante: cajado apoiado, a outra mão conjura uma luz, flutua de leve
-	mago = function(t: number)
-		local flutuar = math.sin(t * 2) * 0.06
-		return {
-			raiz = A(0, 0, 0, 0, flutuar, 0),
-			cintura = A(0.1 + math.sin(t * 1.4) * 0.02),
-			pescoco = A(-0.14),
-			ombroD = A(0.2, 0, 0.2),
-			cotoveloD = A(0.9),
-			pulsoD = A(-1.1),
-			ombroE = A(0.75, 0.35, -0.25),
-			cotoveloE = A(1.35),
-			pulsoE = A(0.45 + math.sin(t * 2) * 0.1),
-			quadrilD = A(0, 0, 0.04),
-			quadrilE = A(0, 0, -0.04),
-			brilho = A(0.35 + math.sin(t * 2) * 0.1),
-		}
-	end,
-	-- Relaxado, peso numa perna, arco baixo, olhando em volta
-	arqueiro = function(t: number)
-		return {
-			raiz = A(0, -0.25, 0.07),
-			cintura = A(0.02, 0.15, -0.05),
-			pescoco = A(0, math.sin(t * 0.6) * 0.45),
-			ombroE = A(0.25, 0, -0.18),
-			cotoveloE = A(0.25),
-			ombroD = A(-0.12, 0, 0.18),
-			cotoveloD = A(0.5),
-			quadrilD = A(0, 0, 0.1),
-			quadrilE = A(0.18, 0, -0.16),
-			joelhoE = A(-0.35),
-			tornozeloE = A(0.15),
-		}
-	end,
-	-- Agachado e inclinado para frente, pronto para dar o bote
-	assassino = function(t: number)
-		local respirar = math.sin(t * 3.2) * 0.04
-		return {
-			raiz = A(0, 0.3, 0, 0, -0.42 + respirar, 0),
-			cintura = A(-0.5 + respirar, -0.2),
-			pescoco = A(0.42, 0.15 + math.sin(t * 0.8) * 0.15),
-			ombroD = A(0.7, 0, 0.4),
-			cotoveloD = A(1.35),
-			pulsoD = A(-0.35),
-			ombroE = A(1, 0.35, -0.35),
-			cotoveloE = A(1.55),
-			pulsoE = A(-0.35),
-			quadrilD = A(0.65, 0, 0.15),
-			joelhoD = A(-1.1),
-			tornozeloD = A(0.42),
-			quadrilE = A(0.35, 0, -0.2),
-			joelhoE = A(-1),
-			tornozeloE = A(0.6),
-		}
-	end,
-}
-
--- Arqueiro mirando: corpo de lado, braço do arco esticado, mão puxando a corda até o rosto
-local MIRA = {
-	cintura = A(0, -0.85),
-	pescoco = A(0, 0.75),
-	ombroE = A(1.57, 0.85),
-	cotoveloE = A(0),
-	pulsoE = A(0),
-	ombroD = A(1.45, 1.1),
-	cotoveloD = A(2.2),
-	puxar = A(1),
-}
-
-local function lancarMago(lado: number)
-	return {
-		duracao = 0.32,
-		quadros = {
-			{ t = 0.07, suave = "forte", pose = { ombroD = A(1.55, -0.15 * lado), cotoveloD = A(0.1), pulsoD = A(-0.2), ombroE = A(1.4, 0.3, -0.1), cotoveloE = A(0.2), cintura = A(0, -0.2 * lado), brilho = A(1) } },
-		},
-	}
-end
-
-local CONJURAR_MAGO = {
-	duracao = 0.5,
-	quadros = {
-		{ t = 0.13, pose = { ombroD = A(2.9, 0, 0.1), cotoveloD = A(0.2), pulsoD = A(0), ombroE = A(2.6, 0, -0.1), cintura = A(0.25), brilho = A(1) } },
-		{ t = 0.24, suave = "forte", pose = { ombroD = A(1.5), cotoveloD = A(0), pulsoD = A(-0.1), ombroE = A(1.5, 0.3), cintura = A(-0.3), raiz = A(-0.12, 0, 0, 0, -0.2, 0), brilho = A(1.5) } },
-	},
-}
-
-local function tiroArqueiro()
-	return {
-		duracao = 0.3,
-		quadros = {
-			{ t = 0.06, pose = MIRA },
-			{ t = 0.09, suave = "forte", pose = { ombroD = A(1.3, 1.5, 0.3), cotoveloD = A(0.9), ombroE = A(1.75, 0.85), puxar = A(0) } },
-		},
-	}
-end
-
-local ACOES = {
-	assassino = {
-		-- corte rápido da direita para a esquerda (adaga direita)
-		ataque1 = {
-			duracao = 0.24,
-			trilha = true,
-			quadros = {
-				{ t = 0.04, pose = { ombroD = A(1.1, -1, 0.35), cotoveloD = A(0.9), pulsoD = A(-0.6), cintura = A(-0.35, -0.45), raiz = A(0, -0.15, 0, 0, -0.3, 0) } },
-				{ t = 0.11, suave = "forte", pose = { ombroD = A(1.45, 0.95), cotoveloD = A(0.15), pulsoD = A(-0.9), cintura = A(-0.4, 0.45), raiz = A(-0.05, 0.2, 0, 0, -0.35, 0) } },
-			},
-		},
-		-- corte rápido da esquerda para a direita (adaga esquerda)
-		ataque2 = {
-			duracao = 0.24,
-			trilha = true,
-			quadros = {
-				{ t = 0.04, pose = { ombroE = A(1.1, 1, -0.35), cotoveloE = A(0.9), pulsoE = A(-0.6), cintura = A(-0.35, 0.45), raiz = A(0, 0.15, 0, 0, -0.3, 0) } },
-				{ t = 0.11, suave = "forte", pose = { ombroE = A(1.45, -0.95), cotoveloE = A(0.15), pulsoE = A(-0.9), cintura = A(-0.4, -0.45), raiz = A(-0.05, -0.2, 0, 0, -0.35, 0) } },
-			},
-		},
-		-- golpe final: salta e cruza as duas adagas para baixo
-		ataque3 = {
-			duracao = 0.4,
-			trilha = true,
-			quadros = {
-				{ t = 0.1, pose = { ombroD = A(2.4, 0.35), ombroE = A(2.4, -0.35), cotoveloD = A(1.1), cotoveloE = A(1.1), cintura = A(0.2), raiz = A(0.05, 0, 0, 0, 0.35, 0) } },
-				{
-					t = 0.19,
-					suave = "forte",
-					pose = {
-						ombroD = A(1.25, 0.55),
-						ombroE = A(1.25, -0.55),
-						cotoveloD = A(0.1),
-						cotoveloE = A(0.1),
-						cintura = A(-0.55),
-						raiz = A(-0.2, 0, 0, 0, -0.5, 0),
-						quadrilD = A(0.9),
-						joelhoD = A(-1),
-						quadrilE = A(-0.45),
-						joelhoE = A(-0.5),
-					},
-				},
-			},
-		},
-		-- carregando: encolhido como uma mola, adagas para trás
-		carregar = {
-			manter = true,
-			quadros = {
-				{
-					t = 0.15,
-					pose = {
-						raiz = A(0, 0, 0, 0, -0.65, 0),
-						cintura = A(-0.6),
-						pescoco = A(0.5),
-						ombroD = A(-0.45, 0, 0.55),
-						ombroE = A(-0.45, 0, -0.55),
-						cotoveloD = A(0.5),
-						cotoveloE = A(0.5),
-						quadrilD = A(0.95),
-						joelhoD = A(-1.45),
-						tornozeloD = A(0.5),
-						quadrilE = A(-0.15),
-						joelhoE = A(-1),
-						tornozeloE = A(0.7),
-					},
-				},
-			},
-		},
-		-- Investida Letal: dispara para frente com as duas adagas esticadas
-		soltar = {
-			duracao = 0.42,
-			trilha = true,
-			quadros = {
-				{
-					t = 0.04,
-					suave = "forte",
-					pose = {
-						ombroD = A(1.6, -0.25),
-						ombroE = A(1.6, 0.25),
-						cotoveloD = A(0),
-						cotoveloE = A(0),
-						pulsoD = A(-1.4),
-						pulsoE = A(-1.4),
-						cintura = A(-0.55),
-						pescoco = A(0.5),
-						raiz = A(-0.3, 0, 0, 0, -0.55, 0),
-						quadrilD = A(1.05),
-						joelhoD = A(-0.7),
-						quadrilE = A(-0.85),
-						joelhoE = A(-0.25),
-					},
-				},
-			},
-		},
-		-- Passo Sombrio: agacha, some e reaparece cravando a adaga
-		habilidade = {
-			duracao = 0.4,
-			trilha = true,
-			quadros = {
-				{ t = 0.05, pose = { raiz = A(0, 0, 0, 0, -0.7, 0), cintura = A(-0.6), ombroD = A(-0.4, 0, 0.5), ombroE = A(-0.4, 0, -0.5), quadrilD = A(1), joelhoD = A(-1.5), quadrilE = A(0.6), joelhoE = A(-1.3) } },
-				{ t = 0.16, suave = "forte", pose = { raiz = A(-0.1, 0, 0, 0, -0.3, 0), cintura = A(-0.45), ombroD = A(1.55, 0.3), cotoveloD = A(0.05), pulsoD = A(-1.3), ombroE = A(0.4, 0, -0.6), quadrilD = A(0.7), joelhoD = A(-0.8), quadrilE = A(-0.3), joelhoE = A(-0.4) } },
-			},
-		},
-		-- Lâminas da Noite: cortes em X sem parar
-		supremo = {
-			trilha = true,
-			continuo = function(tau)
-				local f = math.sin(tau * 24)
-				return {
-					raiz = A(-0.1, f * 0.35, 0, 0, -0.35, 0),
-					cintura = A(-0.45, f * 0.5),
-					ombroD = A(1.35, f * 1.1, 0.2),
-					cotoveloD = A(0.2),
-					pulsoD = A(-1),
-					ombroE = A(1.35, -f * 1.1, -0.2),
-					cotoveloE = A(0.2),
-					pulsoE = A(-1),
-					quadrilD = A(0.7),
-					joelhoD = A(-0.9),
-					quadrilE = A(-0.3),
-					joelhoE = A(-0.5),
-				}
-			end,
-		},
-	},
-
-	cavaleiro = {
-		-- corte da direita para a esquerda
-		ataque1 = {
-			duracao = 0.34,
-			trilha = true,
-			quadros = {
-				{ t = 0.07, pose = { ombroD = A(1.25, -1.25, 0.25), cotoveloD = A(0.5), pulsoD = A(-1.1), cintura = A(0, -0.55), raiz = A(0, -0.15) } },
-				{ t = 0.17, suave = "forte", pose = { ombroD = A(1.45, 1.05), cotoveloD = A(0.15), pulsoD = A(-1.2), cintura = A(-0.1, 0.6), raiz = A(-0.12, 0.2) } },
-			},
-		},
-		-- revés, da esquerda para a direita
-		ataque2 = {
-			duracao = 0.34,
-			trilha = true,
-			quadros = {
-				{ t = 0.07, pose = { ombroD = A(1.35, 1, -0.2), cotoveloD = A(1), pulsoD = A(-1.2), cintura = A(0, 0.55), raiz = A(0, 0.12) } },
-				{ t = 0.17, suave = "forte", pose = { ombroD = A(1.35, -1.2, 0.2), cotoveloD = A(0.2), pulsoD = A(-1.2), cintura = A(-0.1, -0.6), raiz = A(-0.1, -0.2) } },
-			},
-		},
-		-- golpe final: espada por cima da cabeça e para baixo
-		ataque3 = {
-			duracao = 0.48,
-			trilha = true,
-			quadros = {
-				{ t = 0.12, pose = { ombroD = A(3, 0.1), cotoveloD = A(0.35), pulsoD = A(0.2), ombroE = A(1.4, 0.4), cintura = A(0.25), raiz = A(0.08, 0, 0, 0, 0.15, 0) } },
-				{
-					t = 0.22,
-					suave = "forte",
-					pose = {
-						ombroD = A(0.75),
-						cotoveloD = A(0.05),
-						pulsoD = A(-0.6),
-						ombroE = A(0.5, 0.3),
-						cintura = A(-0.4),
-						raiz = A(-0.25, 0, 0, 0, -0.35, 0),
-						quadrilD = A(0.6),
-						joelhoD = A(-0.7),
-						quadrilE = A(-0.35),
-						joelhoE = A(-0.3),
-					},
-				},
-			},
-		},
-		-- carregando: espada para trás, corpo torcido, pernas abertas
-		carregar = {
-			manter = true,
-			quadros = {
-				{
-					t = 0.15,
-					pose = {
-						ombroD = A(0.9, -1.7, 0.4),
-						cotoveloD = A(0.4),
-						pulsoD = A(-0.9),
-						ombroE = A(0.8, 0.5),
-						cintura = A(0, -0.9),
-						raiz = A(-0.15, -0.1, 0, 0, -0.3, 0),
-						quadrilD = A(-0.35, 0, 0.2),
-						quadrilE = A(0.45, 0, -0.2),
-						joelhoE = A(-0.5),
-					},
-				},
-			},
-		},
-		-- solta: giro completo com a espada estendida
-		soltar = {
-			duracao = 0.45,
-			trilha = true,
-			quadros = {
-				{ t = 0.05, suave = "forte", pose = { ombroD = A(0.35, 0, 1.45), cotoveloD = A(0), pulsoD = A(-1.2), ombroE = A(0.5, 0, -1), cintura = A(0, 0.4), raiz = A(-0.1, 0, 0, 0, -0.2, 0) } },
-				{ t = 0.33, suave = "linear", pose = { raiz = A(-0.1, math.pi * 2, 0, 0, -0.2, 0) } },
-			},
-		},
-		-- Redemoinho: gira sem parar enquanto durar
-		habilidade = {
-			trilha = true,
-			continuo = function(tau)
-				return { raiz = A(-0.08, tau * 14, 0, 0, -0.15, 0), ombroD = A(0.35, 0, 1.45), cotoveloD = A(0), pulsoD = A(-1.2), ombroE = A(0.5, 0, -1) }
-			end,
-		},
-		-- Julgamento: salta com a espada no alto e esmaga o chão
-		supremo = {
-			duracao = 0.75,
-			trilha = true,
-			quadros = {
-				{ t = 0.18, pose = { ombroD = A(3), cotoveloD = A(0.2), ombroE = A(2.8), cintura = A(0.25), raiz = A(0.1, 0, 0, 0, 0.8, 0), quadrilD = A(0.5), joelhoD = A(-0.9), quadrilE = A(0.5), joelhoE = A(-0.9) } },
-				{
-					t = 0.34,
-					suave = "forte",
-					pose = {
-						ombroD = A(0.6),
-						cotoveloD = A(0),
-						pulsoD = A(-0.8),
-						ombroE = A(0.6),
-						cintura = A(-0.45),
-						raiz = A(-0.3, 0, 0, 0, -0.7, 0),
-						quadrilD = A(0.9),
-						joelhoD = A(-1.2),
-						quadrilE = A(-0.4),
-						joelhoE = A(-0.5),
-					},
-				},
-			},
-		},
-	},
-
-	mago = {
-		ataque1 = lancarMago(1),
-		ataque2 = lancarMago(-1),
-		ataque3 = CONJURAR_MAGO,
-		carregar = {
-			manter = true,
-			quadros = {
-				{ t = 0.2, pose = { ombroD = A(2.85, 0, 0.15), cotoveloD = A(0.3), pulsoD = A(0), ombroE = A(1.5, 0.35, -0.1), cotoveloE = A(0.3), cintura = A(0.15), raiz = A(0.05), brilho = A(1) } },
-			},
-		},
-		soltar = {
-			duracao = 0.45,
-			quadros = {
-				{ t = 0.07, suave = "forte", pose = { ombroD = A(1.45), cotoveloD = A(0), pulsoD = A(-0.1), ombroE = A(1.45, 0.3), cintura = A(-0.35), raiz = A(-0.15, 0, 0, 0, -0.25, 0), brilho = A(2) } },
-			},
-		},
-		habilidade = CONJURAR_MAGO,
-		-- Tempestade: braços para o céu enquanto os raios caem
-		supremo = {
-			continuo = function(tau)
-				local s = math.sin(tau * 6) * 0.08
-				return { ombroD = A(2.9 + s, 0, 0.25), cotoveloD = A(0.2), pulsoD = A(0), ombroE = A(2.9 - s, 0, -0.25), cintura = A(0.2), raiz = A(0.05), brilho = A(1.5) }
-			end,
-		},
-	},
-
-	arqueiro = {
-		ataque1 = tiroArqueiro(),
-		ataque2 = tiroArqueiro(),
-		ataque3 = {
-			duracao = 0.42,
-			quadros = {
-				{ t = 0.12, pose = juntar(MIRA, { raiz = A(0.05), puxar = A(1.1) }) },
-				{ t = 0.16, suave = "forte", pose = { ombroD = A(1.1, 1.7, 0.5), cotoveloD = A(0.6), ombroE = A(1.9, 0.85), raiz = A(0.14), puxar = A(0) } },
-			},
-		},
-		carregar = {
-			manter = true,
-			quadros = { { t = 0.2, pose = juntar(MIRA, { puxar = A(1.15), raiz = A(0.04) }) } },
-		},
-		soltar = {
-			duracao = 0.42,
-			quadros = {
-				{ t = 0.04, suave = "forte", pose = { ombroD = A(1, 1.8, 0.6), cotoveloD = A(0.5), ombroE = A(1.95, 0.85), raiz = A(0.16), puxar = A(0) } },
-			},
-		},
-		-- Chuva de Flechas: mira para o alto
-		habilidade = {
-			duracao = 0.5,
-			quadros = {
-				{ t = 0.12, pose = { cintura = A(0, -0.85), pescoco = A(-0.5, 0.75), ombroE = A(2.35, 0.85), ombroD = A(2.2, 1.1), cotoveloD = A(2.2), puxar = A(1) } },
-				{ t = 0.18, suave = "forte", pose = { ombroD = A(2, 1.5, 0.3), cotoveloD = A(0.9), puxar = A(0) } },
-			},
-		},
-		-- Saraivada: gira atirando sem parar
-		supremo = {
-			continuo = function(tau)
-				local pose = table.clone(MIRA)
-				pose.raiz = A(0, tau * 10)
-				pose.puxar = A((math.sin(tau * 21) + 1) / 2)
-				return pose
-			end,
-		},
-	},
-}
-
--- Esquivas (uma por classe). Duram um pouco mais que o impulso para o corpo "assentar".
-local ESQUIVAS = {
-	-- Passo de sombra: corrida baixa de ninja, braços para trás
-	assassino = {
-		duracao = 0.3,
-		quadros = {
-			{
-				t = 0.035,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.6, 0, 0, 0, -0.6, 0),
-					cintura = A(-0.3),
-					pescoco = A(0.6),
-					ombroD = A(-1.25, 0, 0.25),
-					ombroE = A(-1.25, 0, -0.25),
-					cotoveloD = A(0.1),
-					cotoveloE = A(0.1),
-					quadrilD = A(1.15),
-					joelhoD = A(-1.4),
-					quadrilE = A(-0.55),
-					joelhoE = A(-0.7),
-				},
-			},
-		},
-	},
-	-- Investida: ombro e escudo à frente, passada longa
-	cavaleiro = {
-		duracao = 0.34,
-		quadros = {
-			{
-				t = 0.04,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.5, 0.35, 0, 0, -0.45, 0),
-					cintura = A(-0.2, 0.25),
-					pescoco = A(0.25, -0.4),
-					ombroE = A(1.25, 0.6, -0.15),
-					cotoveloE = A(1.3),
-					ombroD = A(-0.55, 0, 0.3),
-					cotoveloD = A(0.5),
-					quadrilD = A(0.9),
-					joelhoD = A(-1.1),
-					quadrilE = A(-0.6),
-					joelhoE = A(-0.5),
-				},
-			},
-			{ t = 0.22, pose = { raiz = A(-0.3, 0.2, 0, 0, -0.3, 0), quadrilD = A(0.5), joelhoD = A(-0.7), quadrilE = A(-0.3), joelhoE = A(-0.3) } },
-		},
-	},
-	-- Deslize arcano: corpo inclinado, braços abertos para trás, como se flutuasse
-	mago = {
-		duracao = 0.32,
-		quadros = {
-			{
-				t = 0.05,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.55, 0, 0, 0, -0.35, 0),
-					cintura = A(-0.25),
-					pescoco = A(0.35),
-					ombroD = A(-0.7, 0, 0.55),
-					ombroE = A(-0.7, 0, -0.55),
-					cotoveloD = A(0.2),
-					cotoveloE = A(0.2),
-					quadrilD = A(-0.35),
-					joelhoD = A(-0.6),
-					quadrilE = A(-0.5),
-					joelhoE = A(-0.9),
-					brilho = A(1),
-				},
-			},
-		},
-	},
-	-- Rolamento: encolhe e dá uma cambalhota para frente
-	arqueiro = {
-		duracao = 0.36,
-		quadros = {
-			{
-				t = 0.04,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.7, 0, 0, 0, -1.1, 0),
-					cintura = A(-0.6),
-					pescoco = A(-0.5),
-					ombroD = A(0.9, 0, 0.2),
-					cotoveloD = A(1.6),
-					ombroE = A(0.9, 0, -0.2),
-					cotoveloE = A(1.6),
-					quadrilD = A(1.6),
-					joelhoD = A(-2),
-					quadrilE = A(1.6),
-					joelhoE = A(-2),
-				},
-			},
-			{ t = 0.24, suave = "linear", pose = { raiz = A(-0.7 - math.pi * 2, 0, 0, 0, -1.1, 0) } },
-			{ t = 0.33, pose = { raiz = A(-math.pi * 2, 0, 0, 0, -0.3, 0), cintura = A(-0.15), pescoco = A(0), quadrilD = A(0.4), joelhoD = A(-0.6), quadrilE = A(-0.2), joelhoE = A(-0.3) } },
-		},
-	},
-}
-
-local ATINGIDO = {
-	duracao = 0.22,
-	quadros = { { t = 0.05, suave = "forte", pose = { cintura = A(0.28), pescoco = A(0.2), raiz = A(0.08) } } },
-}
-
-------------------------------------------------------------------------
--- Interpolação
-------------------------------------------------------------------------
-
-local function suavizar(tipo: string?, a: number): number
-	if tipo == "linear" then
-		return a
-	elseif tipo == "forte" then
-		return 1 - (1 - a) ^ 4
-	end
-	return 1 - (1 - a) * (1 - a)
-end
-
-local function misturar(a, b, alfa: number)
-	return {
-		a[1] + (b[1] - a[1]) * alfa,
-		a[2] + (b[2] - a[2]) * alfa,
-		a[3] + (b[3] - a[3]) * alfa,
-		a[4] + (b[4] - a[4]) * alfa,
-		a[5] + (b[5] - a[5]) * alfa,
-		a[6] + (b[6] - a[6]) * alfa,
-	}
-end
-
-local function juntasUsadas(definicao)
-	if definicao.juntas then
-		return definicao.juntas
-	end
-	local lista, vistas = {}, {}
-	for _, quadro in definicao.quadros do
-		for junta in quadro.pose do
-			if not vistas[junta] then
-				vistas[junta] = true
-				table.insert(lista, junta)
-			end
-		end
-	end
-	definicao.juntas = lista
-	return lista
-end
-
--- Pose da animação no tempo "tau", partindo da pose "base"
-local function amostrar(definicao, tau: number, base)
-	local quadros = definicao.quadros
-	local indice = 0
-	for k, quadro in quadros do
-		if quadro.t <= tau then
-			indice = k
-		end
-	end
-	local pose = {}
-	for _, junta in juntasUsadas(definicao) do
-		local inicio = base[junta] or ZERO
-		for k = indice, 1, -1 do
-			local v = quadros[k].pose[junta]
-			if v then
-				inicio = v
-				break
-			end
-		end
-		local proximo = quadros[indice + 1]
-		if proximo and proximo.pose[junta] then
-			local t0 = if indice == 0 then 0 else quadros[indice].t
-			local alfa = suavizar(proximo.suave, math.clamp((tau - t0) / math.max(proximo.t - t0, 0.001), 0, 1))
-			pose[junta] = misturar(inicio, proximo.pose[junta], alfa)
-		else
-			pose[junta] = inicio
-		end
-	end
-	return pose
-end
+local A = Poses.A
+local POSTURAS = Poses.POSTURAS
+local PARADO = Poses.PARADO
+local ACOES = Poses.ACOES
+local ESQUIVAS = Poses.ESQUIVAS
+local ATINGIDO = Poses.ATINGIDO
+local BLOQUEIO = Poses.BLOQUEIO
+local amostrar = Poses.amostrar
+local misturar = Poses.misturar
 
 ------------------------------------------------------------------------
 -- Estado de cada personagem
@@ -720,6 +95,7 @@ local function estadoDe(personagem: Model)
 			cargaInicio = 0,
 			puxar = 0,
 			brilho = 0,
+			flechaMao = 0,
 			ultimaPose = {},
 		}
 		personagens[personagem] = e
@@ -742,6 +118,9 @@ end
 local function comecar(e, definicao, dados)
 	if not definicao then
 		return
+	end
+	if definicao.quadros then
+		Poses.preparar(definicao)
 	end
 	local agora = os.clock()
 	e.acao = {
@@ -917,7 +296,13 @@ local function atualizarArma(e, agora: number)
 	end
 	local acao = e.acao
 	if e.trilha then
-		local ligada = acao ~= nil and acao.def.trilha == true and (acao.soltando == nil) and (agora - acao.inicio) < (if acao.def.continuo then math.huge else acao.duracao * 0.8)
+		-- "trilha" = true (o tempo todo) ou { início, fim } (só durante o corte)
+		local ligada = false
+		if acao and acao.def.trilha and acao.soltando == nil then
+			local tau = agora - acao.inicio
+			local janela = acao.def.trilha
+			ligada = if type(janela) == "table" then tau >= janela[1] and tau <= janela[2] else true
+		end
 		if e.trilha.Enabled ~= ligada then
 			e.trilha.Enabled = ligada
 		end
@@ -929,11 +314,20 @@ local function atualizarArma(e, agora: number)
 		local puxar = math.clamp(e.puxar, 0, 1.3)
 		local z = 0.62 + puxar * 1.6
 		e.encaixe.Position = Vector3.new(0, 0, z)
-		local visivel = puxar > 0.15
+		local noArco = puxar > 0.15
+		-- flecha na mão direita: acabou de tirar da aljava e ainda não encaixou
+		local maoDireita = e.personagem:FindFirstChild("RightHand") or e.personagem:FindFirstChild("Right Arm")
+		local naMao = not noArco and e.flechaMao > 0.5 and maoDireita ~= nil
+		local visivel = noArco or naMao
 		e.flecha.Transparency = if visivel then 0 else 1
 		e.pontaFlecha.Transparency = if visivel then 0 else 1
-		if visivel then
+		if noArco then
 			local cf = e.arco.CFrame * CFrame.new(0, 0, z - 1.35)
+			e.flecha.CFrame = cf
+			e.pontaFlecha.CFrame = cf * CFrame.new(0, 0, -1.45)
+		elseif naMao then
+			-- presa entre os dedos, apontando para cima ao longo do braço
+			local cf = (maoDireita :: BasePart).CFrame * CFrame.new(0, 0.9, 0) * CFrame.Angles(math.rad(90), 0, 0)
 			e.flecha.CFrame = cf
 			e.pontaFlecha.CFrame = cf * CFrame.new(0, 0, -1.45)
 		end
@@ -1016,13 +410,17 @@ end
 -- Aplicar a pose nas juntas (depois da animação padrão, antes da física)
 ------------------------------------------------------------------------
 
+-- Peso geral da ação. Quem tem quadros já entra e sai suave junta por junta (peso de cada
+-- valor); só as animações contínuas e as interrompidas precisam de rampa aqui.
 local function pesoDaAcao(a, agora: number): (number, number)
 	local tau = agora - a.inicio
-	local entrada = a.def.entrada or 0.05
-	local peso = math.min(1, tau / entrada)
+	local peso = 1
+	if a.def.continuo then
+		peso = math.min(1, tau / 0.08)
+	end
 	if a.soltando then
 		peso *= math.max(0, 1 - (agora - a.soltando) / 0.15)
-	elseif not a.def.manter then
+	elseif not a.def.manter and not a.def.voltar then
 		local saida = a.def.saida or 0.12
 		local resto = a.duracao - tau
 		if resto < saida then
@@ -1049,13 +447,18 @@ local function animarPersonagem(e, agora: number)
 		end
 	end
 
+	-- Mistura uma camada por cima: o peso de cada junta é o peso da camada vezes o peso
+	-- do próprio valor (o 7º número)
 	local function aplicarCamada(pose, peso: number)
 		for junta, valor in pose do
-			local atual = final[junta]
-			if atual then
-				final[junta] = { misturar(atual[1], valor, peso), atual[2] + (1 - atual[2]) * peso }
-			else
-				final[junta] = { valor, peso }
+			local w = peso * (valor[7] or 1)
+			if w > 0.001 then
+				local atual = final[junta]
+				if atual then
+					final[junta] = { misturar(atual[1], valor, w), atual[2] + (1 - atual[2]) * w }
+				else
+					final[junta] = { valor, w }
+				end
 			end
 		end
 	end
@@ -1079,8 +482,9 @@ local function animarPersonagem(e, agora: number)
 	local a = e.acao
 	if a then
 		local peso, tau = pesoDaAcao(a, agora)
-		if peso <= 0 and (a.soltando or tau > a.duracao) then
+		if (peso <= 0 and a.soltando) or tau > a.duracao then
 			e.acao = nil
+			e.ultimaPose = {}
 		else
 			local pose = poseDaAcao(a, tau)
 			if e.carregando and a.def.manter then
@@ -1092,7 +496,12 @@ local function animarPersonagem(e, agora: number)
 					pose.cintura = misturar(pose.cintura, A(pose.cintura[1] + tremor, pose.cintura[2] + tremor, pose.cintura[3]), 1)
 				end
 			end
-			e.ultimaPose = pose
+			-- guarda onde o corpo está (com o peso atual) para a próxima ação partir daqui
+			local guardada = {}
+			for junta, valor in pose do
+				guardada[junta] = { valor[1], valor[2], valor[3], valor[4], valor[5], valor[6], (valor[7] or 1) * peso }
+			end
+			e.ultimaPose = guardada
 			aplicarCamada(pose, peso)
 		end
 	end
@@ -1113,19 +522,36 @@ local function animarPersonagem(e, agora: number)
 		end
 	end
 
-	local h = e.atingido
-	if h then
-		local tau = agora - h
-		if tau >= ATINGIDO.duracao then
-			e.atingido = nil
-		else
-			local peso = math.min(1, tau / 0.03) * math.max(0, 1 - tau / ATINGIDO.duracao)
-			aplicarCamada(amostrar(ATINGIDO, tau, {}), peso * 0.8)
+	-- reações rápidas por cima de tudo: levou dano / escudo bloqueou
+	for _, info in { { "atingido", ATINGIDO, 0.8 }, { "bloqueou", BLOQUEIO, 1 } } do
+		local inicio = e[info[1]]
+		if inicio then
+			local tau = agora - inicio
+			Poses.preparar(info[2])
+			if tau >= info[2].duracao then
+				e[info[1]] = nil
+			else
+				aplicarCamada(amostrar(info[2], tau, {}), info[3])
+			end
 		end
 	end
 
 	e.puxar = if final.puxar then final.puxar[1][1] * final.puxar[2] else 0
 	e.brilho = if final.brilho then final.brilho[1][1] * final.brilho[2] else 0
+	e.flechaMao = if final.flechaMao then final.flechaMao[1][1] * final.flechaMao[2] else 0
+
+	-- as juntas podem ter sido trocadas (roupa/escala aplicada depois de nascer): procura de novo
+	local precisaBuscar = next(e.juntas) == nil
+	for _, j in e.juntas do
+		if not j.motor.Parent or not j.motor:IsDescendantOf(e.personagem) then
+			precisaBuscar = true
+			break
+		end
+	end
+	if precisaBuscar and agora >= (e.proximaBusca or 0) then
+		e.proximaBusca = agora + 0.5
+		e.juntas = obterJuntas(e.personagem)
+	end
 
 	for junta, info in final do
 		local j = e.juntas[junta]
@@ -1144,7 +570,8 @@ end
 
 --[[ Toca uma animação num personagem.
 	acao: "ataque" (dados.combo), "carregar", "soltar" (dados.fracao), "cancelar",
-	      "esquiva", "habilidade", "supremo" (dados.duracao), "atingido" ]]
+	      "esquiva", "habilidade", "supremo" (dados.duracao), "defender", "pararDefesa",
+	      "bloqueou", "atingido" ]]
 function Animacoes.tocar(personagem: Model, acao: string, dados)
 	if not personagem or not personagem.Parent then
 		return
@@ -1180,13 +607,24 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 		Vfx.esquiva({ jogador = e.jogador, classe = classe })
 	elseif acao == "habilidade" or acao == "supremo" then
 		comecar(e, acoes[acao], dados)
+	elseif acao == "defender" then
+		e.carregando = false
+		e.defendendo = true
+		comecar(e, acoes.defender, dados)
+	elseif acao == "pararDefesa" then
+		e.defendendo = false
+		if e.acao and e.acao.def == acoes.defender then
+			e.acao.soltando = os.clock()
+		end
+	elseif acao == "bloqueou" then
+		e.bloqueou = os.clock()
 	elseif acao == "atingido" then
 		e.atingido = os.clock()
 	end
 end
 
 -- Ações que o próprio jogador já anima na hora do clique (o servidor não manda de volta)
-local PREVISTAS = { ataque = true, carregar = true, soltar = true, cancelar = true, esquiva = true }
+local PREVISTAS = { ataque = true, carregar = true, soltar = true, cancelar = true, esquiva = true, defender = true, pararDefesa = true }
 
 -- Mensagem "anim" vinda do servidor
 function Animacoes.receber(dados)
