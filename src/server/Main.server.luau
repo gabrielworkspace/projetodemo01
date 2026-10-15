@@ -60,6 +60,11 @@ game:BindToClose(function()
 	Dados.salvarTodos()
 end)
 
+local ultimoSalvarTeclas = {} -- [Player] = quando salvou as teclas pela última vez
+Players.PlayerRemoving:Connect(function(player)
+	ultimoSalvarTeclas[player] = nil
+end)
+
 local ACOES_DE_COMBATE = { atacar = true, carregar = true, soltar = true, cancelar = true, defender = true, habilidade = true, esquiva = true, supremo = true }
 
 Remotos.Acao.OnServerEvent:Connect(function(player, tipo, dados, extra)
@@ -72,6 +77,13 @@ Remotos.Acao.OnServerEvent:Connect(function(player, tipo, dados, extra)
 		Dados.enviarPerfil(player)
 		if not Partida.emPartida(player) then
 			Remotos.enviar(player, "lobby", {})
+		end
+	elseif tipo == "salvarTeclas" then
+		-- no máximo uma vez a cada 0,5s por jogador
+		local agora = os.clock()
+		if agora - (ultimoSalvarTeclas[player] or 0) >= 0.5 then
+			ultimoSalvarTeclas[player] = agora
+			Dados.definirTeclas(player, dados)
 		end
 	elseif tipo == "escolherClasse" then
 		Lobby.escolherClasse(player, dados)

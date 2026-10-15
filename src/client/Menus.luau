@@ -1,17 +1,21 @@
--- Menus: escolha de classe, cartas, elevador, loja do mercador, resumo da partida e ajuda.
+-- Menus: escolha de classe, cartas, elevador, loja do mercador, resumo da partida, ajuda e
+-- troca de teclas.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
 local Cartas = require(Shared:WaitForChild("Cartas"))
+local Teclas = require(Shared:WaitForChild("Teclas"))
 
 local modulos = script.Parent
 local UI = require(modulos.UI)
 local Estado = require(modulos.Estado)
+local Atalhos = require(modulos.Atalhos)
 
 local Menus = {}
 
@@ -136,6 +140,7 @@ criar("UIListLayout", {
 })
 
 local botoesClasse = {}
+local rotulosTeclaClasse = {} -- nome da habilidade/supremo com a tecla escolhida
 for ordem, id in Classes.ordem do
 	local classe = Classes.dados[id]
 	local cartao = UI.painel({ Size = UDim2.fromOffset(286, 566), LayoutOrder = ordem, Parent = linhaClasses })
@@ -190,18 +195,19 @@ for ordem, id in Classes.ordem do
 		pontos(cartao, UDim2.fromOffset(146, y + 3), classe.notas[atributo], classe.cor)
 		y += 22
 	end
-	for i, info in { { classe.habilidade, "E" }, { classe.supremo, "R" } } do
+	for i, info in { { classe.habilidade, "habilidade" }, { classe.supremo, "supremo" } } do
 		local linhaY = 408 + (i - 1) * 52
 		UI.medalhao({ Parent = cartao, Icone = info[1].icone, Position = UDim2.fromOffset(14, linhaY), Size = UDim2.fromOffset(40, 40), Cor = classe.cor })
-		UI.texto({
+		local rotuloHabilidade = UI.texto({
 			Position = UDim2.fromOffset(60, linhaY),
 			Size = UDim2.new(1, -70, 0, 18),
 			FontFace = fontes.forte,
-			Text = info[1].nome .. "  [" .. info[2] .. "]",
+			Text = info[1].nome,
 			TextColor3 = cores.ouroClaro,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = cartao,
 		})
+		table.insert(rotulosTeclaClasse, { rotulo = rotuloHabilidade, nome = info[1].nome, acao = info[2] })
 		local d = UI.texto({
 			Position = UDim2.fromOffset(60, linhaY + 18),
 			Size = UDim2.new(1, -70, 0, 30),
@@ -237,6 +243,9 @@ for ordem, id in Classes.ordem do
 end
 
 local function atualizarClasses()
+	for _, info in rotulosTeclaClasse do
+		info.rotulo.Text = info.nome .. "  [" .. Teclas.curto(Atalhos.principal(info.acao)) .. "]"
+	end
 	for id, botao in botoesClasse do
 		local selecionada = Estado.perfil.classe == id and Estado.perfil.escolheuClasse
 		UI.textoBotao(botao, if selecionada then "SELECIONADA ✓" else "ESCOLHER")
@@ -719,7 +728,7 @@ local painelAjuda = UI.painel({ Size = UDim2.fromScale(1, 1), Parent = menuAjuda
 botaoFechar(menuAjuda)
 UI.titulo(painelAjuda, "COMO JOGAR", 16, 420, 52)
 local secoes = {
-	{ "🎮", "Controles", "Clique: ataque (segure e solte: golpe carregado)  •  E: habilidade  •  Q: esquiva  •  R: supremo\nCavaleiro: segure F ou o botão direito para erguer o escudo. No celular, use os botões redondos." },
+	{ "🎮", "Controles", "Ataque (segure e solte: golpe carregado), habilidade, esquiva, supremo e o escudo do Cavaleiro.\nVeja e troque as teclas em ⚙️ TECLAS. No celular, use os botões redondos." },
 	{ "⚔️", "Combo", "Todo terceiro ataque é um golpe final mais forte. A barra dourada enche lutando: com ela cheia, use o supremo!" },
 	{ "💨", "Esquiva", "Durante a esquiva você não leva dano e atravessa projéteis. Fuja das áreas vermelhas no chão!" },
 	{ "🃏", "Cartas", "Depois de cada sala, escolha 1 de 3 cartas. Cada classe tem cartas próprias, e algumas combinam muito bem." },
@@ -754,6 +763,189 @@ end
 
 function Menus.abrirAjuda()
 	abrir(menuAjuda)
+end
+
+------------------------------------------------------------------------
+-- Teclas: escolha a tecla de cada ação
+------------------------------------------------------------------------
+
+local menuTeclas = novoMenu("Teclas", 780, 640)
+local painelTeclas = UI.painel({ Size = UDim2.fromScale(1, 1), Parent = menuTeclas.conteudo })
+botaoFechar(menuTeclas)
+UI.titulo(painelTeclas, "⚙️ TECLAS", 16, 380, 52)
+local instrucaoTeclas = UI.texto({
+	Position = UDim2.fromOffset(30, 76),
+	Size = UDim2.new(1, -60, 0, 22),
+	FontFace = fontes.texto,
+	Text = "Clique numa tecla e aperte a nova (vale tecla ou botão do mouse).",
+	TextColor3 = cores.textoSuave,
+	Parent = painelTeclas,
+})
+UI.limiteTexto(instrucaoTeclas, 17)
+for _, cabecalho in { { "PRINCIPAL", 400 }, { "ALTERNATIVA", 580 } } do
+	UI.texto({
+		Position = UDim2.fromOffset(cabecalho[2], 108),
+		Size = UDim2.fromOffset(170, 18),
+		FontFace = fontes.cabecalho,
+		Text = cabecalho[1],
+		TextColor3 = cores.ouro,
+		Parent = painelTeclas,
+	})
+end
+
+local esperandoTecla = nil -- { id, slot } enquanto espera o jogador apertar a nova tecla
+local botoesTecla = {} -- [id] = { [1] = botão, [2] = botão }
+
+local function atualizarMenuTeclas()
+	for id, botoes in botoesTecla do
+		for slot = 1, 2 do
+			local nome = Atalhos.atual[id][slot]
+			local esperando = esperandoTecla ~= nil and esperandoTecla.id == id and esperandoTecla.slot == slot
+			UI.textoBotao(botoes[slot], if esperando then "Aperte..." elseif nome then Teclas.texto(nome) else "—")
+			UI.estiloBotao(botoes[slot], if esperando then "verde" elseif nome then "escuro" else "cinza")
+		end
+	end
+end
+
+local function avisoTeclas(texto: string, cor: Color3?)
+	instrucaoTeclas.Text = texto
+	instrucaoTeclas.TextColor3 = cor or cores.textoSuave
+end
+
+for i, acao in Teclas.ACOES do
+	local y = 134 + (i - 1) * 72
+	UI.medalhao({ Parent = painelTeclas, Icone = acao.icone, Position = UDim2.fromOffset(28, y), Size = UDim2.fromOffset(54, 54), Cor = cores.painelClaro })
+	UI.texto({
+		Position = UDim2.fromOffset(96, y + 4),
+		Size = UDim2.fromOffset(290, 24),
+		FontFace = fontes.cabecalho,
+		Text = acao.nome,
+		TextColor3 = cores.ouroClaro,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = painelTeclas,
+	})
+	local detalhe = UI.texto({
+		Position = UDim2.fromOffset(96, y + 30),
+		Size = UDim2.fromOffset(290, 20),
+		FontFace = fontes.texto,
+		Text = acao.detalhe,
+		TextColor3 = cores.textoSuave,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = painelTeclas,
+	})
+	UI.limiteTexto(detalhe, 14)
+	botoesTecla[acao.id] = {}
+	for slot = 1, 2 do
+		local botao = UI.botao({
+			Parent = painelTeclas,
+			Texto = "",
+			Estilo = "escuro",
+			Position = UDim2.fromOffset(if slot == 1 then 395 else 575, y + 4),
+			Size = UDim2.fromOffset(170, 46),
+			TamanhoTexto = 20,
+		})
+		botao.Activated:Connect(function()
+			-- clicar de novo no mesmo botão desiste
+			if esperandoTecla and esperandoTecla.id == acao.id and esperandoTecla.slot == slot then
+				esperandoTecla = nil
+				avisoTeclas("Clique numa tecla e aperte a nova (vale tecla ou botão do mouse).")
+			else
+				esperandoTecla = { id = acao.id, slot = slot }
+				avisoTeclas("Aperte a nova tecla para " .. acao.nome .. ".  Apagar (Backspace) deixa vazio  •  clique de novo para desistir", cores.ouroClaro)
+			end
+			atualizarMenuTeclas()
+		end)
+		botoesTecla[acao.id][slot] = botao
+	end
+end
+
+UI.texto({
+	Position = UDim2.fromOffset(30, 498),
+	Size = UDim2.new(1, -60, 0, 40),
+	FontFace = fontes.texto,
+	Text = "🎮 Controle: R2 atacar  •  X habilidade  •  B esquiva  •  Y supremo  •  L2 escudo\nW A S D, Espaço, Esc e Tab ficam para andar, pular e os menus do Roblox.",
+	TextColor3 = cores.textoSuave,
+	TextWrapped = true,
+	Parent = painelTeclas,
+})
+local botaoPadrao = UI.botao({
+	Parent = painelTeclas,
+	Texto = "RESTAURAR PADRÃO",
+	Estilo = "escuro",
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(0.5, -10, 1, -18),
+	Size = UDim2.fromOffset(250, 50),
+	TamanhoTexto = 20,
+})
+botaoPadrao.Activated:Connect(function()
+	esperandoTecla = nil
+	Atalhos.restaurarPadrao()
+	avisoTeclas("Teclas voltaram ao padrão.", cores.ouroClaro)
+	atualizarMenuTeclas()
+end)
+local botaoProntoTeclas = UI.botao({
+	Parent = painelTeclas,
+	Texto = "PRONTO",
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0.5, 10, 1, -18),
+	Size = UDim2.fromOffset(250, 50),
+	TamanhoTexto = 22,
+})
+botaoProntoTeclas.Activated:Connect(function()
+	esperandoTecla = nil
+	fechar(menuTeclas)
+end)
+
+-- Captura da nova tecla
+UserInputService.InputBegan:Connect(function(entrada, processado)
+	if not esperandoTecla or not abertos[menuTeclas] then
+		return
+	end
+	local tipo = entrada.UserInputType
+	local nome = nil
+	if tipo == Enum.UserInputType.Keyboard then
+		if entrada.KeyCode == Enum.KeyCode.Escape then
+			esperandoTecla = nil
+			avisoTeclas("Clique numa tecla e aperte a nova (vale tecla ou botão do mouse).")
+			atualizarMenuTeclas()
+			return
+		elseif entrada.KeyCode == Enum.KeyCode.Backspace or entrada.KeyCode == Enum.KeyCode.Delete then
+			Atalhos.limpar(esperandoTecla.id, esperandoTecla.slot)
+			esperandoTecla = nil
+			avisoTeclas("Tecla removida.", cores.ouroClaro)
+			atualizarMenuTeclas()
+			return
+		elseif processado then
+			return -- digitando no chat
+		end
+		nome = entrada.KeyCode.Name
+	elseif tipo == Enum.UserInputType.MouseButton1 then
+		-- clique em cima de um botão do menu é clique no menu, não a tecla nova
+		if processado then
+			return
+		end
+		nome = tipo.Name
+	elseif tipo == Enum.UserInputType.MouseButton2 or tipo == Enum.UserInputType.MouseButton3 then
+		nome = tipo.Name
+	else
+		return
+	end
+	local id, slot = esperandoTecla.id, esperandoTecla.slot
+	local ok, mensagem = Atalhos.definir(id, slot, nome)
+	if ok then
+		esperandoTecla = nil
+		avisoTeclas("✔ " .. Teclas.acoesPorId[id].nome .. ": " .. Teclas.texto(nome) .. (if mensagem then "   (" .. mensagem .. ")" else ""), Color3.fromRGB(130, 230, 140))
+	else
+		avisoTeclas("✘ " .. (mensagem or "Essa tecla não pode ser usada.") .. " Tente outra.", Color3.fromRGB(255, 120, 120))
+	end
+	atualizarMenuTeclas()
+end)
+
+function Menus.abrirTeclas()
+	esperandoTecla = nil
+	avisoTeclas("Clique numa tecla e aperte a nova (vale tecla ou botão do mouse).")
+	atualizarMenuTeclas()
+	abrir(menuTeclas)
 end
 
 ------------------------------------------------------------------------

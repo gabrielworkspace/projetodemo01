@@ -23,6 +23,8 @@ Tudo é criado por código quando o jogo começa (terreno, salas, monstros, inte
 | Supremo | R (com a barra dourada cheia) | Botão do topo | Y |
 | Defender com o escudo (Cavaleiro) | Segurar F ou o botão direito | Segurar 🛡️ | Segurar L2 |
 
+Essas são as teclas padrão. Para trocar, use o botão **⚙️ TECLAS** no acampamento ou a engrenagem ao lado da barra de ações durante a partida. Cada ação aceita uma tecla principal e uma alternativa (tecla ou botão do mouse), e a escolha fica salva no seu perfil. W, A, S, D, Espaço, Esc e Tab ficam reservadas para o Roblox.
+
 ## As classes
 
 | Classe | Estilo | Ponto forte | Ponto fraco | Habilidade (E) | Supremo (R) |
@@ -71,6 +73,7 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 | `src/shared/Cartas.luau` | Cartas e seus efeitos |
 | `src/server/Inimigos.luau` | Vida, dano e ataques de inimigos e chefes |
 | `src/server/Combate.luau` | Combos, habilidades, supremos, esquiva, escudo, mana, sangramento, dano |
+| `src/shared/Teclas.luau` | Ações e teclas padrão (menu ⚙️ Teclas) |
 | `src/client/Poses.luau` | Poses e golpes de cada classe (quadros-chave das animações) |
 | `src/server/Masmorra.luau` | Construção e decoração das salas |
 | `src/server/Lobby.luau` | Acampamento, altares, portal, mercador |

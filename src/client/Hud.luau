@@ -9,11 +9,13 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
 local Cartas = require(Shared:WaitForChild("Cartas"))
+local Teclas = require(Shared:WaitForChild("Teclas"))
 
 local modulos = script.Parent
 local UI = require(modulos.UI)
 local Estado = require(modulos.Estado)
 local Vfx = require(modulos.Vfx)
+local Atalhos = require(modulos.Atalhos)
 
 local Hud = {}
 Hud.aoAbrir = nil :: ((string) -> ())?
@@ -135,7 +137,7 @@ local _, textoRecorde = ficha(telaLobby, "🏆", UDim2.new(1, -16, 0, 114), 190)
 local doca = criar("Frame", {
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -22),
-	Size = UDim2.fromOffset(560, 62),
+	Size = UDim2.fromOffset(760, 62),
 	BackgroundTransparency = 1,
 	Parent = telaLobby,
 })
@@ -147,7 +149,7 @@ criar("UIListLayout", {
 	SortOrder = Enum.SortOrder.LayoutOrder,
 	Parent = doca,
 })
-for ordem, info in { { "classe", "⚔️ CLASSE", "ouro" }, { "loja", "🛒 LOJA", "escuro" }, { "ajuda", "📜 COMO JOGAR", "escuro" } } do
+for ordem, info in { { "classe", "⚔️ CLASSE", "ouro" }, { "loja", "🛒 LOJA", "escuro" }, { "ajuda", "📜 COMO JOGAR", "escuro" }, { "teclas", "⚙️ TECLAS", "escuro" } } do
 	local botao = UI.botao({ Parent = doca, Texto = info[2], Estilo = info[3], Size = UDim2.fromOffset(170, 58), LayoutOrder = ordem, TamanhoTexto = 24 })
 	botao.Activated:Connect(function()
 		if Hud.aoAbrir then
@@ -255,6 +257,7 @@ local tituloChefe = UI.texto({ Position = UDim2.fromOffset(0, 58), Size = UDim2.
 
 -- Ouro e cartas da partida
 local _, textoOuroPartida = ficha(telaPartida, "💰", UDim2.new(1, -16, 0, 64), 170)
+
 local faixaCartas = criar("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -16, 0, 116),
@@ -292,6 +295,19 @@ local barraAcoes = UI.painel({
 	Parent = telaPartida,
 })
 UI.escalavel(barraAcoes)
+-- engrenagem ao lado da barra: abre o menu de teclas no meio da partida
+local botaoTeclasPartida = UI.botao({
+	Parent = barraAcoes,
+	Texto = "⚙️",
+	Estilo = "escuro",
+	Position = UDim2.new(1, 10, 0, 4),
+	Size = UDim2.fromOffset(46, 46),
+})
+botaoTeclasPartida.Activated:Connect(function()
+	if Hud.aoAbrir then
+		Hud.aoAbrir("teclas")
+	end
+end)
 local medalhaoClasse = UI.medalhao({ Parent = barraAcoes, Icone = "🛡️", Position = UDim2.fromOffset(14, 24), Size = UDim2.fromOffset(80, 80), EspessuraBorda = 3 })
 local barraVida = UI.barra({ Parent = barraAcoes, Position = UDim2.fromOffset(106, 14), Size = UDim2.fromOffset(440, 26) })
 local barraCarga = UI.barra({
@@ -371,7 +387,15 @@ local function criarSlot(ordem: number, tecla: string)
 	UI.cantos(sombra, 8)
 	local segundos = UI.texto({ Size = UDim2.fromScale(1, 1), FontFace = fontes.numero, Text = "", ZIndex = 4, Parent = slot })
 	UI.contorno(segundos, 2)
-	return { quadro = slot, icone = icone, rotulo = rotulo, sombra = sombra, segundos = segundos, aro = aro }
+	return { quadro = slot, icone = icone, rotulo = rotulo, sombra = sombra, segundos = segundos, aro = aro, tecla = nome }
+end
+
+-- mostra nos quadradinhos a tecla que o jogador escolheu para cada ação
+local slotsPorAcao = {}
+local function atualizarTeclasNosSlots()
+	for id, slot in slotsPorAcao do
+		slot.tecla.Text = Teclas.curto(Atalhos.principal(id))
+	end
 end
 
 local slots = {
@@ -385,6 +409,8 @@ slots.habilidade.rotulo.Text = "Habilid."
 slots.esquiva.rotulo.Text = "Esquiva"
 slots.esquiva.icone.Text = "💨"
 slots.supremo.rotulo.Text = "Supremo"
+slotsPorAcao = { ataque = slots.ataque, habilidade = slots.habilidade, esquiva = slots.esquiva, supremo = slots.supremo }
+atualizarTeclasNosSlots()
 
 -- Versão celular: vida no topo e botões grandes à direita
 local vidaCelular = UI.painel({
@@ -978,6 +1004,8 @@ function Hud.iniciar()
 			atualizarCartas()
 		elseif chave == "ouro" then
 			textoOuroPartida.Text = formatarNumero(Estado.ouroPartida)
+		elseif chave == "teclas" then
+			atualizarTeclasNosSlots()
 		end
 	end)
 	atualizarPerfil()

@@ -516,17 +516,181 @@ return Config
 ]]></ProtectedString>
         </Properties>
       </Item>
+      <Item class="ModuleScript" referent="RBX00000009">
+        <Properties>
+          <string name="Name">Teclas</string>
+          <ProtectedString name="Source"><![CDATA[-- Teclas de cada ação (o jogador pode trocar no menu ⚙️ Teclas). Usado pelo servidor
+-- para validar o que é salvo e pelo jogador para ler os comandos.
+--
+-- Cada ação tem até 2 teclas (principal e alternativa). Uma tecla é guardada pelo nome:
+-- o nome de um Enum.KeyCode ("E", "LeftShift"...) ou "MouseButton1", "MouseButton2",
+-- "MouseButton3". O controle (gamepad) tem botões fixos.
+
+local Teclas = {}
+
+Teclas.ACOES = {
+	{ id = "ataque", nome = "Atacar", detalhe = "Segure e solte para o golpe carregado", icone = "⚔️" },
+	{ id = "habilidade", nome = "Habilidade", detalhe = "Habilidade especial da classe", icone = "✨" },
+	{ id = "esquiva", nome = "Esquiva", detalhe = "Fica intocável por um instante", icone = "💨" },
+	{ id = "supremo", nome = "Supremo", detalhe = "Com a barra dourada cheia", icone = "⚡" },
+	{ id = "defender", nome = "Defender", detalhe = "Cavaleiro: segure para erguer o escudo", icone = "🛡️" },
+}
+
+Teclas.PADRAO = {
+	ataque = { "MouseButton1" },
+	habilidade = { "E" },
+	esquiva = { "Q" },
+	supremo = { "R" },
+	defender = { "F", "MouseButton2" },
+}
+
+-- Botões do controle (não mudam)
+Teclas.CONTROLE = {
+	ataque = Enum.KeyCode.ButtonR2,
+	habilidade = Enum.KeyCode.ButtonX,
+	esquiva = Enum.KeyCode.ButtonB,
+	supremo = Enum.KeyCode.ButtonY,
+	defender = Enum.KeyCode.ButtonL2,
+}
+
+-- Teclas que já fazem outra coisa no Roblox (andar, pular, chat, menu)
+Teclas.RESERVADAS = {
+	W = true,
+	A = true,
+	S = true,
+	D = true,
+	Up = true,
+	Down = true,
+	Left = true,
+	Right = true,
+	Space = true,
+	Escape = true,
+	Slash = true,
+	Tab = true,
+	Backquote = true,
+	Unknown = true,
+}
+
+local MOUSE = { MouseButton1 = true, MouseButton2 = true, MouseButton3 = true }
+
+local acoesPorId = {}
+for _, acao in Teclas.ACOES do
+	acoesPorId[acao.id] = acao
+end
+Teclas.acoesPorId = acoesPorId
+
+-- A tecla existe e pode ser usada?
+function Teclas.valida(nome: any): boolean
+	if type(nome) ~= "string" or #nome > 32 then
+		return false
+	end
+	if MOUSE[nome] then
+		return true
+	end
+	if Teclas.RESERVADAS[nome] then
+		return false
+	end
+	local ok, tecla = pcall(function()
+		return (Enum.KeyCode :: any)[nome]
+	end)
+	return ok and tecla ~= nil
+end
+
+-- Limpa uma tabela vinda de fora: só ações conhecidas, no máximo 2 teclas válidas cada,
+-- e a mesma tecla nunca em duas ações. Ações que ficarem de fora usam o padrão.
+function Teclas.normalizar(tabela: any)
+	local resultado = {}
+	local usadas = {}
+	for _, acao in Teclas.ACOES do
+		local lista = if type(tabela) == "table" then tabela[acao.id] else nil
+		if type(lista) ~= "table" then
+			lista = Teclas.PADRAO[acao.id]
+		end
+		local limpa = {}
+		for slot = 1, 2 do
+			local nome = lista[slot]
+			if Teclas.valida(nome) and not usadas[nome] then
+				usadas[nome] = true
+				limpa[slot] = nome
+			else
+				limpa[slot] = false -- vazio (false para não abrir buraco na lista)
+			end
+		end
+		resultado[acao.id] = limpa
+	end
+	return resultado
+end
+
+-- Nome curto para mostrar na tela
+local NOMES = {
+	MouseButton1 = "Clique Esq.",
+	MouseButton2 = "Clique Dir.",
+	MouseButton3 = "Clique Meio",
+	LeftShift = "Shift Esq.",
+	RightShift = "Shift Dir.",
+	LeftControl = "Ctrl Esq.",
+	RightControl = "Ctrl Dir.",
+	LeftAlt = "Alt Esq.",
+	RightAlt = "Alt Dir.",
+	Return = "Enter",
+	Backspace = "Apagar",
+	CapsLock = "Caps Lock",
+	One = "1",
+	Two = "2",
+	Three = "3",
+	Four = "4",
+	Five = "5",
+	Six = "6",
+	Seven = "7",
+	Eight = "8",
+	Nine = "9",
+	Zero = "0",
+	Minus = "-",
+	Equals = "=",
+	LeftBracket = "[",
+	RightBracket = "]",
+	Semicolon = ";",
+	Quote = "'",
+	Comma = ",",
+	Period = ".",
+	BackSlash = "\\",
+}
+
+function Teclas.texto(nome: any): string
+	if type(nome) ~= "string" then
+		return "—"
+	end
+	return NOMES[nome] or nome
+end
+
+-- Texto bem curto para os quadradinhos do HUD
+function Teclas.curto(nome: any): string
+	if nome == "MouseButton1" then
+		return "🖱️E"
+	elseif nome == "MouseButton2" then
+		return "🖱️D"
+	elseif nome == "MouseButton3" then
+		return "🖱️M"
+	end
+	local texto = Teclas.texto(nome)
+	return if #texto > 5 then string.sub(texto, 1, 5) else texto
+end
+
+return Teclas
+]]></ProtectedString>
+        </Properties>
+      </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="RBX00000009">
+  <Item class="ServerScriptService" referent="RBX00000010">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="RBX00000010">
+    <Item class="Folder" referent="RBX00000011">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="ModuleScript" referent="RBX00000011">
+      <Item class="ModuleScript" referent="RBX00000012">
         <Properties>
           <string name="Name">Armas</string>
           <ProtectedString name="Source"><![CDATA[-- Armas e acessórios de cada classe, montados com peças e presos às mãos do personagem.
@@ -813,7 +977,7 @@ return Armas
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000012">
+      <Item class="ModuleScript" referent="RBX00000013">
         <Properties>
           <string name="Name">Combate</string>
           <ProtectedString name="Source"><![CDATA[-- Combate: atributos, combos, habilidades, supremos, esquiva, dano e jogador caído.
@@ -2490,10 +2654,10 @@ return Combate
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000013">
+      <Item class="ModuleScript" referent="RBX00000014">
         <Properties>
           <string name="Name">Dados</string>
-          <ProtectedString name="Source"><![CDATA[-- Progresso permanente dos jogadores (ouro, recorde e melhorias), salvo no DataStore.
+          <ProtectedString name="Source"><![CDATA[-- Progresso permanente dos jogadores (ouro, recorde, melhorias e teclas), salvo no DataStore.
 -- No Studio, o salvamento só funciona com o jogo publicado e com
 -- "Game Settings > Security > Enable Studio Access to API Services" ligado.
 
@@ -2503,6 +2667,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
+local Teclas = require(Shared:WaitForChild("Teclas"))
 local Remotos = require(script.Parent.Remotos)
 
 local Dados = {}
@@ -2529,7 +2694,7 @@ local function perfilPadrao()
 	for _, melhoria in Config.MELHORIAS do
 		melhorias[melhoria.id] = 0
 	end
-	return { Ouro = 0, Recorde = 0, Melhorias = melhorias, Classe = "cavaleiro", EscolheuClasse = false }
+	return { Ouro = 0, Recorde = 0, Melhorias = melhorias, Classe = "cavaleiro", EscolheuClasse = false, Teclas = Teclas.normalizar(nil) }
 end
 
 local function corrigirPerfil(salvo)
@@ -2554,6 +2719,7 @@ local function corrigirPerfil(salvo)
 		perfil.Classe = salvo.Classe
 		perfil.EscolheuClasse = salvo.EscolheuClasse == true
 	end
+	perfil.Teclas = Teclas.normalizar(salvo.Teclas)
 	return perfil
 end
 
@@ -2631,6 +2797,7 @@ function Dados.salvar(player: Player)
 		Melhorias = table.clone(perfil.Melhorias),
 		Classe = perfil.Classe,
 		EscolheuClasse = perfil.EscolheuClasse,
+		Teclas = perfil.Teclas,
 	}
 	local ok, erro = pcall(function()
 		banco:SetAsync(chave(player), copia)
@@ -2661,6 +2828,7 @@ function Dados.enviarPerfil(player: Player)
 			melhorias = perfil.Melhorias,
 			classe = perfil.Classe,
 			escolheuClasse = perfil.EscolheuClasse,
+			teclas = perfil.Teclas,
 		})
 	end
 end
@@ -2674,6 +2842,14 @@ function Dados.definirClasse(player: Player, classe: any): boolean
 	perfil.EscolheuClasse = true
 	player:SetAttribute("Classe", classe)
 	return true
+end
+
+-- Teclas escolhidas no menu ⚙️ (sempre conferidas: só ações e teclas válidas)
+function Dados.definirTeclas(player: Player, tabela: any)
+	local perfil = perfis[player]
+	if perfil then
+		perfil.Teclas = Teclas.normalizar(tabela)
+	end
 end
 
 function Dados.adicionarOuro(player: Player, quantidade: number)
@@ -2727,7 +2903,7 @@ return Dados
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000014">
+      <Item class="ModuleScript" referent="RBX00000015">
         <Properties>
           <string name="Name">Inimigos</string>
           <ProtectedString name="Source"><![CDATA[-- Inimigos: tipos, ataques, elites, chefes e inteligência.
@@ -3771,7 +3947,7 @@ return Inimigos
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000015">
+      <Item class="ModuleScript" referent="RBX00000016">
         <Properties>
           <string name="Name">Lobby</string>
           <ProtectedString name="Source"><![CDATA[-- Lobby (o acampamento): terreno, altares das classes, portal da masmorra e loja do mercador.
@@ -4426,7 +4602,7 @@ return Lobby
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="Script" referent="RBX00000016">
+      <Item class="Script" referent="RBX00000017">
         <Properties>
           <string name="Name">Main</string>
           <ProtectedString name="Source"><![CDATA[-- Script principal do servidor: monta o lobby e cuida da entrada e saída dos jogadores.
@@ -4491,6 +4667,11 @@ game:BindToClose(function()
 	Dados.salvarTodos()
 end)
 
+local ultimoSalvarTeclas = {} -- [Player] = quando salvou as teclas pela última vez
+Players.PlayerRemoving:Connect(function(player)
+	ultimoSalvarTeclas[player] = nil
+end)
+
 local ACOES_DE_COMBATE = { atacar = true, carregar = true, soltar = true, cancelar = true, defender = true, habilidade = true, esquiva = true, supremo = true }
 
 Remotos.Acao.OnServerEvent:Connect(function(player, tipo, dados, extra)
@@ -4503,6 +4684,13 @@ Remotos.Acao.OnServerEvent:Connect(function(player, tipo, dados, extra)
 		Dados.enviarPerfil(player)
 		if not Partida.emPartida(player) then
 			Remotos.enviar(player, "lobby", {})
+		end
+	elseif tipo == "salvarTeclas" then
+		-- no máximo uma vez a cada 0,5s por jogador
+		local agora = os.clock()
+		if agora - (ultimoSalvarTeclas[player] or 0) >= 0.5 then
+			ultimoSalvarTeclas[player] = agora
+			Dados.definirTeclas(player, dados)
 		end
 	elseif tipo == "escolherClasse" then
 		Lobby.escolherClasse(player, dados)
@@ -4522,7 +4710,7 @@ end)
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000017">
+      <Item class="ModuleScript" referent="RBX00000018">
         <Properties>
           <string name="Name">Masmorra</string>
           <ProtectedString name="Source"><![CDATA[-- Gera as salas da masmorra por código. Cada sala é sorteada na hora: tamanho, pilares,
@@ -5278,7 +5466,7 @@ return Masmorra
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000018">
+      <Item class="ModuleScript" referent="RBX00000019">
         <Properties>
           <string name="Name">Partida</string>
           <ProtectedString name="Source"><![CDATA[-- Controla cada partida: salas, ondas de inimigos, cartas, elevador e fim de jogo.
@@ -6150,7 +6338,7 @@ return Partida
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000019">
+      <Item class="ModuleScript" referent="RBX00000020">
         <Properties>
           <string name="Name">Projeteis</string>
           <ProtectedString name="Source"><![CDATA[-- Projéteis (flechas, orbes, bolas de fogo...). O servidor calcula o trajeto e os acertos;
@@ -6368,7 +6556,7 @@ return Projeteis
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000020">
+      <Item class="ModuleScript" referent="RBX00000021">
         <Properties>
           <string name="Name">Remotos</string>
           <ProtectedString name="Source"><![CDATA[-- Canais de comunicação entre servidor e jogadores.
@@ -6408,7 +6596,7 @@ return Remotos
 ]]></ProtectedString>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="RBX00000021">
+      <Item class="ModuleScript" referent="RBX00000022">
         <Properties>
           <string name="Name">Vfx</string>
           <ProtectedString name="Source"><![CDATA[-- Efeitos visuais: o servidor só avisa o que aconteceu e cada jogador desenha o efeito
@@ -6440,19 +6628,19 @@ return Vfx
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="RBX00000022">
+  <Item class="StarterPlayer" referent="RBX00000023">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="RBX00000023">
+    <Item class="StarterPlayerScripts" referent="RBX00000024">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="RBX00000024">
+      <Item class="Folder" referent="RBX00000025">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="RBX00000025">
+        <Item class="ModuleScript" referent="RBX00000026">
           <Properties>
             <string name="Name">Ambiente</string>
             <ProtectedString name="Source"><![CDATA[-- Iluminação e pós-processamento: fim de tarde dourado no acampamento, escuridão com
@@ -6604,7 +6792,7 @@ return Ambiente
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000026">
+        <Item class="ModuleScript" referent="RBX00000027">
           <Properties>
             <string name="Name">Animacoes</string>
             <ProtectedString name="Source"><![CDATA[-- Animações dos personagens feitas por código (não precisam de arquivos de animação).
@@ -7304,12 +7492,137 @@ return Animacoes
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000027">
+        <Item class="ModuleScript" referent="RBX00000028">
+          <Properties>
+            <string name="Name">Atalhos</string>
+            <ProtectedString name="Source"><![CDATA[-- Teclas escolhidas pelo jogador: diz qual ação uma tecla aperta e salva as mudanças
+-- no perfil (servidor). A lista de ações e as teclas padrão ficam em Shared/Teclas.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Teclas = require(Shared:WaitForChild("Teclas"))
+
+local Estado = require(script.Parent.Estado)
+
+local Atalhos = {}
+
+local Acao = ReplicatedStorage:WaitForChild("Remotos"):WaitForChild("Acao") :: RemoteEvent
+
+Atalhos.atual = Teclas.normalizar(nil)
+
+-- Nome da tecla (ou botão do mouse) de uma entrada; nil se não for teclado/mouse
+function Atalhos.nomeDe(entrada: InputObject): string?
+	local tipo = entrada.UserInputType
+	if tipo == Enum.UserInputType.MouseButton1 or tipo == Enum.UserInputType.MouseButton2 or tipo == Enum.UserInputType.MouseButton3 then
+		return tipo.Name
+	elseif tipo == Enum.UserInputType.Keyboard then
+		return entrada.KeyCode.Name
+	end
+	return nil
+end
+
+-- Qual ação esta entrada aciona (teclado, mouse ou controle)
+function Atalhos.acaoDe(entrada: InputObject): string?
+	local nome = Atalhos.nomeDe(entrada)
+	if nome then
+		for id, lista in Atalhos.atual do
+			if lista[1] == nome or lista[2] == nome then
+				return id
+			end
+		end
+		return nil
+	end
+	for id, botao in Teclas.CONTROLE do
+		if entrada.KeyCode == botao then
+			return id
+		end
+	end
+	return nil
+end
+
+-- Tecla principal de uma ação (para mostrar no HUD); usa a alternativa se não houver
+function Atalhos.principal(id: string): string?
+	local lista = Atalhos.atual[id]
+	if not lista then
+		return nil
+	end
+	return (lista[1] or lista[2]) or nil
+end
+
+local function avisarMudanca()
+	Estado.avisar("teclas")
+end
+
+-- Teclas vindas do perfil salvo
+function Atalhos.carregar(tabela: any)
+	Atalhos.atual = Teclas.normalizar(tabela)
+	avisarMudanca()
+end
+
+local salvarAgendado = false
+local function salvar()
+	avisarMudanca()
+	-- junta várias mudanças seguidas num só envio
+	if salvarAgendado then
+		return
+	end
+	salvarAgendado = true
+	task.delay(1, function()
+		salvarAgendado = false
+		Acao:FireServer("salvarTeclas", Atalhos.atual)
+	end)
+end
+
+--[[ Coloca uma tecla numa ação (slot 1 = principal, 2 = alternativa).
+	Se a tecla já era de outra ação, sai de lá. Retorna (ok, mensagem). ]]
+function Atalhos.definir(id: string, slot: number, nome: string): (boolean, string?)
+	if not Atalhos.atual[id] or (slot ~= 1 and slot ~= 2) then
+		return false, nil
+	end
+	if Teclas.RESERVADAS[nome] then
+		return false, "Essa tecla já é usada para andar, pular ou abrir o chat."
+	end
+	if not Teclas.valida(nome) then
+		return false, "Essa tecla não pode ser usada."
+	end
+	local mensagem = nil
+	for outroId, lista in Atalhos.atual do
+		for outroSlot = 1, 2 do
+			if lista[outroSlot] == nome and not (outroId == id and outroSlot == slot) then
+				lista[outroSlot] = false
+				mensagem = Teclas.texto(nome) .. " saiu de " .. Teclas.acoesPorId[outroId].nome .. "."
+			end
+		end
+	end
+	Atalhos.atual[id][slot] = nome
+	salvar()
+	return true, mensagem
+end
+
+function Atalhos.limpar(id: string, slot: number)
+	if Atalhos.atual[id] then
+		Atalhos.atual[id][slot] = false
+		salvar()
+	end
+end
+
+function Atalhos.restaurarPadrao()
+	Atalhos.atual = Teclas.normalizar(nil)
+	salvar()
+end
+
+return Atalhos
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX00000029">
           <Properties>
             <string name="Name">Controles</string>
             <ProtectedString name="Source"><![CDATA[-- Controles: tocar para atacar (mira no mouse; no celular mira sozinha no inimigo mais próximo),
 -- segurar para carregar e soltar para um golpe forte, habilidade (E), esquiva (Q), supremo (R),
--- defesa com escudo do Cavaleiro (F / botão direito / L2) e os botões de toque no celular.
+-- defesa com escudo do Cavaleiro e os botões de toque no celular. As teclas de cada ação
+-- vêm de Atalhos (o jogador pode trocar no menu ⚙️ Teclas).
 
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
@@ -7327,6 +7640,7 @@ local Estado = require(modulos.Estado)
 local Vfx = require(modulos.Vfx)
 local UI = require(modulos.UI)
 local Animacoes = require(modulos.Animacoes)
+local Atalhos = require(modulos.Atalhos)
 
 local Controles = {}
 
@@ -7753,23 +8067,25 @@ function Controles.iniciar()
 		if processado then
 			return
 		end
-		local tipo, tecla = entrada.UserInputType, entrada.KeyCode
-		if tipo == Enum.UserInputType.MouseButton1 or tecla == Enum.KeyCode.ButtonR2 then
+		local acao = Atalhos.acaoDe(entrada)
+		if acao == "ataque" then
 			Controles.segurarAtaque(true)
-		elseif tecla == Enum.KeyCode.E or tecla == Enum.KeyCode.ButtonX then
+		elseif acao == "habilidade" then
 			usarHabilidade()
-		elseif tecla == Enum.KeyCode.Q or tecla == Enum.KeyCode.ButtonB then
+		elseif acao == "esquiva" then
 			esquivar()
-		elseif tecla == Enum.KeyCode.R or tecla == Enum.KeyCode.ButtonY then
+		elseif acao == "supremo" then
 			usarSupremo()
-		elseif tecla == Enum.KeyCode.F or tecla == Enum.KeyCode.ButtonL2 or tipo == Enum.UserInputType.MouseButton2 then
+		elseif acao == "defender" then
 			defender(true)
 		end
 	end)
+	-- soltar a tecla: termina o ataque segurado (solta o golpe carregado) e abaixa o escudo
 	UserInputService.InputEnded:Connect(function(entrada)
-		if entrada.UserInputType == Enum.UserInputType.MouseButton1 or entrada.KeyCode == Enum.KeyCode.ButtonR2 then
+		local acao = Atalhos.acaoDe(entrada)
+		if acao == "ataque" then
 			Controles.segurarAtaque(false)
-		elseif entrada.KeyCode == Enum.KeyCode.F or entrada.KeyCode == Enum.KeyCode.ButtonL2 or entrada.UserInputType == Enum.UserInputType.MouseButton2 then
+		elseif acao == "defender" then
 			defender(false)
 		end
 	end)
@@ -7816,7 +8132,7 @@ return Controles
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000028">
+        <Item class="ModuleScript" referent="RBX00000030">
           <Properties>
             <string name="Name">Estado</string>
             <ProtectedString name="Source"><![CDATA[-- Estado compartilhado entre as partes da interface do jogador.
@@ -7854,7 +8170,7 @@ return Estado
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000029">
+        <Item class="ModuleScript" referent="RBX00000031">
           <Properties>
             <string name="Name">Hud</string>
             <ProtectedString name="Source"><![CDATA[-- HUD: tudo o que fica na tela durante o jogo (lobby e masmorra).
@@ -7868,11 +8184,13 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
 local Cartas = require(Shared:WaitForChild("Cartas"))
+local Teclas = require(Shared:WaitForChild("Teclas"))
 
 local modulos = script.Parent
 local UI = require(modulos.UI)
 local Estado = require(modulos.Estado)
 local Vfx = require(modulos.Vfx)
+local Atalhos = require(modulos.Atalhos)
 
 local Hud = {}
 Hud.aoAbrir = nil :: ((string) -> ())?
@@ -7994,7 +8312,7 @@ local _, textoRecorde = ficha(telaLobby, "🏆", UDim2.new(1, -16, 0, 114), 190)
 local doca = criar("Frame", {
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -22),
-	Size = UDim2.fromOffset(560, 62),
+	Size = UDim2.fromOffset(760, 62),
 	BackgroundTransparency = 1,
 	Parent = telaLobby,
 })
@@ -8006,7 +8324,7 @@ criar("UIListLayout", {
 	SortOrder = Enum.SortOrder.LayoutOrder,
 	Parent = doca,
 })
-for ordem, info in { { "classe", "⚔️ CLASSE", "ouro" }, { "loja", "🛒 LOJA", "escuro" }, { "ajuda", "📜 COMO JOGAR", "escuro" } } do
+for ordem, info in { { "classe", "⚔️ CLASSE", "ouro" }, { "loja", "🛒 LOJA", "escuro" }, { "ajuda", "📜 COMO JOGAR", "escuro" }, { "teclas", "⚙️ TECLAS", "escuro" } } do
 	local botao = UI.botao({ Parent = doca, Texto = info[2], Estilo = info[3], Size = UDim2.fromOffset(170, 58), LayoutOrder = ordem, TamanhoTexto = 24 })
 	botao.Activated:Connect(function()
 		if Hud.aoAbrir then
@@ -8114,6 +8432,7 @@ local tituloChefe = UI.texto({ Position = UDim2.fromOffset(0, 58), Size = UDim2.
 
 -- Ouro e cartas da partida
 local _, textoOuroPartida = ficha(telaPartida, "💰", UDim2.new(1, -16, 0, 64), 170)
+
 local faixaCartas = criar("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -16, 0, 116),
@@ -8151,6 +8470,19 @@ local barraAcoes = UI.painel({
 	Parent = telaPartida,
 })
 UI.escalavel(barraAcoes)
+-- engrenagem ao lado da barra: abre o menu de teclas no meio da partida
+local botaoTeclasPartida = UI.botao({
+	Parent = barraAcoes,
+	Texto = "⚙️",
+	Estilo = "escuro",
+	Position = UDim2.new(1, 10, 0, 4),
+	Size = UDim2.fromOffset(46, 46),
+})
+botaoTeclasPartida.Activated:Connect(function()
+	if Hud.aoAbrir then
+		Hud.aoAbrir("teclas")
+	end
+end)
 local medalhaoClasse = UI.medalhao({ Parent = barraAcoes, Icone = "🛡️", Position = UDim2.fromOffset(14, 24), Size = UDim2.fromOffset(80, 80), EspessuraBorda = 3 })
 local barraVida = UI.barra({ Parent = barraAcoes, Position = UDim2.fromOffset(106, 14), Size = UDim2.fromOffset(440, 26) })
 local barraCarga = UI.barra({
@@ -8230,7 +8562,15 @@ local function criarSlot(ordem: number, tecla: string)
 	UI.cantos(sombra, 8)
 	local segundos = UI.texto({ Size = UDim2.fromScale(1, 1), FontFace = fontes.numero, Text = "", ZIndex = 4, Parent = slot })
 	UI.contorno(segundos, 2)
-	return { quadro = slot, icone = icone, rotulo = rotulo, sombra = sombra, segundos = segundos, aro = aro }
+	return { quadro = slot, icone = icone, rotulo = rotulo, sombra = sombra, segundos = segundos, aro = aro, tecla = nome }
+end
+
+-- mostra nos quadradinhos a tecla que o jogador escolheu para cada ação
+local slotsPorAcao = {}
+local function atualizarTeclasNosSlots()
+	for id, slot in slotsPorAcao do
+		slot.tecla.Text = Teclas.curto(Atalhos.principal(id))
+	end
 end
 
 local slots = {
@@ -8244,6 +8584,8 @@ slots.habilidade.rotulo.Text = "Habilid."
 slots.esquiva.rotulo.Text = "Esquiva"
 slots.esquiva.icone.Text = "💨"
 slots.supremo.rotulo.Text = "Supremo"
+slotsPorAcao = { ataque = slots.ataque, habilidade = slots.habilidade, esquiva = slots.esquiva, supremo = slots.supremo }
+atualizarTeclasNosSlots()
 
 -- Versão celular: vida no topo e botões grandes à direita
 local vidaCelular = UI.painel({
@@ -8837,6 +9179,8 @@ function Hud.iniciar()
 			atualizarCartas()
 		elseif chave == "ouro" then
 			textoOuroPartida.Text = formatarNumero(Estado.ouroPartida)
+		elseif chave == "teclas" then
+			atualizarTeclasNosSlots()
 		end
 	end)
 	atualizarPerfil()
@@ -8940,7 +9284,7 @@ return Hud
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="RBX00000030">
+        <Item class="LocalScript" referent="RBX00000032">
           <Properties>
             <string name="Name">Main</string>
             <ProtectedString name="Source"><![CDATA[-- Script principal do jogador: liga a interface, os efeitos, os controles e recebe as
@@ -8960,6 +9304,7 @@ local Controles = require(modulos.Controles)
 local Animacoes = require(modulos.Animacoes)
 local Hud = require(modulos.Hud)
 local Menus = require(modulos.Menus)
+local Atalhos = require(modulos.Atalhos)
 
 local jogador = Players.LocalPlayer
 local Remotos = ReplicatedStorage:WaitForChild("Remotos")
@@ -9002,12 +9347,15 @@ Hud.aoAbrir = function(nome: string)
 		Menus.abrirClasses()
 	elseif nome == "loja" then
 		Menus.abrirLoja()
+	elseif nome == "teclas" then
+		Menus.abrirTeclas()
 	else
 		Menus.abrirAjuda()
 	end
 end
 
 local mostrouClasses = false
+local teclasCarregadas = false
 
 local function voltarAoLobby()
 	Estado.modo = "lobby"
@@ -9027,6 +9375,11 @@ end
 local manipuladores = {
 	perfil = function(dados)
 		Estado.perfil = dados
+		-- as teclas salvas só são lidas uma vez (depois o próprio jogador é quem muda)
+		if not teclasCarregadas then
+			teclasCarregadas = true
+			Atalhos.carregar(dados.teclas)
+		end
 		Estado.avisar("perfil")
 		if not dados.escolheuClasse and not mostrouClasses and Estado.modo == "lobby" then
 			mostrouClasses = true
@@ -9152,23 +9505,27 @@ Acao:FireServer("pronto")
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000031">
+        <Item class="ModuleScript" referent="RBX00000033">
           <Properties>
             <string name="Name">Menus</string>
-            <ProtectedString name="Source"><![CDATA[-- Menus: escolha de classe, cartas, elevador, loja do mercador, resumo da partida e ajuda.
+            <ProtectedString name="Source"><![CDATA[-- Menus: escolha de classe, cartas, elevador, loja do mercador, resumo da partida, ajuda e
+-- troca de teclas.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
 local Cartas = require(Shared:WaitForChild("Cartas"))
+local Teclas = require(Shared:WaitForChild("Teclas"))
 
 local modulos = script.Parent
 local UI = require(modulos.UI)
 local Estado = require(modulos.Estado)
+local Atalhos = require(modulos.Atalhos)
 
 local Menus = {}
 
@@ -9293,6 +9650,7 @@ criar("UIListLayout", {
 })
 
 local botoesClasse = {}
+local rotulosTeclaClasse = {} -- nome da habilidade/supremo com a tecla escolhida
 for ordem, id in Classes.ordem do
 	local classe = Classes.dados[id]
 	local cartao = UI.painel({ Size = UDim2.fromOffset(286, 566), LayoutOrder = ordem, Parent = linhaClasses })
@@ -9347,18 +9705,19 @@ for ordem, id in Classes.ordem do
 		pontos(cartao, UDim2.fromOffset(146, y + 3), classe.notas[atributo], classe.cor)
 		y += 22
 	end
-	for i, info in { { classe.habilidade, "E" }, { classe.supremo, "R" } } do
+	for i, info in { { classe.habilidade, "habilidade" }, { classe.supremo, "supremo" } } do
 		local linhaY = 408 + (i - 1) * 52
 		UI.medalhao({ Parent = cartao, Icone = info[1].icone, Position = UDim2.fromOffset(14, linhaY), Size = UDim2.fromOffset(40, 40), Cor = classe.cor })
-		UI.texto({
+		local rotuloHabilidade = UI.texto({
 			Position = UDim2.fromOffset(60, linhaY),
 			Size = UDim2.new(1, -70, 0, 18),
 			FontFace = fontes.forte,
-			Text = info[1].nome .. "  [" .. info[2] .. "]",
+			Text = info[1].nome,
 			TextColor3 = cores.ouroClaro,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = cartao,
 		})
+		table.insert(rotulosTeclaClasse, { rotulo = rotuloHabilidade, nome = info[1].nome, acao = info[2] })
 		local d = UI.texto({
 			Position = UDim2.fromOffset(60, linhaY + 18),
 			Size = UDim2.new(1, -70, 0, 30),
@@ -9394,6 +9753,9 @@ for ordem, id in Classes.ordem do
 end
 
 local function atualizarClasses()
+	for _, info in rotulosTeclaClasse do
+		info.rotulo.Text = info.nome .. "  [" .. Teclas.curto(Atalhos.principal(info.acao)) .. "]"
+	end
 	for id, botao in botoesClasse do
 		local selecionada = Estado.perfil.classe == id and Estado.perfil.escolheuClasse
 		UI.textoBotao(botao, if selecionada then "SELECIONADA ✓" else "ESCOLHER")
@@ -9876,7 +10238,7 @@ local painelAjuda = UI.painel({ Size = UDim2.fromScale(1, 1), Parent = menuAjuda
 botaoFechar(menuAjuda)
 UI.titulo(painelAjuda, "COMO JOGAR", 16, 420, 52)
 local secoes = {
-	{ "🎮", "Controles", "Clique: ataque (segure e solte: golpe carregado)  •  E: habilidade  •  Q: esquiva  •  R: supremo\nCavaleiro: segure F ou o botão direito para erguer o escudo. No celular, use os botões redondos." },
+	{ "🎮", "Controles", "Ataque (segure e solte: golpe carregado), habilidade, esquiva, supremo e o escudo do Cavaleiro.\nVeja e troque as teclas em ⚙️ TECLAS. No celular, use os botões redondos." },
 	{ "⚔️", "Combo", "Todo terceiro ataque é um golpe final mais forte. A barra dourada enche lutando: com ela cheia, use o supremo!" },
 	{ "💨", "Esquiva", "Durante a esquiva você não leva dano e atravessa projéteis. Fuja das áreas vermelhas no chão!" },
 	{ "🃏", "Cartas", "Depois de cada sala, escolha 1 de 3 cartas. Cada classe tem cartas próprias, e algumas combinam muito bem." },
@@ -9914,6 +10276,189 @@ function Menus.abrirAjuda()
 end
 
 ------------------------------------------------------------------------
+-- Teclas: escolha a tecla de cada ação
+------------------------------------------------------------------------
+
+local menuTeclas = novoMenu("Teclas", 780, 640)
+local painelTeclas = UI.painel({ Size = UDim2.fromScale(1, 1), Parent = menuTeclas.conteudo })
+botaoFechar(menuTeclas)
+UI.titulo(painelTeclas, "⚙️ TECLAS", 16, 380, 52)
+local instrucaoTeclas = UI.texto({
+	Position = UDim2.fromOffset(30, 76),
+	Size = UDim2.new(1, -60, 0, 22),
+	FontFace = fontes.texto,
+	Text = "Clique numa tecla e aperte a nova (vale tecla ou botão do mouse).",
+	TextColor3 = cores.textoSuave,
+	Parent = painelTeclas,
+})
+UI.limiteTexto(instrucaoTeclas, 17)
+for _, cabecalho in { { "PRINCIPAL", 400 }, { "ALTERNATIVA", 580 } } do
+	UI.texto({
+		Position = UDim2.fromOffset(cabecalho[2], 108),
+		Size = UDim2.fromOffset(170, 18),
+		FontFace = fontes.cabecalho,
+		Text = cabecalho[1],
+		TextColor3 = cores.ouro,
+		Parent = painelTeclas,
+	})
+end
+
+local esperandoTecla = nil -- { id, slot } enquanto espera o jogador apertar a nova tecla
+local botoesTecla = {} -- [id] = { [1] = botão, [2] = botão }
+
+local function atualizarMenuTeclas()
+	for id, botoes in botoesTecla do
+		for slot = 1, 2 do
+			local nome = Atalhos.atual[id][slot]
+			local esperando = esperandoTecla ~= nil and esperandoTecla.id == id and esperandoTecla.slot == slot
+			UI.textoBotao(botoes[slot], if esperando then "Aperte..." elseif nome then Teclas.texto(nome) else "—")
+			UI.estiloBotao(botoes[slot], if esperando then "verde" elseif nome then "escuro" else "cinza")
+		end
+	end
+end
+
+local function avisoTeclas(texto: string, cor: Color3?)
+	instrucaoTeclas.Text = texto
+	instrucaoTeclas.TextColor3 = cor or cores.textoSuave
+end
+
+for i, acao in Teclas.ACOES do
+	local y = 134 + (i - 1) * 72
+	UI.medalhao({ Parent = painelTeclas, Icone = acao.icone, Position = UDim2.fromOffset(28, y), Size = UDim2.fromOffset(54, 54), Cor = cores.painelClaro })
+	UI.texto({
+		Position = UDim2.fromOffset(96, y + 4),
+		Size = UDim2.fromOffset(290, 24),
+		FontFace = fontes.cabecalho,
+		Text = acao.nome,
+		TextColor3 = cores.ouroClaro,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = painelTeclas,
+	})
+	local detalhe = UI.texto({
+		Position = UDim2.fromOffset(96, y + 30),
+		Size = UDim2.fromOffset(290, 20),
+		FontFace = fontes.texto,
+		Text = acao.detalhe,
+		TextColor3 = cores.textoSuave,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = painelTeclas,
+	})
+	UI.limiteTexto(detalhe, 14)
+	botoesTecla[acao.id] = {}
+	for slot = 1, 2 do
+		local botao = UI.botao({
+			Parent = painelTeclas,
+			Texto = "",
+			Estilo = "escuro",
+			Position = UDim2.fromOffset(if slot == 1 then 395 else 575, y + 4),
+			Size = UDim2.fromOffset(170, 46),
+			TamanhoTexto = 20,
+		})
+		botao.Activated:Connect(function()
+			-- clicar de novo no mesmo botão desiste
+			if esperandoTecla and esperandoTecla.id == acao.id and esperandoTecla.slot == slot then
+				esperandoTecla = nil
+				avisoTeclas("Clique numa tecla e aperte a nova (vale tecla ou botão do mouse).")
+			else
+				esperandoTecla = { id = acao.id, slot = slot }
+				avisoTeclas("Aperte a nova tecla para " .. acao.nome .. ".  Apagar (Backspace) deixa vazio  •  clique de novo para desistir", cores.ouroClaro)
+			end
+			atualizarMenuTeclas()
+		end)
+		botoesTecla[acao.id][slot] = botao
+	end
+end
+
+UI.texto({
+	Position = UDim2.fromOffset(30, 498),
+	Size = UDim2.new(1, -60, 0, 40),
+	FontFace = fontes.texto,
+	Text = "🎮 Controle: R2 atacar  •  X habilidade  •  B esquiva  •  Y supremo  •  L2 escudo\nW A S D, Espaço, Esc e Tab ficam para andar, pular e os menus do Roblox.",
+	TextColor3 = cores.textoSuave,
+	TextWrapped = true,
+	Parent = painelTeclas,
+})
+local botaoPadrao = UI.botao({
+	Parent = painelTeclas,
+	Texto = "RESTAURAR PADRÃO",
+	Estilo = "escuro",
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(0.5, -10, 1, -18),
+	Size = UDim2.fromOffset(250, 50),
+	TamanhoTexto = 20,
+})
+botaoPadrao.Activated:Connect(function()
+	esperandoTecla = nil
+	Atalhos.restaurarPadrao()
+	avisoTeclas("Teclas voltaram ao padrão.", cores.ouroClaro)
+	atualizarMenuTeclas()
+end)
+local botaoProntoTeclas = UI.botao({
+	Parent = painelTeclas,
+	Texto = "PRONTO",
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0.5, 10, 1, -18),
+	Size = UDim2.fromOffset(250, 50),
+	TamanhoTexto = 22,
+})
+botaoProntoTeclas.Activated:Connect(function()
+	esperandoTecla = nil
+	fechar(menuTeclas)
+end)
+
+-- Captura da nova tecla
+UserInputService.InputBegan:Connect(function(entrada, processado)
+	if not esperandoTecla or not abertos[menuTeclas] then
+		return
+	end
+	local tipo = entrada.UserInputType
+	local nome = nil
+	if tipo == Enum.UserInputType.Keyboard then
+		if entrada.KeyCode == Enum.KeyCode.Escape then
+			esperandoTecla = nil
+			avisoTeclas("Clique numa tecla e aperte a nova (vale tecla ou botão do mouse).")
+			atualizarMenuTeclas()
+			return
+		elseif entrada.KeyCode == Enum.KeyCode.Backspace or entrada.KeyCode == Enum.KeyCode.Delete then
+			Atalhos.limpar(esperandoTecla.id, esperandoTecla.slot)
+			esperandoTecla = nil
+			avisoTeclas("Tecla removida.", cores.ouroClaro)
+			atualizarMenuTeclas()
+			return
+		elseif processado then
+			return -- digitando no chat
+		end
+		nome = entrada.KeyCode.Name
+	elseif tipo == Enum.UserInputType.MouseButton1 then
+		-- clique em cima de um botão do menu é clique no menu, não a tecla nova
+		if processado then
+			return
+		end
+		nome = tipo.Name
+	elseif tipo == Enum.UserInputType.MouseButton2 or tipo == Enum.UserInputType.MouseButton3 then
+		nome = tipo.Name
+	else
+		return
+	end
+	local id, slot = esperandoTecla.id, esperandoTecla.slot
+	local ok, mensagem = Atalhos.definir(id, slot, nome)
+	if ok then
+		esperandoTecla = nil
+		avisoTeclas("✔ " .. Teclas.acoesPorId[id].nome .. ": " .. Teclas.texto(nome) .. (if mensagem then "   (" .. mensagem .. ")" else ""), Color3.fromRGB(130, 230, 140))
+	else
+		avisoTeclas("✘ " .. (mensagem or "Essa tecla não pode ser usada.") .. " Tente outra.", Color3.fromRGB(255, 120, 120))
+	end
+	atualizarMenuTeclas()
+end)
+
+function Menus.abrirTeclas()
+	esperandoTecla = nil
+	avisoTeclas("Clique numa tecla e aperte a nova (vale tecla ou botão do mouse).")
+	atualizarMenuTeclas()
+	abrir(menuTeclas)
+end
+
+------------------------------------------------------------------------
 -- Troca de modo
 ------------------------------------------------------------------------
 
@@ -9948,7 +10493,7 @@ return Menus
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000032">
+        <Item class="ModuleScript" referent="RBX00000034">
           <Properties>
             <string name="Name">Modelos</string>
             <ProtectedString name="Source"><![CDATA[-- Aparência dos inimigos, montada com peças. Inspiração: Warcraft (proporções exageradas,
@@ -10718,7 +11263,7 @@ return Modelos
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000033">
+        <Item class="ModuleScript" referent="RBX00000035">
           <Properties>
             <string name="Name">Poses</string>
             <ProtectedString name="Source"><![CDATA[-- Poses e animações dos personagens (só dados e contas: pode ser testado fora do Roblox).
@@ -11895,7 +12440,7 @@ return Poses
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000034">
+        <Item class="ModuleScript" referent="RBX00000036">
           <Properties>
             <string name="Name">UI</string>
             <ProtectedString name="Source"><![CDATA[-- Kit visual da interface: cores, fontes e componentes (painéis, botões, barras, medalhões).
@@ -12370,7 +12915,7 @@ return UI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000035">
+        <Item class="ModuleScript" referent="RBX00000037">
           <Properties>
             <string name="Name">Vfx</string>
             <ProtectedString name="Source"><![CDATA[-- Efeitos visuais desenhados no computador do jogador: cortes, projéteis, explosões,
@@ -14274,7 +14819,7 @@ return Vfx
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000036">
+        <Item class="ModuleScript" referent="RBX00000038">
           <Properties>
             <string name="Name">VisualInimigos</string>
             <ProtectedString name="Source"><![CDATA[-- Dá vida aos inimigos no computador do jogador: monta o modelo (Modelos.luau), anima
@@ -15170,11 +15715,11 @@ return VisualInimigos
         </Item>
       </Item>
     </Item>
-    <Item class="StarterCharacterScripts" referent="RBX00000037">
+    <Item class="StarterCharacterScripts" referent="RBX00000039">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="RBX00000038">
+      <Item class="Script" referent="RBX00000040">
         <Properties>
           <string name="Name">Health</string>
           <ProtectedString name="Source"><![CDATA[-- Substitui o script "Health" padrão do Roblox, que regenera vida sozinho.

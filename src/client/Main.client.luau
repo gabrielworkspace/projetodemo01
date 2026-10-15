@@ -15,6 +15,7 @@ local Controles = require(modulos.Controles)
 local Animacoes = require(modulos.Animacoes)
 local Hud = require(modulos.Hud)
 local Menus = require(modulos.Menus)
+local Atalhos = require(modulos.Atalhos)
 
 local jogador = Players.LocalPlayer
 local Remotos = ReplicatedStorage:WaitForChild("Remotos")
@@ -57,12 +58,15 @@ Hud.aoAbrir = function(nome: string)
 		Menus.abrirClasses()
 	elseif nome == "loja" then
 		Menus.abrirLoja()
+	elseif nome == "teclas" then
+		Menus.abrirTeclas()
 	else
 		Menus.abrirAjuda()
 	end
 end
 
 local mostrouClasses = false
+local teclasCarregadas = false
 
 local function voltarAoLobby()
 	Estado.modo = "lobby"
@@ -82,6 +86,11 @@ end
 local manipuladores = {
 	perfil = function(dados)
 		Estado.perfil = dados
+		-- as teclas salvas só são lidas uma vez (depois o próprio jogador é quem muda)
+		if not teclasCarregadas then
+			teclasCarregadas = true
+			Atalhos.carregar(dados.teclas)
+		end
 		Estado.avisar("perfil")
 		if not dados.escolheuClasse and not mostrouClasses and Estado.modo == "lobby" then
 			mostrouClasses = true

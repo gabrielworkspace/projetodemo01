@@ -1,6 +1,7 @@
 -- Controles: tocar para atacar (mira no mouse; no celular mira sozinha no inimigo mais próximo),
 -- segurar para carregar e soltar para um golpe forte, habilidade (E), esquiva (Q), supremo (R),
--- defesa com escudo do Cavaleiro (F / botão direito / L2) e os botões de toque no celular.
+-- defesa com escudo do Cavaleiro e os botões de toque no celular. As teclas de cada ação
+-- vêm de Atalhos (o jogador pode trocar no menu ⚙️ Teclas).
 
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
@@ -18,6 +19,7 @@ local Estado = require(modulos.Estado)
 local Vfx = require(modulos.Vfx)
 local UI = require(modulos.UI)
 local Animacoes = require(modulos.Animacoes)
+local Atalhos = require(modulos.Atalhos)
 
 local Controles = {}
 
@@ -444,23 +446,25 @@ function Controles.iniciar()
 		if processado then
 			return
 		end
-		local tipo, tecla = entrada.UserInputType, entrada.KeyCode
-		if tipo == Enum.UserInputType.MouseButton1 or tecla == Enum.KeyCode.ButtonR2 then
+		local acao = Atalhos.acaoDe(entrada)
+		if acao == "ataque" then
 			Controles.segurarAtaque(true)
-		elseif tecla == Enum.KeyCode.E or tecla == Enum.KeyCode.ButtonX then
+		elseif acao == "habilidade" then
 			usarHabilidade()
-		elseif tecla == Enum.KeyCode.Q or tecla == Enum.KeyCode.ButtonB then
+		elseif acao == "esquiva" then
 			esquivar()
-		elseif tecla == Enum.KeyCode.R or tecla == Enum.KeyCode.ButtonY then
+		elseif acao == "supremo" then
 			usarSupremo()
-		elseif tecla == Enum.KeyCode.F or tecla == Enum.KeyCode.ButtonL2 or tipo == Enum.UserInputType.MouseButton2 then
+		elseif acao == "defender" then
 			defender(true)
 		end
 	end)
+	-- soltar a tecla: termina o ataque segurado (solta o golpe carregado) e abaixa o escudo
 	UserInputService.InputEnded:Connect(function(entrada)
-		if entrada.UserInputType == Enum.UserInputType.MouseButton1 or entrada.KeyCode == Enum.KeyCode.ButtonR2 then
+		local acao = Atalhos.acaoDe(entrada)
+		if acao == "ataque" then
 			Controles.segurarAtaque(false)
-		elseif entrada.KeyCode == Enum.KeyCode.F or entrada.KeyCode == Enum.KeyCode.ButtonL2 or entrada.UserInputType == Enum.UserInputType.MouseButton2 then
+		elseif acao == "defender" then
 			defender(false)
 		end
 	end)

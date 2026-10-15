@@ -1,4 +1,4 @@
--- Progresso permanente dos jogadores (ouro, recorde e melhorias), salvo no DataStore.
+-- Progresso permanente dos jogadores (ouro, recorde, melhorias e teclas), salvo no DataStore.
 -- No Studio, o salvamento só funciona com o jogo publicado e com
 -- "Game Settings > Security > Enable Studio Access to API Services" ligado.
 
@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
+local Teclas = require(Shared:WaitForChild("Teclas"))
 local Remotos = require(script.Parent.Remotos)
 
 local Dados = {}
@@ -34,7 +35,7 @@ local function perfilPadrao()
 	for _, melhoria in Config.MELHORIAS do
 		melhorias[melhoria.id] = 0
 	end
-	return { Ouro = 0, Recorde = 0, Melhorias = melhorias, Classe = "cavaleiro", EscolheuClasse = false }
+	return { Ouro = 0, Recorde = 0, Melhorias = melhorias, Classe = "cavaleiro", EscolheuClasse = false, Teclas = Teclas.normalizar(nil) }
 end
 
 local function corrigirPerfil(salvo)
@@ -59,6 +60,7 @@ local function corrigirPerfil(salvo)
 		perfil.Classe = salvo.Classe
 		perfil.EscolheuClasse = salvo.EscolheuClasse == true
 	end
+	perfil.Teclas = Teclas.normalizar(salvo.Teclas)
 	return perfil
 end
 
@@ -136,6 +138,7 @@ function Dados.salvar(player: Player)
 		Melhorias = table.clone(perfil.Melhorias),
 		Classe = perfil.Classe,
 		EscolheuClasse = perfil.EscolheuClasse,
+		Teclas = perfil.Teclas,
 	}
 	local ok, erro = pcall(function()
 		banco:SetAsync(chave(player), copia)
@@ -166,6 +169,7 @@ function Dados.enviarPerfil(player: Player)
 			melhorias = perfil.Melhorias,
 			classe = perfil.Classe,
 			escolheuClasse = perfil.EscolheuClasse,
+			teclas = perfil.Teclas,
 		})
 	end
 end
@@ -179,6 +183,14 @@ function Dados.definirClasse(player: Player, classe: any): boolean
 	perfil.EscolheuClasse = true
 	player:SetAttribute("Classe", classe)
 	return true
+end
+
+-- Teclas escolhidas no menu ⚙️ (sempre conferidas: só ações e teclas válidas)
+function Dados.definirTeclas(player: Player, tabela: any)
+	local perfil = perfis[player]
+	if perfil then
+		perfil.Teclas = Teclas.normalizar(tabela)
+	end
 end
 
 function Dados.adicionarOuro(player: Player, quantidade: number)

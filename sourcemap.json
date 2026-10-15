@@ -45,6 +45,13 @@
               "filePaths": [
                 "src/shared/Config.luau"
               ]
+            },
+            {
+              "name": "Teclas",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/shared/Teclas.luau"
+              ]
             }
           ]
         }
@@ -163,6 +170,13 @@
                   "className": "ModuleScript",
                   "filePaths": [
                     "src/client/Animacoes.luau"
+                  ]
+                },
+                {
+                  "name": "Atalhos",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Atalhos.luau"
                   ]
                 },
                 {
