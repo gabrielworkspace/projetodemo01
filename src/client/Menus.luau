@@ -97,11 +97,11 @@ end
 
 -- Pontinhos de 1 a 5 (força de um atributo)
 local function pontos(pai: Instance, posicao: UDim2, valor: number, cor: Color3)
-	local linha = criar("Frame", { Position = posicao, Size = UDim2.fromOffset(150, 14), BackgroundTransparency = 1, Parent = pai })
-	criar("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5), Parent = linha })
+	local linha = criar("Frame", { Position = posicao, Size = UDim2.fromOffset(120, 14), BackgroundTransparency = 1, Parent = pai })
+	criar("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), Parent = linha })
 	for i = 1, 5 do
 		local p = criar("Frame", {
-			Size = UDim2.fromOffset(24, 12),
+			Size = UDim2.fromOffset(20, 12),
 			BackgroundColor3 = if i <= valor then cor else Color3.fromRGB(46, 40, 58),
 			BorderSizePixel = 0,
 			Parent = linha,
@@ -115,7 +115,7 @@ end
 -- Escolha de classe
 ------------------------------------------------------------------------
 
-local menuClasses = novoMenu("Classes", 1200, 640)
+local menuClasses = novoMenu("Classes", 1220, 690)
 botaoFechar(menuClasses)
 UI.titulo(menuClasses.conteudo, "ESCOLHA SUA CLASSE", 0, 620, 58)
 UI.texto({
@@ -126,11 +126,11 @@ UI.texto({
 	TextColor3 = cores.textoSuave,
 	Parent = menuClasses.conteudo,
 })
-local linhaClasses = criar("Frame", { Position = UDim2.fromOffset(0, 108), Size = UDim2.new(1, 0, 0, 530), BackgroundTransparency = 1, Parent = menuClasses.conteudo })
+local linhaClasses = criar("Frame", { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 0, 570), BackgroundTransparency = 1, Parent = menuClasses.conteudo })
 criar("UIListLayout", {
 	FillDirection = Enum.FillDirection.Horizontal,
 	HorizontalAlignment = Enum.HorizontalAlignment.Center,
-	Padding = UDim.new(0, 24),
+	Padding = UDim.new(0, 14),
 	SortOrder = Enum.SortOrder.LayoutOrder,
 	Parent = linhaClasses,
 })
@@ -138,50 +138,64 @@ criar("UIListLayout", {
 local botoesClasse = {}
 for ordem, id in Classes.ordem do
 	local classe = Classes.dados[id]
-	local cartao = UI.painel({ Size = UDim2.fromOffset(370, 524), LayoutOrder = ordem, Parent = linhaClasses })
+	local cartao = UI.painel({ Size = UDim2.fromOffset(286, 566), LayoutOrder = ordem, Parent = linhaClasses })
 	local zoom = criar("UIScale", { Parent = cartao })
 	local cabecalho = criar("Frame", {
 		Position = UDim2.fromOffset(8, 8),
-		Size = UDim2.new(1, -16, 0, 150),
+		Size = UDim2.new(1, -16, 0, 130),
 		BackgroundColor3 = cores.branco,
 		Parent = cartao,
 	})
 	UI.cantos(cabecalho, 8)
 	UI.gradiente(cabecalho, classe.cor, classe.cor:Lerp(cores.fundo, 0.75))
-	UI.medalhao({ Parent = cabecalho, Icone = classe.icone, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(110, 110), Cor = classe.cor, EspessuraBorda = 3 })
-	local nome = UI.texto({ Position = UDim2.fromOffset(0, 166), Size = UDim2.new(1, 0, 0, 36), FontFace = fontes.cabecalho, Text = classe.nome, TextColor3 = classe.cor:Lerp(cores.branco, 0.35), Parent = cartao })
+	UI.medalhao({ Parent = cabecalho, Icone = classe.icone, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(96, 96), Cor = classe.cor, EspessuraBorda = 3 })
+	local nome = UI.texto({ Position = UDim2.fromOffset(0, 144), Size = UDim2.new(1, 0, 0, 32), FontFace = fontes.cabecalho, Text = classe.nome, TextColor3 = classe.cor:Lerp(cores.branco, 0.35), Parent = cartao })
 	UI.contorno(nome, 2)
-	UI.texto({ Position = UDim2.fromOffset(0, 202), Size = UDim2.new(1, 0, 0, 20), FontFace = fontes.texto, Text = classe.titulo, TextColor3 = cores.ouro, Parent = cartao })
+	UI.texto({ Position = UDim2.fromOffset(0, 176), Size = UDim2.new(1, 0, 0, 18), FontFace = fontes.texto, Text = classe.titulo, TextColor3 = cores.ouro, Parent = cartao })
 	local descricao = UI.texto({
-		Position = UDim2.fromOffset(22, 228),
-		Size = UDim2.new(1, -44, 0, 50),
+		Position = UDim2.fromOffset(16, 198),
+		Size = UDim2.new(1, -32, 0, 44),
 		FontFace = fontes.texto,
 		Text = classe.descricao,
 		TextColor3 = cores.texto,
 		TextWrapped = true,
 		Parent = cartao,
 	})
-	UI.limiteTexto(descricao, 18)
-	local y = 286
+	UI.limiteTexto(descricao, 15)
+	-- pontos fortes e fracos
+	for i, info in { { "✔ " .. (classe.forte or ""), Color3.fromRGB(130, 230, 140) }, { "✘ " .. (classe.fraco or ""), Color3.fromRGB(255, 120, 120) } } do
+		local linha = UI.texto({
+			Position = UDim2.fromOffset(16, 244 + (i - 1) * 32),
+			Size = UDim2.new(1, -32, 0, 30),
+			FontFace = fontes.forte,
+			Text = info[1],
+			TextColor3 = info[2],
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = cartao,
+		})
+		UI.limiteTexto(linha, 13)
+	end
+	local y = 314
 	for _, atributo in { "Vida", "Dano", "Alcance", "Velocidade" } do
 		UI.texto({
-			Position = UDim2.fromOffset(26, y),
-			Size = UDim2.fromOffset(150, 18),
+			Position = UDim2.fromOffset(20, y),
+			Size = UDim2.fromOffset(120, 18),
 			FontFace = fontes.forte,
 			Text = atributo,
 			TextColor3 = cores.textoSuave,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = cartao,
 		})
-		pontos(cartao, UDim2.fromOffset(186, y + 3), classe.notas[atributo], classe.cor)
-		y += 24
+		pontos(cartao, UDim2.fromOffset(146, y + 3), classe.notas[atributo], classe.cor)
+		y += 22
 	end
 	for i, info in { { classe.habilidade, "E" }, { classe.supremo, "R" } } do
-		local linhaY = 386 + (i - 1) * 50
-		UI.medalhao({ Parent = cartao, Icone = info[1].icone, Position = UDim2.fromOffset(22, linhaY), Size = UDim2.fromOffset(42, 42), Cor = classe.cor })
+		local linhaY = 408 + (i - 1) * 52
+		UI.medalhao({ Parent = cartao, Icone = info[1].icone, Position = UDim2.fromOffset(14, linhaY), Size = UDim2.fromOffset(40, 40), Cor = classe.cor })
 		UI.texto({
-			Position = UDim2.fromOffset(72, linhaY),
-			Size = UDim2.fromOffset(280, 18),
+			Position = UDim2.fromOffset(60, linhaY),
+			Size = UDim2.new(1, -70, 0, 18),
 			FontFace = fontes.forte,
 			Text = info[1].nome .. "  [" .. info[2] .. "]",
 			TextColor3 = cores.ouroClaro,
@@ -189,8 +203,8 @@ for ordem, id in Classes.ordem do
 			Parent = cartao,
 		})
 		local d = UI.texto({
-			Position = UDim2.fromOffset(72, linhaY + 19),
-			Size = UDim2.fromOffset(280, 24),
+			Position = UDim2.fromOffset(60, linhaY + 18),
+			Size = UDim2.new(1, -70, 0, 30),
 			FontFace = fontes.texto,
 			Text = info[1].descricao,
 			TextColor3 = cores.textoSuave,
@@ -198,14 +212,14 @@ for ordem, id in Classes.ordem do
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = cartao,
 		})
-		UI.limiteTexto(d, 14)
+		UI.limiteTexto(d, 12)
 	end
 	local botao = UI.botao({
 		Parent = cartao,
 		Texto = "ESCOLHER",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -14),
-		Size = UDim2.fromOffset(260, 46),
+		Position = UDim2.new(0.5, 0, 1, -12),
+		Size = UDim2.fromOffset(230, 42),
 	})
 	botao.Activated:Connect(function()
 		if Estado.perfil.classe ~= id or not Estado.perfil.escolheuClasse then

@@ -98,6 +98,24 @@ local function mirar(direcao: Vector3)
 	mirandoAte = os.clock() + 0.35
 end
 
+-- Empurra o próprio personagem (o movimento do personagem é feito neste computador)
+local function impulso(direcao: Vector3, velocidade: number, duracao: number)
+	local raiz = personagem()
+	if not raiz then
+		return
+	end
+	local anexo = Instance.new("Attachment")
+	anexo.Parent = raiz
+	local forca = Instance.new("LinearVelocity")
+	forca.Attachment0 = anexo
+	forca.MaxForce = 1e7
+	forca.RelativeTo = Enum.ActuatorRelativeTo.World
+	forca.VectorVelocity = direcao * velocidade
+	forca.Parent = raiz
+	Debris:AddItem(forca, duracao)
+	Debris:AddItem(anexo, duracao)
+end
+
 local function podeLutar(): boolean
 	return not Estado.caido and not Estado.morto and Estado.menusAbertos == 0
 end
@@ -207,6 +225,12 @@ local function soltarCarga()
 				cor = classe.cor,
 				perfeito = fracao >= 0.99,
 			})
+		elseif classe.id == "assassino" then
+			-- Investida Letal: dispara para frente (mesma distância que o servidor usa)
+			local distancia = 12 + 6 * fracao
+			Vfx.investidaLetal({ jogador = jogador, de = raiz.Position, ate = raiz.Position + direcao * distancia, cor = classe.cor, perfeito = fracao >= 0.99 })
+			impulso(direcao, distancia / 0.2, 0.2)
+			mirandoAte = os.clock() + 0.3
 		else
 			Vfx.tremer(0.4 + 0.6 * fracao, 0.15)
 		end
@@ -223,6 +247,11 @@ local function usarHabilidade()
 	local direcao = direcaoDaMira()
 	mirar(direcao)
 	Acao:FireServer("habilidade", direcao)
+	-- Arqueiro: salta para trás antes da chuva de flechas
+	local stats = Estado.stats
+	if stats and stats.classe == "arqueiro" then
+		impulso(-direcao, 70, 0.18)
+	end
 end
 
 local function usarSupremo()

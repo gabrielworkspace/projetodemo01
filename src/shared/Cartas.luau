@@ -1,4 +1,4 @@
--- Cartas de poder. "classe = nil" aparece para todos; as outras só para aquela classe.
+-- Cartas de poder (11 universais e 11 de cada classe). "classe = nil" aparece para todos; as outras só para aquela classe.
 -- "efeitos" soma valores aos atributos do jogador (veja Combate.calcularStats no servidor).
 
 local Cartas = {}
@@ -68,6 +68,19 @@ Cartas.lista = {
 	carta("torrencial", "Chuva Torrencial", "🌧️", "Epica", "arqueiro", 2, "A Chuva de Flechas fica 40% maior e dura mais", { chuvaPct = 0.4 }),
 	carta("fantasma", "Tiro Fantasma", "👻", "Lendaria", "arqueiro", 1, "O golpe final do combo dispara uma flecha gigante que atravessa tudo", { fantasma = 1 }),
 	carta("cacador", "Caçador", "🏹", "Lendaria", "arqueiro", 1, "Críticos causam 5x de dano em vez de 3x", { multCritico = 2 }),
+
+	-- Assassino --------------------------------------------------------------
+	carta("laminasAfiadas", "Lâminas Afiadas", "🔪", "Comum", "assassino", 5, "+15% de dano", { danoPct = 0.15 }),
+	carta("reflexos", "Reflexos", "⚡", "Comum", "assassino", 5, "Ataca 15% mais rápido", { ataqueVelPct = 0.15 }),
+	carta("sombraAgil", "Sombra Ágil", "💨", "Comum", "assassino", 3, "+10% de velocidade e esquiva 20% mais rápida", { velocidadePct = 0.1, esquivaPct = 0.2 }),
+	carta("venenoAdagas", "Lâminas Envenenadas", "🧪", "Rara", "assassino", 3, "Cada golpe envenena o inimigo por 3 segundos", { queimadura = 0.35 }),
+	carta("pontoFraco", "Ponto Fraco", "🎯", "Rara", "assassino", 3, "Golpes pelas costas causam +40% de dano", { costasPct = 0.4 }),
+	carta("sangria", "Sangria", "🩸", "Rara", "assassino", 3, "Críticos curam 4 de vida", { curaCritico = 4 }),
+	carta("sombraPersistente", "Sombra Persistente", "🌑", "Epica", "assassino", 2, "O Passo Sombrio recarga 30% mais rápido", { recargaPct = 0.3 }),
+	carta("lequeAdagas", "Leque de Adagas", "🎴", "Epica", "assassino", 2, "O golpe final do combo arremessa 3 adagas em leque", { leque = 1 }),
+	carta("contraAtaque", "Contra-Ataque", "🔄", "Epica", "assassino", 1, "Depois de esquivar, o próximo golpe é crítico garantido", { contraAtaque = 1 }),
+	carta("execucao", "Execução", "☠️", "Lendaria", "assassino", 1, "Golpes acabam na hora com inimigos abaixo de 20% de vida (chefes levam dano dobrado)", { execucao = 1 }),
+	carta("milCortes", "Mil Cortes", "🌸", "Lendaria", "assassino", 1, "Cada crítico tira 0,5s da recarga do Passo Sombrio", { milCortes = 1 }),
 }
 
 Cartas.porId = {}

@@ -2,7 +2,8 @@
 -- (Não usamos Tool: as animações de ataque são feitas por código em Client/Animacoes.)
 --
 -- Peças com nome fixo que a animação procura:
---   Espada: "Lamina" com os anexos "TrilhaBase" e "TrilhaPonta" (rastro do golpe)
+--   Espada e adagas: "Lamina" com os anexos "TrilhaBase" e "TrilhaPonta" (rastro do golpe)
+--   (o Assassino tem uma segunda adaga, "ArmaSecundaria", na mão esquerda)
 --   Cajado: "Haste" com o anexo "Ponta" (brilho do cristal)
 --   Arco:   "Arco" com os anexos "CordaCima", "CordaBaixo" e "Encaixe" (corda que estica)
 
@@ -134,12 +135,32 @@ local function construirArco(cor: Color3): (Model, BasePart, CFrame)
 	return modelo, empunhadura, CFrame.Angles(math.rad(-90), 0, 0)
 end
 
+-- Adaga: como a espada, mas curta; a mão segura em z = -1.25
+local function construirAdaga(cor: Color3): (Model, BasePart, CFrame)
+	local modelo = Instance.new("Model")
+	modelo.Name = "Adaga"
+	local lamina = novaPeca("Lamina", Vector3.new(0.26, 0.1, 1.9), Color3.fromRGB(70, 70, 82), Enum.Material.Metal)
+	lamina.CFrame = CFrame.new()
+	lamina.Parent = modelo
+	prender(lamina, novaPeca("Fio", Vector3.new(0.06, 0.12, 1.5), cor, Enum.Material.Neon), CFrame.new(0, 0, 0.1), modelo)
+	prender(lamina, novaPeca("Guarda", Vector3.new(0.9, 0.18, 0.18), Color3.fromRGB(40, 36, 46), Enum.Material.Metal), CFrame.new(0, 0, -0.98), modelo)
+	prender(lamina, novaPeca("Cabo", Vector3.new(0.26, 0.26, 0.7), Color3.fromRGB(34, 30, 38), Enum.Material.Fabric), CFrame.new(0, 0, -1.35), modelo)
+	prender(lamina, novaPeca("Pomo", Vector3.one * 0.3, cor, Enum.Material.Neon, Enum.PartType.Ball), CFrame.new(0, 0, -1.75), modelo)
+	anexo(lamina, "TrilhaBase", Vector3.new(0, 0, -0.5))
+	anexo(lamina, "TrilhaPonta", Vector3.new(0, 0, 0.95))
+	modelo.PrimaryPart = lamina
+	local naMao = CFrame.Angles(math.rad(-30), 0, 0) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, 1.3)
+	return modelo, lamina, naMao
+end
+
 local function construir(classe: string): (Model, BasePart, CFrame)
 	local dados = Classes.obter(classe)
 	if dados.id == "mago" then
 		return construirCajado(dados.cor)
 	elseif dados.id == "arqueiro" then
 		return construirArco(dados.cor)
+	elseif dados.id == "assassino" then
+		return construirAdaga(dados.cor)
 	end
 	return construirEspada(dados.cor)
 end
@@ -200,6 +221,20 @@ function Armas.vestir(personagem: Model, classe: string)
 		solda.Parent = base
 		arma.Parent = pasta
 	end
+	-- Assassino: segunda adaga na mão esquerda
+	if dados.id == "assassino" then
+		local maoEsquerda = parteDoCorpo(personagem, { "LeftHand", "Left Arm" })
+		if maoEsquerda then
+			local adaga, base, naMao = construirAdaga(dados.cor)
+			adaga.Name = "ArmaSecundaria"
+			adaga:PivotTo(pegada(maoEsquerda) * naMao)
+			local solda = Instance.new("WeldConstraint")
+			solda.Part0 = maoEsquerda
+			solda.Part1 = base
+			solda.Parent = base
+			adaga.Parent = pasta
+		end
+	end
 
 	local tronco = parteDoCorpo(personagem, { "UpperTorso", "Torso" })
 	if dados.id == "cavaleiro" then
@@ -228,6 +263,16 @@ function Armas.vestir(personagem: Model, classe: string)
 		)
 		for i = -1, 1 do
 			prender(aljava, novaPeca("Pena", Vector3.new(0.5, 0.12, 0.35), dados.cor, Enum.Material.Neon), CFrame.new(1.35, i * 0.18, 0), pasta)
+		end
+	elseif dados.id == "assassino" and tronco then
+		local escuro = Color3.fromRGB(30, 26, 36)
+		-- cachecol com a ponta voando para trás
+		local cachecol = prender(tronco, novaPeca("Cachecol", Vector3.new(1.7, 0.45, 1.15), dados.cor:Lerp(escuro, 0.35), Enum.Material.Fabric), CFrame.new(0, 0.85, 0), pasta)
+		prender(cachecol, novaPeca("PontaCachecol", Vector3.new(0.45, 0.1, 1.6), dados.cor:Lerp(escuro, 0.35), Enum.Material.Fabric), CFrame.new(0.35, -0.1, 1.1) * CFrame.Angles(math.rad(-25), 0, 0), pasta)
+		-- cinto com facas de reserva
+		local cinto = prender(tronco, novaPeca("Cinto", Vector3.new(2.05, 0.3, 1.1), escuro, Enum.Material.Fabric), CFrame.new(0, -0.85, 0), pasta)
+		for i = -1, 1 do
+			prender(cinto, novaPeca("Faca", Vector3.new(0.12, 0.6, 0.18), Color3.fromRGB(200, 200, 210), Enum.Material.Metal), CFrame.new(i * 0.3, -0.15, 0.58) * CFrame.Angles(0, 0, math.rad(i * 12)), pasta)
 		end
 	end
 	pasta.Parent = personagem

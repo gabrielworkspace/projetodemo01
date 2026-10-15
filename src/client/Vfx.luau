@@ -379,6 +379,7 @@ local ESTILOS_PROJETIL = {
 	fogo = { cor = Color3.fromRGB(255, 120, 40), formato = "bola", tamanho = 1.4, fogo = true },
 	orbeCarregado = { cor = Color3.fromRGB(225, 150, 255), formato = "bola", tamanho = 1.2 },
 	flechaCarregada = { cor = Color3.fromRGB(255, 230, 120), formato = "flecha", tamanho = 1 },
+	adaga = { cor = Color3.fromRGB(255, 90, 120), formato = "flecha", tamanho = 0.7 },
 }
 
 local function rastro(p: BasePart, cor: Color3, largura: number, duracao: number)
@@ -963,6 +964,7 @@ local COR_ESQUIVA = {
 	cavaleiro = Color3.fromRGB(255, 225, 160),
 	mago = Color3.fromRGB(210, 160, 255),
 	arqueiro = Color3.fromRGB(170, 255, 190),
+	assassino = Color3.fromRGB(120, 30, 60),
 }
 
 function Vfx.esquiva(dados)
@@ -1028,6 +1030,98 @@ function Vfx.cargaCheia(dados)
 	if dados.local_ then
 		Vfx.tremer(0.35, 0.1)
 	end
+end
+
+-- Fumaça escura que fica onde o Assassino some ou aparece
+local function fumaca(posicao: Vector3, cor: Color3, quantidade: number)
+	particulas(posicao, { cor = Color3.fromRGB(30, 22, 40), cor2 = cor, quantidade = quantidade, tamanho = 1.1, velocidade = 7, vida = 0.5, luz = 0 })
+	local nuvem = parte(Vector3.one * 2, CFrame.new(posicao), Color3.fromRGB(25, 18, 32), 0.35, Enum.PartType.Ball, Enum.Material.SmoothPlastic)
+	animar(nuvem, 0.4, { Size = Vector3.one * 5, Transparency = 1 })
+	Debris:AddItem(nuvem, 0.45)
+end
+
+-- Assassino: some numa fumaça e aparece em outro lugar, deixando um risco no ar
+function Vfx.passoSombrio(dados)
+	local de, ate = dados.de, dados.ate
+	local cor = dados.cor
+	fumaca(de, cor, if dados.leve then 6 else 12)
+	fumaca(ate, cor, if dados.leve then 4 else 8)
+	local distancia = (ate - de).Magnitude
+	if distancia > 1 then
+		local risco = parte(Vector3.new(0.35, 0.35, distancia), CFrame.lookAt((de + ate) / 2, ate), cor, 0.2, nil, Enum.Material.Neon)
+		animar(risco, 0.25, { Size = Vector3.new(0.05, 0.05, distancia), Transparency = 1 })
+		Debris:AddItem(risco, 0.3)
+	end
+	if dados.jogador == jogador and not dados.leve then
+		Vfx.tremer(0.4, 0.1)
+	end
+end
+
+-- Investida Letal do Assassino (golpe carregado): linha de cortes no caminho
+function Vfx.investidaLetal(dados)
+	local de, ate = dados.de, dados.ate
+	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.5) else dados.cor
+	local distancia = (ate - de).Magnitude
+	if distancia < 0.5 then
+		return
+	end
+	local direcao = (ate - de).Unit
+	for i = 0, 2 do
+		task.delay(i * 0.04, function()
+			local lado = if i % 2 == 0 then 1 else -1
+			local origem = CFrame.lookAt(de + direcao * distancia * (0.3 + 0.3 * i), de + direcao * distancia * (0.3 + 0.3 * i) + direcao)
+			arcoDeCorte(origem * CFrame.Angles(0, 0, math.rad(35 * lado)), 3.2, 160, cor, { espessura = 0.9, duracao = 0.12, reverso = lado < 0 })
+		end)
+	end
+	local rastro = parte(Vector3.new(1.2, 0.2, distancia), CFrame.lookAt((de + ate) / 2, ate), cor, 0.3, nil, Enum.Material.Neon)
+	animar(rastro, 0.35, { Size = Vector3.new(0.1, 0.05, distancia), Transparency = 1 })
+	Debris:AddItem(rastro, 0.4)
+	particulas(ate, { cor = cor, cor2 = BRANCO, quantidade = 12, tamanho = 0.4, velocidade = 18, vida = 0.3 })
+	Vfx.tremerEm(ate, if dados.perfeito then 1 else 0.6, 0.12)
+end
+
+-- Chão em chamas deixado pelo Meteoro
+function Vfx.zonaFogo(dados)
+	local centro = dados.pos + Vector3.new(0, 0.1, 0)
+	local diametro = dados.raio * 2
+	local base = disco(centro, diametro, FOGO, 0.45)
+	-- peça invisível e achatada: as chamas saem de toda a área dela, para cima
+	local area = parte(Vector3.new(diametro * 0.75, 0.2, diametro * 0.75), CFrame.new(centro), FOGO, 1)
+	local chamas = Instance.new("ParticleEmitter")
+	chamas.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(255, 70, 20))
+	chamas.LightEmission = 1
+	chamas.LightInfluence = 0
+	chamas.Size = sequencia({ { 0, 0.9 }, { 1, 0 } })
+	chamas.Lifetime = NumberRange.new(0.5, 0.9)
+	chamas.Speed = NumberRange.new(3, 6)
+	chamas.SpreadAngle = Vector2.new(10, 10)
+	chamas.Shape = Enum.ParticleEmitterShape.Box
+	chamas.EmissionDirection = Enum.NormalId.Top
+	chamas.Rate = 60
+	chamas.Parent = area
+	local luz = Instance.new("PointLight")
+	luz.Color = FOGO
+	luz.Range = diametro
+	luz.Brightness = 2
+	luz.Parent = area
+	task.delay(dados.duracao, function()
+		chamas.Enabled = false
+		animar(luz, 0.3, { Brightness = 0 })
+	end)
+	sumir({ base }, 0.4, dados.duracao)
+	Debris:AddItem(area, dados.duracao + 1)
+end
+
+-- Escudo ganho com o Julgamento do Cavaleiro
+function Vfx.escudoGanho(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	local bolha = parte(Vector3.one * 2, raiz.CFrame, dados.cor:Lerp(BRANCO, 0.4), 0.3, Enum.PartType.Ball, Enum.Material.ForceField)
+	animar(bolha, 0.5, { Size = Vector3.one * 7, Transparency = 1 })
+	Debris:AddItem(bolha, 0.55)
+	textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "🛡️ ESCUDO", dados.cor:Lerp(BRANCO, 0.4), 26)
 end
 
 -- Giro do Cavaleiro com a espada carregada

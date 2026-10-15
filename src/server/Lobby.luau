@@ -330,7 +330,7 @@ local function construirAltares()
 	local centroX = -40
 	for i, id in Classes.ordem do
 		local classe = Classes.dados[id]
-		local z = (i - 2) * 15
+		local z = (i - (#Classes.ordem + 1) / 2) * 15
 		local base = Vector3.new(centroX, 0, z)
 		parte("Degrau", Vector3.new(9, 1, 9), CFrame.new(base + Vector3.new(0, 0.5, 0)), Enum.Material.Slate, PEDRA_ESCURA)
 		parte("Pedestal", Vector3.new(4, 4, 4), CFrame.new(base + Vector3.new(0, 3, 0)), Enum.Material.Marble, Color3.fromRGB(196, 190, 200))
@@ -343,7 +343,7 @@ local function construirAltares()
 		-- Arma flutuando sobre o altar (gira no computador de cada jogador)
 		local exibicao = Armas.modeloExibicao(id)
 		exibicao.Name = "Arma" .. classe.nome
-		local orientacao = if id == "cavaleiro" then CFrame.Angles(math.rad(-90), 0, 0) else CFrame.new()
+		local orientacao = if id == "cavaleiro" or id == "assassino" then CFrame.Angles(math.rad(-90), 0, 0) else CFrame.new()
 		exibicao:PivotTo(CFrame.new(base + Vector3.new(0, 9.5, 0)) * orientacao)
 		exibicao:SetAttribute("Giro", 0.8)
 		exibicao:SetAttribute("Flutuar", 0.6)

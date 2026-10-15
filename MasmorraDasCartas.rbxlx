@@ -33,7 +33,7 @@
       <Item class="ModuleScript" referent="RBX00000006">
         <Properties>
           <string name="Name">Cartas</string>
-          <ProtectedString name="Source"><![CDATA[-- Cartas de poder. "classe = nil" aparece para todos; as outras só para aquela classe.
+          <ProtectedString name="Source"><![CDATA[-- Cartas de poder (11 universais e 11 de cada classe). "classe = nil" aparece para todos; as outras só para aquela classe.
 -- "efeitos" soma valores aos atributos do jogador (veja Combate.calcularStats no servidor).
 
 local Cartas = {}
@@ -103,6 +103,19 @@ Cartas.lista = {
 	carta("torrencial", "Chuva Torrencial", "🌧️", "Epica", "arqueiro", 2, "A Chuva de Flechas fica 40% maior e dura mais", { chuvaPct = 0.4 }),
 	carta("fantasma", "Tiro Fantasma", "👻", "Lendaria", "arqueiro", 1, "O golpe final do combo dispara uma flecha gigante que atravessa tudo", { fantasma = 1 }),
 	carta("cacador", "Caçador", "🏹", "Lendaria", "arqueiro", 1, "Críticos causam 5x de dano em vez de 3x", { multCritico = 2 }),
+
+	-- Assassino --------------------------------------------------------------
+	carta("laminasAfiadas", "Lâminas Afiadas", "🔪", "Comum", "assassino", 5, "+15% de dano", { danoPct = 0.15 }),
+	carta("reflexos", "Reflexos", "⚡", "Comum", "assassino", 5, "Ataca 15% mais rápido", { ataqueVelPct = 0.15 }),
+	carta("sombraAgil", "Sombra Ágil", "💨", "Comum", "assassino", 3, "+10% de velocidade e esquiva 20% mais rápida", { velocidadePct = 0.1, esquivaPct = 0.2 }),
+	carta("venenoAdagas", "Lâminas Envenenadas", "🧪", "Rara", "assassino", 3, "Cada golpe envenena o inimigo por 3 segundos", { queimadura = 0.35 }),
+	carta("pontoFraco", "Ponto Fraco", "🎯", "Rara", "assassino", 3, "Golpes pelas costas causam +40% de dano", { costasPct = 0.4 }),
+	carta("sangria", "Sangria", "🩸", "Rara", "assassino", 3, "Críticos curam 4 de vida", { curaCritico = 4 }),
+	carta("sombraPersistente", "Sombra Persistente", "🌑", "Epica", "assassino", 2, "O Passo Sombrio recarga 30% mais rápido", { recargaPct = 0.3 }),
+	carta("lequeAdagas", "Leque de Adagas", "🎴", "Epica", "assassino", 2, "O golpe final do combo arremessa 3 adagas em leque", { leque = 1 }),
+	carta("contraAtaque", "Contra-Ataque", "🔄", "Epica", "assassino", 1, "Depois de esquivar, o próximo golpe é crítico garantido", { contraAtaque = 1 }),
+	carta("execucao", "Execução", "☠️", "Lendaria", "assassino", 1, "Golpes acabam na hora com inimigos abaixo de 20% de vida (chefes levam dano dobrado)", { execucao = 1 }),
+	carta("milCortes", "Mil Cortes", "🌸", "Lendaria", "assassino", 1, "Cada crítico tira 0,5s da recarga do Passo Sombrio", { milCortes = 1 }),
 }
 
 Cartas.porId = {}
@@ -117,12 +130,21 @@ return Cartas
       <Item class="ModuleScript" referent="RBX00000007">
         <Properties>
           <string name="Name">Classes</string>
-          <ProtectedString name="Source"><![CDATA[-- As três classes jogáveis. Os números de cada classe ficam aqui.
+          <ProtectedString name="Source"><![CDATA[-- As quatro classes jogáveis. Os números de cada classe ficam aqui.
 -- As cartas de cada classe ficam em Cartas.luau (campo "classe").
+--
+-- Cada classe tem pontos fortes e fracos claros:
+--   Cavaleiro: aguenta muito e protege o grupo, mas é lento e só bate de perto
+--   Mago:      destrói grupos de longe, mas é frágil e ataca devagar
+--   Arqueiro:  dano constante de longe e muito ágil, mas fraco contra quem chega perto
+--   Assassino: mata um alvo de cada vez muito rápido, mas tem pouca vida e quase nenhuma área
+--
+-- Campos opcionais: critico (chance base), esquivaMult (recarga da esquiva),
+-- ameacaMult (o quanto chama a atenção dos inimigos)
 
 local Classes = {}
 
-Classes.ordem = { "cavaleiro", "mago", "arqueiro" }
+Classes.ordem = { "cavaleiro", "mago", "arqueiro", "assassino" }
 
 Classes.dados = {
 	cavaleiro = {
@@ -131,15 +153,19 @@ Classes.dados = {
 		titulo = "A Muralha de Aço",
 		icone = "🛡️",
 		cor = Color3.fromRGB(86, 156, 255),
-		descricao = "Luta na linha de frente com espada e escudo. Aguenta muito dano e protege o grupo.",
-		notas = { Vida = 5, Dano = 4, Alcance = 1, Velocidade = 2 },
+		descricao = "Luta na linha de frente com espada e escudo e atrai os inimigos para si.",
+		forte = "Muita vida e armadura, protege os aliados",
+		fraco = "Lento, esquiva demora mais e só bate de perto",
+		notas = { Vida = 5, Dano = 3, Alcance = 1, Velocidade = 1 },
 
-		vida = 150,
-		dano = 24,
-		velocidade = 17,
-		intervalo = 0.42,
+		vida = 160,
+		dano = 22,
+		velocidade = 16,
+		intervalo = 0.44,
 		alcance = 9.5,
-		armadura = 0.1,
+		armadura = 0.15,
+		esquivaMult = 1.25,
+		ameacaMult = 2.5,
 
 		ataque = {
 			tipo = "corte",
@@ -153,13 +179,13 @@ Classes.dados = {
 			nome = "Redemoinho",
 			icone = "🌀",
 			recarga = 8,
-			descricao = "Gira a espada por 2 segundos, acertando tudo ao redor.",
+			descricao = "Gira por 2s puxando os inimigos para perto. Recebe 40% menos dano enquanto gira.",
 		},
 		supremo = {
 			id = "julgamento",
 			nome = "Julgamento",
 			icone = "⚡",
-			descricao = "Esmaga o chão: dano enorme ao redor e atordoa os inimigos.",
+			descricao = "Esmaga o chão: atordoa todos ao redor e dá um escudo aos aliados próximos.",
 		},
 	},
 
@@ -169,13 +195,15 @@ Classes.dados = {
 		titulo = "O Arcano",
 		icone = "🔮",
 		cor = Color3.fromRGB(180, 96, 255),
-		descricao = "Ataca de longe com orbes que explodem. Frágil, mas destrói grupos inteiros.",
-		notas = { Vida = 2, Dano = 5, Alcance = 4, Velocidade = 2 },
+		descricao = "Ataca de longe com orbes que explodem e controla o campo com fogo e raios.",
+		forte = "Enorme dano em área e controle de grupos",
+		fraco = "Pouquíssima vida e ataque lento",
+		notas = { Vida = 1, Dano = 5, Alcance = 4, Velocidade = 2 },
 
-		vida = 90,
-		dano = 20,
+		vida = 80,
+		dano = 21,
 		velocidade = 17,
-		intervalo = 0.5,
+		intervalo = 0.52,
 		alcance = 50,
 		armadura = 0,
 
@@ -194,13 +222,13 @@ Classes.dados = {
 			nome = "Meteoro",
 			icone = "☄️",
 			recarga = 9,
-			descricao = "Um meteoro cai no inimigo mais próximo da mira, com dano enorme em área.",
+			descricao = "Um meteoro cai na mira e deixa o chão em chamas por 3 segundos.",
 		},
 		supremo = {
 			id = "tempestade",
 			nome = "Tempestade Arcana",
 			icone = "🌩️",
-			descricao = "Raios caem sem parar sobre os inimigos por 5 segundos.",
+			descricao = "Raios caem sem parar por 5s e deixam os inimigos atingidos lentos.",
 		},
 	},
 
@@ -210,8 +238,10 @@ Classes.dados = {
 		titulo = "O Olho do Bosque",
 		icone = "🏹",
 		cor = Color3.fromRGB(96, 214, 120),
-		descricao = "Rápido e certeiro. Atira sem parar enquanto foge dos inimigos.",
-		notas = { Vida = 3, Dano = 3, Alcance = 5, Velocidade = 5 },
+		descricao = "Rápido e certeiro. Atira sem parar enquanto mantém os inimigos longe.",
+		forte = "Maior alcance, muito ágil, dano constante",
+		fraco = "Flechas perdem força em inimigos colados",
+		notas = { Vida = 3, Dano = 3, Alcance = 5, Velocidade = 4 },
 
 		vida = 100,
 		dano = 15,
@@ -219,6 +249,7 @@ Classes.dados = {
 		intervalo = 0.32,
 		alcance = 60,
 		armadura = 0,
+		critico = 0.05,
 
 		ataque = {
 			tipo = "projetil",
@@ -234,14 +265,58 @@ Classes.dados = {
 			id = "chuva",
 			nome = "Chuva de Flechas",
 			icone = "🌧️",
-			recarga = 10,
-			descricao = "Flechas caem do céu numa área por 3 segundos.",
+			recarga = 9,
+			descricao = "Salta para trás e faz chover flechas na mira por 3s, deixando os inimigos lentos.",
 		},
 		supremo = {
 			id = "saraivada",
 			nome = "Saraivada",
 			icone = "💫",
-			descricao = "Dispara flechas em todas as direções sem parar por 4 segundos.",
+			descricao = "Dispara flechas em todas as direções por 4s, correndo 30% mais rápido.",
+		},
+	},
+
+	assassino = {
+		id = "assassino",
+		nome = "Assassino",
+		titulo = "A Lâmina na Sombra",
+		icone = "🗡️",
+		cor = Color3.fromRGB(235, 60, 90),
+		descricao = "Duas adagas, muitos críticos e golpes pelas costas. Some e reaparece atrás do alvo.",
+		forte = "Mata um alvo de cada vez, críticos e esquiva rápida",
+		fraco = "Pouca vida, alcance curtíssimo, quase nada de área",
+		notas = { Vida = 2, Dano = 5, Alcance = 1, Velocidade = 5 },
+
+		vida = 85,
+		dano = 15,
+		velocidade = 21,
+		intervalo = 0.26,
+		alcance = 7.5,
+		armadura = 0,
+		critico = 0.15,
+		esquivaMult = 0.7,
+		ameacaMult = 0.6,
+
+		ataque = {
+			tipo = "corte",
+			arco = 95,
+			combo = { 1, 1, 2.4 },
+			costas = 0.5, -- +50% de dano acertando o inimigo pelas costas
+			nome = "Dança das Adagas",
+			icone = "🗡️",
+		},
+		habilidade = {
+			id = "passoSombrio",
+			nome = "Passo Sombrio",
+			icone = "🌑",
+			recarga = 6,
+			descricao = "Some e aparece atrás do inimigo na mira, com um golpe crítico garantido.",
+		},
+		supremo = {
+			id = "laminasNoturnas",
+			nome = "Lâminas da Noite",
+			icone = "🌙",
+			descricao = "Fica intocável e salta de inimigo em inimigo, cortando até 10 vezes.",
 		},
 	},
 }
@@ -438,7 +513,8 @@ return Config
 -- (Não usamos Tool: as animações de ataque são feitas por código em Client/Animacoes.)
 --
 -- Peças com nome fixo que a animação procura:
---   Espada: "Lamina" com os anexos "TrilhaBase" e "TrilhaPonta" (rastro do golpe)
+--   Espada e adagas: "Lamina" com os anexos "TrilhaBase" e "TrilhaPonta" (rastro do golpe)
+--   (o Assassino tem uma segunda adaga, "ArmaSecundaria", na mão esquerda)
 --   Cajado: "Haste" com o anexo "Ponta" (brilho do cristal)
 --   Arco:   "Arco" com os anexos "CordaCima", "CordaBaixo" e "Encaixe" (corda que estica)
 
@@ -570,12 +646,32 @@ local function construirArco(cor: Color3): (Model, BasePart, CFrame)
 	return modelo, empunhadura, CFrame.Angles(math.rad(-90), 0, 0)
 end
 
+-- Adaga: como a espada, mas curta; a mão segura em z = -1.25
+local function construirAdaga(cor: Color3): (Model, BasePart, CFrame)
+	local modelo = Instance.new("Model")
+	modelo.Name = "Adaga"
+	local lamina = novaPeca("Lamina", Vector3.new(0.26, 0.1, 1.9), Color3.fromRGB(70, 70, 82), Enum.Material.Metal)
+	lamina.CFrame = CFrame.new()
+	lamina.Parent = modelo
+	prender(lamina, novaPeca("Fio", Vector3.new(0.06, 0.12, 1.5), cor, Enum.Material.Neon), CFrame.new(0, 0, 0.1), modelo)
+	prender(lamina, novaPeca("Guarda", Vector3.new(0.9, 0.18, 0.18), Color3.fromRGB(40, 36, 46), Enum.Material.Metal), CFrame.new(0, 0, -0.98), modelo)
+	prender(lamina, novaPeca("Cabo", Vector3.new(0.26, 0.26, 0.7), Color3.fromRGB(34, 30, 38), Enum.Material.Fabric), CFrame.new(0, 0, -1.35), modelo)
+	prender(lamina, novaPeca("Pomo", Vector3.one * 0.3, cor, Enum.Material.Neon, Enum.PartType.Ball), CFrame.new(0, 0, -1.75), modelo)
+	anexo(lamina, "TrilhaBase", Vector3.new(0, 0, -0.5))
+	anexo(lamina, "TrilhaPonta", Vector3.new(0, 0, 0.95))
+	modelo.PrimaryPart = lamina
+	local naMao = CFrame.Angles(math.rad(-30), 0, 0) * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, 1.3)
+	return modelo, lamina, naMao
+end
+
 local function construir(classe: string): (Model, BasePart, CFrame)
 	local dados = Classes.obter(classe)
 	if dados.id == "mago" then
 		return construirCajado(dados.cor)
 	elseif dados.id == "arqueiro" then
 		return construirArco(dados.cor)
+	elseif dados.id == "assassino" then
+		return construirAdaga(dados.cor)
 	end
 	return construirEspada(dados.cor)
 end
@@ -636,6 +732,20 @@ function Armas.vestir(personagem: Model, classe: string)
 		solda.Parent = base
 		arma.Parent = pasta
 	end
+	-- Assassino: segunda adaga na mão esquerda
+	if dados.id == "assassino" then
+		local maoEsquerda = parteDoCorpo(personagem, { "LeftHand", "Left Arm" })
+		if maoEsquerda then
+			local adaga, base, naMao = construirAdaga(dados.cor)
+			adaga.Name = "ArmaSecundaria"
+			adaga:PivotTo(pegada(maoEsquerda) * naMao)
+			local solda = Instance.new("WeldConstraint")
+			solda.Part0 = maoEsquerda
+			solda.Part1 = base
+			solda.Parent = base
+			adaga.Parent = pasta
+		end
+	end
 
 	local tronco = parteDoCorpo(personagem, { "UpperTorso", "Torso" })
 	if dados.id == "cavaleiro" then
@@ -665,6 +775,16 @@ function Armas.vestir(personagem: Model, classe: string)
 		for i = -1, 1 do
 			prender(aljava, novaPeca("Pena", Vector3.new(0.5, 0.12, 0.35), dados.cor, Enum.Material.Neon), CFrame.new(1.35, i * 0.18, 0), pasta)
 		end
+	elseif dados.id == "assassino" and tronco then
+		local escuro = Color3.fromRGB(30, 26, 36)
+		-- cachecol com a ponta voando para trás
+		local cachecol = prender(tronco, novaPeca("Cachecol", Vector3.new(1.7, 0.45, 1.15), dados.cor:Lerp(escuro, 0.35), Enum.Material.Fabric), CFrame.new(0, 0.85, 0), pasta)
+		prender(cachecol, novaPeca("PontaCachecol", Vector3.new(0.45, 0.1, 1.6), dados.cor:Lerp(escuro, 0.35), Enum.Material.Fabric), CFrame.new(0.35, -0.1, 1.1) * CFrame.Angles(math.rad(-25), 0, 0), pasta)
+		-- cinto com facas de reserva
+		local cinto = prender(tronco, novaPeca("Cinto", Vector3.new(2.05, 0.3, 1.1), escuro, Enum.Material.Fabric), CFrame.new(0, -0.85, 0), pasta)
+		for i = -1, 1 do
+			prender(cinto, novaPeca("Faca", Vector3.new(0.12, 0.6, 0.18), Color3.fromRGB(200, 200, 210), Enum.Material.Metal), CFrame.new(i * 0.3, -0.15, 0.58) * CFrame.Angles(0, 0, math.rad(i * 12)), pasta)
+		end
 	end
 	pasta.Parent = personagem
 end
@@ -678,6 +798,8 @@ return Armas
           <string name="Name">Combate</string>
           <ProtectedString name="Source"><![CDATA[-- Combate: atributos, combos, habilidades, supremos, esquiva, dano e jogador caído.
 
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -761,7 +883,7 @@ function Combate.calcularStats(estado)
 		velocidade = classe.velocidade * (1 + e("velocidadePct")) * (0.92 ^ e("gigante")),
 		intervalo = classe.intervalo / (1 + e("ataqueVelPct")),
 		alcance = classe.alcance * (1 + e("alcancePct")) * (1 + 0.2 * e("gigante")),
-		critico = math.min(e("critico"), 0.75),
+		critico = math.min((classe.critico or 0) + e("critico"), 0.75),
 		multCritico = 3 + e("multCritico"),
 		rouboVida = e("rouboVida"),
 		regen = e("regen"),
@@ -790,8 +912,15 @@ function Combate.calcularStats(estado)
 		chuva = 1 + e("chuvaPct"),
 		fantasma = e("fantasma") > 0,
 		recarga = classe.habilidade.recarga * (1 - math.min(e("recargaPct"), 0.6)),
-		recargaEsquiva = Config.ESQUIVA_RECARGA * (1 - math.min(e("esquivaPct"), 0.6)),
+		recargaEsquiva = Config.ESQUIVA_RECARGA * (classe.esquivaMult or 1) * (1 - math.min(e("esquivaPct"), 0.6)),
 		multCarga = 1 + e("cargaPct"),
+		-- Assassino
+		costas = (classe.ataque.costas or 0) + e("costasPct"),
+		curaCritico = e("curaCritico"),
+		leque = e("leque"),
+		contraAtaque = e("contraAtaque") > 0,
+		execucao = e("execucao") > 0,
+		milCortes = e("milCortes") > 0,
 	}
 	return estado.stats
 end
@@ -824,6 +953,9 @@ function Combate.aplicarVelocidade(estado)
 	local fator = if os.clock() < (estado.lentoAte or 0) then estado.lentoFator or 1 else 1
 	if estado.carregandoDesde then
 		fator *= Config.VELOCIDADE_CARREGANDO
+	end
+	if os.clock() < (estado.rapidoAte or 0) then
+		fator *= 1.3
 	end
 	humanoid.WalkSpeed = estado.stats.velocidade * fator
 end
@@ -950,12 +1082,23 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 	end
 	opcoes = opcoes or {}
 	dano = math.max(1, math.floor(dano * (1 - (inimigo.armadura or 0)) + 0.5))
+	-- Carta Execução: golpes acabam com quem está quase morto (chefes só levam o dobro)
+	if estado and opcoes.principal and estado.stats.execucao then
+		if inimigo.chefe then
+			if inimigo.vida <= inimigo.vidaMax * 0.2 then
+				dano *= 2
+			end
+		elseif inimigo.vida - dano <= inimigo.vidaMax * 0.2 then
+			dano = math.max(dano, math.ceil(inimigo.vida))
+			opcoes.cor = opcoes.cor or Color3.fromRGB(255, 60, 90)
+		end
+	end
 	inimigo.vida -= dano
 	inimigo.modelo:SetAttribute("Vida", math.max(0, inimigo.vida))
 
 	if estado then
 		-- Ameaça: os inimigos preferem atacar quem causa mais dano (o Cavaleiro chama o dobro de atenção)
-		inimigo.ameaca[estado] = (inimigo.ameaca[estado] or 0) + dano * (if estado.classe == "cavaleiro" then 2 else 1)
+		inimigo.ameaca[estado] = (inimigo.ameaca[estado] or 0) + dano * (Classes.obter(estado.classe).ameacaMult or 1)
 		estado.danoCausado += dano
 	end
 
@@ -985,6 +1128,14 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		end
 		if stats.raios > 0 and opcoes.principal then
 			correnteEletrica(run, inimigo, estado, stats.raios, stats.dano * 0.5)
+		end
+		if opcoes.critico then
+			if stats.curaCritico > 0 then
+				Combate.curar(run, estado, stats.curaCritico, true)
+			end
+			if stats.milCortes then
+				Combate.reduzirRecarga(estado, 0.5)
+			end
 		end
 		Combate.adicionarCarga(estado, Config.CARGA_POR_ACERTO)
 	end
@@ -1130,6 +1281,9 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 			end
 		end
 	end
+	if agora < (estado.resistenteAte or 0) then
+		dano *= 0.6
+	end
 	dano = math.max(1, math.floor(dano * (1 - estado.stats.armadura) + 0.5))
 
 	if estado.escudoAtivo and not opcoes.ambiente then
@@ -1174,6 +1328,20 @@ end
 -- Ataque básico (combo de 3)
 ------------------------------------------------------------------------
 
+local COR_COSTAS = Color3.fromRGB(255, 70, 110)
+
+-- O atacante está atrás do inimigo? (o inimigo olha para o outro lado)
+local function pelasCostas(inimigo, origem: Vector3): boolean
+	local paraAtacante = planar(origem - inimigo.raiz.Position)
+	local olhar = planar(inimigo.raiz.CFrame.LookVector)
+	if paraAtacante.Magnitude < 0.1 or olhar.Magnitude < 0.1 then
+		return false
+	end
+	return paraAtacante.Unit:Dot(olhar.Unit) < -0.25
+end
+
+local laminasNoturnas
+
 local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vector3, mult: number, final: boolean)
 	local stats = estado.stats
 	local arco = classe.ataque.arco * (if final then 1.25 else 1)
@@ -1200,14 +1368,46 @@ local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vecto
 			end
 		end
 	end
+	local garantido = estado.criticoGarantido == true
+	if #alvos > 0 then
+		estado.criticoGarantido = nil
+	end
 	for _, inimigo in alvos do
-		local critico = math.random() < stats.critico
+		local critico = garantido or math.random() < stats.critico
 		local dano = stats.dano * mult * (if critico then stats.multCritico else 1)
+		local costas = pelasCostas(inimigo, raiz.Position)
+		if costas and stats.costas > 0 then
+			dano *= 1 + stats.costas
+		end
 		Combate.danoAoInimigo(run, inimigo, dano, estado, {
 			critico = critico,
 			principal = true,
+			cor = if costas and stats.costas > 0 then COR_COSTAS else nil,
 			empurrar = direcao * (if final then 50 else 25),
 		})
+	end
+
+	-- Carta Leque de Adagas: o golpe final arremessa adagas
+	if final and stats.leque > 0 then
+		local lista = {}
+		local quantidade = 1 + 2 * stats.leque
+		for i = 1, quantidade do
+			local angulo = math.rad((i - (quantidade + 1) / 2) * 14)
+			table.insert(lista, {
+				lado = "jogador",
+				tipo = "adaga",
+				pos = raiz.Position + direcao * 1.5 + Vector3.new(0, 0.6, 0),
+				dir = CFrame.Angles(0, angulo, 0):VectorToWorldSpace(direcao),
+				velocidade = 90,
+				alcance = 30,
+				raio = 1,
+				perfuracao = 0,
+				aoAcertar = function(inimigo)
+					Combate.danoAoInimigo(run, inimigo, stats.dano * 0.9, estado, { semEfeitos = true, cor = classe.cor })
+				end,
+			})
+		end
+		Projeteis.disparar(run, lista)
 	end
 
 	if final and stats.ondaCorte > 0 then
@@ -1275,7 +1475,15 @@ local function disparoDeClasse(run, estado, classe, raiz: BasePart, direcao: Vec
 			ricochete = stats.ricochete,
 			explosao = if explosao > 0 then explosao else nil,
 			aoAcertar = function(inimigo, _, projetil)
-				Combate.danoAoInimigo(run, inimigo, danoFinal, estado, {
+				local danoAqui = danoFinal
+				-- Arqueiro: flecha disparada colada no inimigo perde força
+				if classe.id == "arqueiro" then
+					local raizAgora = raizDe(estado)
+					if raizAgora and planar(raizAgora.Position - inimigo.raiz.Position).Magnitude < inimigo.raio + 6 then
+						danoAqui *= 0.6
+					end
+				end
+				Combate.danoAoInimigo(run, inimigo, danoAqui, estado, {
 					critico = critico,
 					principal = true,
 					empurrar = projetil.dir * 18,
@@ -1429,6 +1637,28 @@ local function golpeCarregado(run, estado, classe, raiz: BasePart, direcao: Vect
 				end,
 			},
 		})
+	elseif classe.id == "assassino" then
+		-- Investida Letal: avança cortando tudo numa linha (o movimento é feito no computador
+		-- de quem ataca). Com a carga cheia, todo corte é crítico.
+		local inicio = raiz.Position
+		local fim = inicio + direcao * (12 + 6 * fracao)
+		Vfx.partida(run, "investidaLetal", { jogador = estado.player, de = inicio, ate = fim, cor = classe.cor, perfeito = perfeito }, estado.player)
+		estado.invulneravelAte = math.max(estado.invulneravelAte or 0, os.clock() + 0.3)
+		task.delay(0.12, function()
+			if not run.ativa then
+				return
+			end
+			for _, inimigo in inimigosVivos(run) do
+				if Projeteis.distanciaAoSegmento(inimigo.raiz.Position, inicio, fim) <= inimigo.raio + 3 then
+					local critico = perfeito or math.random() < stats.critico
+					Combate.danoAoInimigo(run, inimigo, stats.dano * mult * (if critico then stats.multCritico else 1), estado, {
+						critico = critico,
+						principal = true,
+						empurrar = direcao * 20,
+					})
+				end
+			end
+		end)
 	else
 		-- Flecha perfurante e veloz (crítico garantido com a carga cheia)
 		local critico = perfeito or math.random() < stats.critico
@@ -1507,6 +1737,7 @@ local function redemoinho(run, estado, classe)
 	local raio = stats.alcance * 1.1
 	Vfx.partida(run, "redemoinho", { jogador = estado.player, duracao = duracao, raio = raio, cor = classe.cor, fogo = stats.redemoinhoFogo })
 	animar(run, estado, "habilidade", { duracao = duracao })
+	estado.resistenteAte = os.clock() + duracao
 	task.spawn(function()
 		local fim = os.clock() + duracao
 		while os.clock() < fim and run.ativa and estado.vivo and not estado.caido do
@@ -1514,9 +1745,11 @@ local function redemoinho(run, estado, classe)
 			if not raiz then
 				break
 			end
-			Combate.danoEmArea(run, raiz.Position, raio, stats.dano * 0.55, estado, { queimar = stats.redemoinhoFogo })
+			-- empurrar negativo puxa os inimigos para o centro do giro
+			Combate.danoEmArea(run, raiz.Position, raio, stats.dano * 0.55, estado, { queimar = stats.redemoinhoFogo, empurrarForca = -18 })
 			task.wait(0.22)
 		end
+		estado.resistenteAte = nil
 	end)
 end
 
@@ -1554,7 +1787,16 @@ local function meteoro(run, estado, raiz: BasePart, direcao: Vector3)
 					return
 				end
 				Vfx.partida(run, "explosao", { pos = ponto, raio = 11, cor = COR_FOGO, forte = true })
-				Combate.danoEmArea(run, ponto, 11, stats.dano * 4, estado, { semEfeitos = true, queimar = true, cor = COR_FOGO, empurrarForca = 40 })
+				Combate.danoEmArea(run, ponto, 11, stats.dano * 3.5, estado, { semEfeitos = true, queimar = true, cor = COR_FOGO, empurrarForca = 40 })
+				-- o chão fica em chamas por 3 segundos
+				Vfx.partida(run, "zonaFogo", { pos = ponto, raio = 8, duracao = 3 })
+				task.spawn(function()
+					local fimZona = os.clock() + 3
+					while os.clock() < fimZona and run.ativa do
+						task.wait(0.5)
+						Combate.danoEmArea(run, ponto, 8, stats.dano * 0.35, estado, { semEfeitos = true, cor = COR_FOGO })
+					end
+				end)
 			end)
 		end)
 	end
@@ -1574,6 +1816,77 @@ local function chuvaDeFlechas(run, estado, classe, raiz: BasePart, direcao: Vect
 			Combate.danoEmArea(run, centro, raio, stats.dano * 0.45, estado, { semEfeitos = true, lento = 0.75 })
 			task.wait(0.25)
 		end
+	end)
+end
+
+-- Ponto livre entre "de" e "ate" (não atravessa paredes)
+local function pontoLivre(personagem: Model?, de: Vector3, ate: Vector3): Vector3
+	local parametros = RaycastParams.new()
+	parametros.FilterType = Enum.RaycastFilterType.Exclude
+	local ignorar = {}
+	for _, player in Players:GetPlayers() do
+		if player.Character then
+			table.insert(ignorar, player.Character)
+		end
+	end
+	if personagem then
+		table.insert(ignorar, personagem)
+	end
+	for _, inimigo in CollectionService:GetTagged("Inimigo") do
+		table.insert(ignorar, inimigo)
+	end
+	parametros.FilterDescendantsInstances = ignorar
+	parametros.RespectCanCollide = true
+	local delta = ate - de
+	local resultado = workspace:Raycast(de, delta, parametros)
+	if resultado then
+		local recuo = math.max(0, (resultado.Position - de).Magnitude - 2)
+		return de + delta.Unit * recuo
+	end
+	return ate
+end
+
+-- Coloca o jogador atrás do inimigo, olhando para ele
+local function teleportarAtras(estado, inimigo, raiz: BasePart): Vector3
+	local alvo = inimigo.raiz.Position
+	local olhar = planar(inimigo.raiz.CFrame.LookVector)
+	if olhar.Magnitude < 0.1 then
+		olhar = planar(alvo - raiz.Position)
+	end
+	olhar = if olhar.Magnitude > 0.1 then olhar.Unit else Vector3.new(0, 0, -1)
+	local altura = Vector3.new(0, raiz.Position.Y - alvo.Y, 0)
+	local desejado = alvo + altura - olhar * (inimigo.raio + 2.5)
+	local destino = pontoLivre(estado.player.Character, alvo + altura, desejado)
+	local personagem = estado.player.Character
+	if personagem then
+		personagem:PivotTo(CFrame.lookAt(destino, Vector3.new(alvo.X, destino.Y, alvo.Z)))
+	end
+	return destino
+end
+
+local function passoSombrio(run, estado, classe, raiz: BasePart, direcao: Vector3)
+	local stats = estado.stats
+	local inicio = raiz.Position
+	local alvo = alvoNaMira(inicio, direcao, run, 35)
+	estado.invulneravelAte = math.max(estado.invulneravelAte or 0, os.clock() + 0.5)
+	if not alvo then
+		-- sem alvo: só avança na direção da mira
+		local destino = pontoLivre(estado.player.Character, inicio, inicio + direcao * 14)
+		local personagem = estado.player.Character
+		if personagem then
+			personagem:PivotTo(CFrame.lookAt(destino, destino + direcao))
+		end
+		Vfx.partida(run, "passoSombrio", { jogador = estado.player, de = inicio, ate = destino, cor = classe.cor })
+		return
+	end
+	local destino = teleportarAtras(estado, alvo, raiz)
+	Vfx.partida(run, "passoSombrio", { jogador = estado.player, de = inicio, ate = destino, cor = classe.cor })
+	task.delay(0.1, function()
+		if not run.ativa or not alvo.vivo then
+			return
+		end
+		local dano = stats.dano * 2.2 * stats.multCritico * (1 + stats.costas)
+		Combate.danoAoInimigo(run, alvo, dano, estado, { critico = true, principal = true, cor = COR_COSTAS, empurrar = planar(alvo.raiz.Position - destino).Unit * 20 })
 	end)
 end
 
@@ -1598,7 +1911,12 @@ function Combate.habilidade(run, estado, direcao: any)
 	elseif id == "meteoro" then
 		animar(run, estado, "habilidade", { duracao = 0.5 })
 		meteoro(run, estado, raiz, dir)
+	elseif id == "passoSombrio" then
+		animar(run, estado, "habilidade", { duracao = 0.4 })
+		passoSombrio(run, estado, classe, raiz, dir)
 	else
+		-- o salto para trás é feito no computador do arqueiro; aqui só fica intocável no salto
+		estado.invulneravelAte = math.max(estado.invulneravelAte or 0, agora + 0.3)
 		animar(run, estado, "habilidade", { duracao = 0.45 })
 		chuvaDeFlechas(run, estado, classe, raiz, dir)
 	end
@@ -1614,6 +1932,49 @@ end
 ------------------------------------------------------------------------
 -- Supremos (tecla R)
 ------------------------------------------------------------------------
+
+-- Assassino: salta de inimigo em inimigo, intocável, cortando cada um pelas costas
+laminasNoturnas = function(run, estado, classe)
+	local stats = estado.stats
+	local golpes = 10
+	local duracao = golpes * 0.28 + 0.3
+	estado.invulneravelAte = math.max(estado.invulneravelAte or 0, os.clock() + duracao)
+	animar(run, estado, "supremo", { duracao = duracao })
+	task.spawn(function()
+		local ultimo = nil
+		for _ = 1, golpes do
+			if not run.ativa or not estado.vivo or estado.caido then
+				break
+			end
+			local raiz = raizDe(estado)
+			if not raiz then
+				break
+			end
+			-- o mais perto, evitando repetir o último (a não ser que só reste ele)
+			local melhor, melhorDistancia = nil, math.huge
+			for _, inimigo in inimigosVivos(run) do
+				local distancia = (inimigo.raiz.Position - raiz.Position).Magnitude
+				if inimigo == ultimo then
+					distancia += 1000
+				end
+				if distancia < melhorDistancia then
+					melhor, melhorDistancia = inimigo, distancia
+				end
+			end
+			if not melhor then
+				break
+			end
+			ultimo = melhor
+			local inicio = raiz.Position
+			local destino = teleportarAtras(estado, melhor, raiz)
+			Vfx.partida(run, "passoSombrio", { jogador = estado.player, de = inicio, ate = destino, cor = classe.cor, leve = true })
+			local critico = math.random() < stats.critico + 0.25
+			local dano = stats.dano * 2.4 * (1 + stats.costas) * (if critico then stats.multCritico else 1)
+			Combate.danoAoInimigo(run, melhor, dano, estado, { critico = critico, principal = true, cor = COR_COSTAS })
+			task.wait(0.28)
+		end
+	end)
+end
 
 function Combate.supremo(run, estado)
 	if not podeAgir(run, estado) or estado.carga < Config.CARGA_MAXIMA then
@@ -1642,6 +2003,14 @@ function Combate.supremo(run, estado)
 				end
 			end
 			Combate.danoEmArea(run, centro, 18, stats.dano * 5, estado, { semEfeitos = true, cor = COR_OURO, empurrarForca = 60 })
+			-- o Cavaleiro e os aliados por perto ganham um escudo que bloqueia o próximo golpe
+			for _, outro in run.jogadores do
+				local raizOutro = raizDe(outro)
+				if outro.vivo and not outro.caido and raizOutro and planar(raizOutro.Position - centro).Magnitude <= 25 then
+					outro.escudoAtivo = true
+					Vfx.partida(run, "escudoGanho", { jogador = outro.player, cor = classe.cor })
+				end
+			end
 		end)
 	elseif classe.supremo.id == "tempestade" then
 		animar(run, estado, "supremo", { duracao = 5 })
@@ -1652,13 +2021,20 @@ function Combate.supremo(run, estado)
 				if #vivos > 0 then
 					local ponto = noChao(run, vivos[math.random(#vivos)].raiz.Position)
 					Vfx.partida(run, "raioCeu", { pos = ponto, cor = classe.cor })
-					Combate.danoEmArea(run, ponto, 4.5, stats.dano * 1.6, estado, { semEfeitos = true, cor = COR_RAIO })
+					Combate.danoEmArea(run, ponto, 4.5, stats.dano * 1.6, estado, { semEfeitos = true, cor = COR_RAIO, lento = 0.6 })
 				end
 				task.wait(0.2)
 			end
 		end)
+	elseif classe.supremo.id == "laminasNoturnas" then
+		laminasNoturnas(run, estado, classe)
 	else
 		animar(run, estado, "supremo", { duracao = 4 })
+		estado.rapidoAte = os.clock() + 4
+		Combate.aplicarVelocidade(estado)
+		task.delay(4.05, function()
+			Combate.aplicarVelocidade(estado)
+		end)
 		task.spawn(function()
 			local fim = os.clock() + 4
 			local giro = 0
@@ -1708,6 +2084,9 @@ function Combate.esquiva(run, estado, direcao: any)
 	estado.esquivaProntaEm = agora + estado.stats.recargaEsquiva
 	estado.invulneravelAte = math.max(estado.invulneravelAte or 0, agora + Config.ESQUIVA_INVULNERAVEL)
 	animar(run, estado, "esquiva", nil, estado.player)
+	if estado.stats.contraAtaque then
+		estado.criticoGarantido = true
+	end
 
 	-- Carta Investida Brutal: atropela quem estiver no caminho
 	local stats = estado.stats
@@ -3436,7 +3815,7 @@ local function construirAltares()
 	local centroX = -40
 	for i, id in Classes.ordem do
 		local classe = Classes.dados[id]
-		local z = (i - 2) * 15
+		local z = (i - (#Classes.ordem + 1) / 2) * 15
 		local base = Vector3.new(centroX, 0, z)
 		parte("Degrau", Vector3.new(9, 1, 9), CFrame.new(base + Vector3.new(0, 0.5, 0)), Enum.Material.Slate, PEDRA_ESCURA)
 		parte("Pedestal", Vector3.new(4, 4, 4), CFrame.new(base + Vector3.new(0, 3, 0)), Enum.Material.Marble, Color3.fromRGB(196, 190, 200))
@@ -3449,7 +3828,7 @@ local function construirAltares()
 		-- Arma flutuando sobre o altar (gira no computador de cada jogador)
 		local exibicao = Armas.modeloExibicao(id)
 		exibicao.Name = "Arma" .. classe.nome
-		local orientacao = if id == "cavaleiro" then CFrame.Angles(math.rad(-90), 0, 0) else CFrame.new()
+		local orientacao = if id == "cavaleiro" or id == "assassino" then CFrame.Angles(math.rad(-90), 0, 0) else CFrame.new()
 		exibicao:PivotTo(CFrame.new(base + Vector3.new(0, 9.5, 0)) * orientacao)
 		exibicao:SetAttribute("Giro", 0.8)
 		exibicao:SetAttribute("Flutuar", 0.6)
@@ -5970,6 +6349,8 @@ local JUNTAS_R15 = {
 	joelhoD = { "RightLowerLeg", "RightKnee" },
 	quadrilE = { "LeftUpperLeg", "LeftHip" },
 	joelhoE = { "LeftLowerLeg", "LeftKnee" },
+	tornozeloD = { "RightFoot", "RightAnkle" },
+	tornozeloE = { "LeftFoot", "LeftAnkle" },
 }
 local JUNTAS_R6 = {
 	raiz = { "HumanoidRootPart", "RootJoint" },
@@ -5997,10 +6378,102 @@ end
 -- Posturas (como cada classe segura a arma parada) e animações
 ------------------------------------------------------------------------
 
+-- Postura: vale sempre (andando ou parado) e mexe só da cintura para cima
 local POSTURAS = {
-	cavaleiro = { ombroD = A(0.35, 0, 0.12), cotoveloD = A(0.6), ombroE = A(0.55, 0.35, -0.1), cotoveloE = A(1.1) },
-	mago = { ombroD = A(0.25, 0, 0.1), cotoveloD = A(0.8), pulsoD = A(-1.05), ombroE = A(0.15, 0, -0.12) },
+	cavaleiro = { ombroD = A(0.35, 0, 0.12), cotoveloD = A(0.6), ombroE = A(0.55, 0.35, -0.1), cotoveloE = A(1.1), pescoco = A(-0.05) },
+	mago = { ombroD = A(0.25, 0, 0.1), cotoveloD = A(0.8), pulsoD = A(-1.05), ombroE = A(0.15, 0, -0.12), cintura = A(0.06) },
 	arqueiro = { ombroE = A(0.45, 0.2, -0.1), cotoveloE = A(0.3), ombroD = A(0.15, 0, 0.1) },
+	-- o Assassino anda sempre curvado, com as adagas baixas e à frente
+	assassino = {
+		cintura = A(-0.3),
+		pescoco = A(0.22),
+		ombroD = A(0.55, 0, 0.3),
+		cotoveloD = A(1.2),
+		pulsoD = A(-0.3),
+		ombroE = A(0.75, 0.25, -0.3),
+		cotoveloE = A(1.35),
+		pulsoE = A(-0.3),
+	},
+}
+
+-- Pose parada: o corpo todo, só quando o personagem está quase sem se mexer.
+-- "t" é o tempo em segundos (para respirar e balançar de leve).
+local PARADO = {
+	-- Guarda firme: base larga, escudo à frente, espada pronta
+	cavaleiro = function(t: number)
+		local respirar = math.sin(t * 1.6) * 0.025
+		return {
+			raiz = A(0, 0.3, 0, 0, -0.22, 0),
+			cintura = A(-0.04 + respirar, -0.22),
+			pescoco = A(-0.05, -0.08),
+			ombroE = A(0.95, 0.55, -0.1),
+			cotoveloE = A(1.25),
+			ombroD = A(0.4, 0, 0.3),
+			cotoveloD = A(0.75),
+			pulsoD = A(-0.45),
+			quadrilD = A(0.32, 0, 0.14),
+			joelhoD = A(-0.5),
+			tornozeloD = A(0.18),
+			quadrilE = A(-0.12, 0, -0.14),
+			joelhoE = A(-0.32),
+			tornozeloE = A(0.18),
+		}
+	end,
+	-- Ereto e confiante: cajado apoiado, a outra mão conjura uma luz, flutua de leve
+	mago = function(t: number)
+		local flutuar = math.sin(t * 2) * 0.06
+		return {
+			raiz = A(0, 0, 0, 0, flutuar, 0),
+			cintura = A(0.1 + math.sin(t * 1.4) * 0.02),
+			pescoco = A(-0.14),
+			ombroD = A(0.2, 0, 0.2),
+			cotoveloD = A(0.9),
+			pulsoD = A(-1.1),
+			ombroE = A(0.75, 0.35, -0.25),
+			cotoveloE = A(1.35),
+			pulsoE = A(0.45 + math.sin(t * 2) * 0.1),
+			quadrilD = A(0, 0, 0.04),
+			quadrilE = A(0, 0, -0.04),
+			brilho = A(0.35 + math.sin(t * 2) * 0.1),
+		}
+	end,
+	-- Relaxado, peso numa perna, arco baixo, olhando em volta
+	arqueiro = function(t: number)
+		return {
+			raiz = A(0, -0.25, 0.07),
+			cintura = A(0.02, 0.15, -0.05),
+			pescoco = A(0, math.sin(t * 0.6) * 0.45),
+			ombroE = A(0.25, 0, -0.18),
+			cotoveloE = A(0.25),
+			ombroD = A(-0.12, 0, 0.18),
+			cotoveloD = A(0.5),
+			quadrilD = A(0, 0, 0.1),
+			quadrilE = A(0.18, 0, -0.16),
+			joelhoE = A(-0.35),
+			tornozeloE = A(0.15),
+		}
+	end,
+	-- Agachado e inclinado para frente, pronto para dar o bote
+	assassino = function(t: number)
+		local respirar = math.sin(t * 3.2) * 0.04
+		return {
+			raiz = A(0, 0.3, 0, 0, -0.42 + respirar, 0),
+			cintura = A(-0.5 + respirar, -0.2),
+			pescoco = A(0.42, 0.15 + math.sin(t * 0.8) * 0.15),
+			ombroD = A(0.7, 0, 0.4),
+			cotoveloD = A(1.35),
+			pulsoD = A(-0.35),
+			ombroE = A(1, 0.35, -0.35),
+			cotoveloE = A(1.55),
+			pulsoE = A(-0.35),
+			quadrilD = A(0.65, 0, 0.15),
+			joelhoD = A(-1.1),
+			tornozeloD = A(0.42),
+			quadrilE = A(0.35, 0, -0.2),
+			joelhoE = A(-1),
+			tornozeloE = A(0.6),
+		}
+	end,
 }
 
 -- Arqueiro mirando: corpo de lado, braço do arco esticado, mão puxando a corda até o rosto
@@ -6043,6 +6516,131 @@ local function tiroArqueiro()
 end
 
 local ACOES = {
+	assassino = {
+		-- corte rápido da direita para a esquerda (adaga direita)
+		ataque1 = {
+			duracao = 0.24,
+			trilha = true,
+			quadros = {
+				{ t = 0.04, pose = { ombroD = A(1.1, -1, 0.35), cotoveloD = A(0.9), pulsoD = A(-0.6), cintura = A(-0.35, -0.45), raiz = A(0, -0.15, 0, 0, -0.3, 0) } },
+				{ t = 0.11, suave = "forte", pose = { ombroD = A(1.45, 0.95), cotoveloD = A(0.15), pulsoD = A(-0.9), cintura = A(-0.4, 0.45), raiz = A(-0.05, 0.2, 0, 0, -0.35, 0) } },
+			},
+		},
+		-- corte rápido da esquerda para a direita (adaga esquerda)
+		ataque2 = {
+			duracao = 0.24,
+			trilha = true,
+			quadros = {
+				{ t = 0.04, pose = { ombroE = A(1.1, 1, -0.35), cotoveloE = A(0.9), pulsoE = A(-0.6), cintura = A(-0.35, 0.45), raiz = A(0, 0.15, 0, 0, -0.3, 0) } },
+				{ t = 0.11, suave = "forte", pose = { ombroE = A(1.45, -0.95), cotoveloE = A(0.15), pulsoE = A(-0.9), cintura = A(-0.4, -0.45), raiz = A(-0.05, -0.2, 0, 0, -0.35, 0) } },
+			},
+		},
+		-- golpe final: salta e cruza as duas adagas para baixo
+		ataque3 = {
+			duracao = 0.4,
+			trilha = true,
+			quadros = {
+				{ t = 0.1, pose = { ombroD = A(2.4, 0.35), ombroE = A(2.4, -0.35), cotoveloD = A(1.1), cotoveloE = A(1.1), cintura = A(0.2), raiz = A(0.05, 0, 0, 0, 0.35, 0) } },
+				{
+					t = 0.19,
+					suave = "forte",
+					pose = {
+						ombroD = A(1.25, 0.55),
+						ombroE = A(1.25, -0.55),
+						cotoveloD = A(0.1),
+						cotoveloE = A(0.1),
+						cintura = A(-0.55),
+						raiz = A(-0.2, 0, 0, 0, -0.5, 0),
+						quadrilD = A(0.9),
+						joelhoD = A(-1),
+						quadrilE = A(-0.45),
+						joelhoE = A(-0.5),
+					},
+				},
+			},
+		},
+		-- carregando: encolhido como uma mola, adagas para trás
+		carregar = {
+			manter = true,
+			quadros = {
+				{
+					t = 0.15,
+					pose = {
+						raiz = A(0, 0, 0, 0, -0.65, 0),
+						cintura = A(-0.6),
+						pescoco = A(0.5),
+						ombroD = A(-0.45, 0, 0.55),
+						ombroE = A(-0.45, 0, -0.55),
+						cotoveloD = A(0.5),
+						cotoveloE = A(0.5),
+						quadrilD = A(0.95),
+						joelhoD = A(-1.45),
+						tornozeloD = A(0.5),
+						quadrilE = A(-0.15),
+						joelhoE = A(-1),
+						tornozeloE = A(0.7),
+					},
+				},
+			},
+		},
+		-- Investida Letal: dispara para frente com as duas adagas esticadas
+		soltar = {
+			duracao = 0.42,
+			trilha = true,
+			quadros = {
+				{
+					t = 0.04,
+					suave = "forte",
+					pose = {
+						ombroD = A(1.6, -0.25),
+						ombroE = A(1.6, 0.25),
+						cotoveloD = A(0),
+						cotoveloE = A(0),
+						pulsoD = A(-1.4),
+						pulsoE = A(-1.4),
+						cintura = A(-0.55),
+						pescoco = A(0.5),
+						raiz = A(-0.3, 0, 0, 0, -0.55, 0),
+						quadrilD = A(1.05),
+						joelhoD = A(-0.7),
+						quadrilE = A(-0.85),
+						joelhoE = A(-0.25),
+					},
+				},
+			},
+		},
+		-- Passo Sombrio: agacha, some e reaparece cravando a adaga
+		habilidade = {
+			duracao = 0.4,
+			trilha = true,
+			quadros = {
+				{ t = 0.05, pose = { raiz = A(0, 0, 0, 0, -0.7, 0), cintura = A(-0.6), ombroD = A(-0.4, 0, 0.5), ombroE = A(-0.4, 0, -0.5), quadrilD = A(1), joelhoD = A(-1.5), quadrilE = A(0.6), joelhoE = A(-1.3) } },
+				{ t = 0.16, suave = "forte", pose = { raiz = A(-0.1, 0, 0, 0, -0.3, 0), cintura = A(-0.45), ombroD = A(1.55, 0.3), cotoveloD = A(0.05), pulsoD = A(-1.3), ombroE = A(0.4, 0, -0.6), quadrilD = A(0.7), joelhoD = A(-0.8), quadrilE = A(-0.3), joelhoE = A(-0.4) } },
+			},
+		},
+		-- Lâminas da Noite: cortes em X sem parar
+		supremo = {
+			trilha = true,
+			continuo = function(tau)
+				local f = math.sin(tau * 24)
+				return {
+					raiz = A(-0.1, f * 0.35, 0, 0, -0.35, 0),
+					cintura = A(-0.45, f * 0.5),
+					ombroD = A(1.35, f * 1.1, 0.2),
+					cotoveloD = A(0.2),
+					pulsoD = A(-1),
+					ombroE = A(1.35, -f * 1.1, -0.2),
+					cotoveloE = A(0.2),
+					pulsoE = A(-1),
+					quadrilD = A(0.7),
+					joelhoD = A(-0.9),
+					quadrilE = A(-0.3),
+					joelhoE = A(-0.5),
+				}
+			end,
+		},
+	},
+
 	cavaleiro = {
 		-- corte da direita para a esquerda
 		ataque1 = {
@@ -6216,6 +6814,29 @@ local ACOES = {
 
 -- Esquivas (uma por classe). Duram um pouco mais que o impulso para o corpo "assentar".
 local ESQUIVAS = {
+	-- Passo de sombra: corrida baixa de ninja, braços para trás
+	assassino = {
+		duracao = 0.3,
+		quadros = {
+			{
+				t = 0.035,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.6, 0, 0, 0, -0.6, 0),
+					cintura = A(-0.3),
+					pescoco = A(0.6),
+					ombroD = A(-1.25, 0, 0.25),
+					ombroE = A(-1.25, 0, -0.25),
+					cotoveloD = A(0.1),
+					cotoveloE = A(0.1),
+					quadrilD = A(1.15),
+					joelhoD = A(-1.4),
+					quadrilE = A(-0.55),
+					joelhoE = A(-0.7),
+				},
+			},
+		},
+	},
 	-- Investida: ombro e escudo à frente, passada longa
 	cavaleiro = {
 		duracao = 0.34,
@@ -6453,32 +7074,39 @@ local function prepararArma(e)
 	end
 	e.detalhes = {}
 	e.arma = arma
-	e.trilha, e.encaixe, e.flecha, e.glow, e.esfera, e.emissorCarga = nil, nil, nil, nil, nil, nil
+	e.trilha, e.trilha2, e.encaixe, e.flecha, e.glow, e.esfera, e.emissorCarga = nil, nil, nil, nil, nil, nil, nil
 	if not arma then
 		return
 	end
 	local classe = Classes.obter(classeDe(e))
 
-	local lamina = arma:FindFirstChild("Lamina")
-	if lamina then
-		local base = lamina:FindFirstChild("TrilhaBase") :: Attachment?
-		local ponta = lamina:FindFirstChild("TrilhaPonta") :: Attachment?
-		if base and ponta then
-			local trilha = Instance.new("Trail")
-			trilha.Attachment0 = base
-			trilha.Attachment1 = ponta
-			trilha.Color = ColorSequence.new(Color3.new(1, 1, 1), classe.cor)
-			trilha.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
-			trilha.Lifetime = 0.16
-			trilha.LightEmission = 1
-			trilha.LightInfluence = 0
-			trilha.Enabled = false
-			trilha.Parent = lamina
-			e.trilha = trilha
-			table.insert(e.detalhes, trilha)
-			e.pontaArma = ponta
+	local function rastroDaLamina(modelo: Instance?): (Trail?, Attachment?)
+		local lamina = modelo and modelo:FindFirstChild("Lamina")
+		local base = lamina and lamina:FindFirstChild("TrilhaBase") :: Attachment?
+		local ponta = lamina and lamina:FindFirstChild("TrilhaPonta") :: Attachment?
+		if not base or not ponta then
+			return nil, nil
 		end
+		local trilha = Instance.new("Trail")
+		trilha.Attachment0 = base
+		trilha.Attachment1 = ponta
+		trilha.Color = ColorSequence.new(Color3.new(1, 1, 1), classe.cor)
+		trilha.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
+		trilha.Lifetime = 0.16
+		trilha.LightEmission = 1
+		trilha.LightInfluence = 0
+		trilha.Enabled = false
+		trilha.Parent = lamina
+		table.insert(e.detalhes, trilha)
+		return trilha, ponta
 	end
+	local trilha, ponta = rastroDaLamina(arma)
+	if trilha then
+		e.trilha = trilha
+		e.pontaArma = ponta
+	end
+	-- Assassino: rastro também na adaga da mão esquerda
+	e.trilha2 = rastroDaLamina(acessorios:FindFirstChild("ArmaSecundaria"))
 
 	local arco = arma:FindFirstChild("Arco")
 	if arco then
@@ -6595,6 +7223,9 @@ local function atualizarArma(e, agora: number)
 		local ligada = acao ~= nil and acao.def.trilha == true and (acao.soltando == nil) and (agora - acao.inicio) < (if acao.def.continuo then math.huge else acao.duracao * 0.8)
 		if e.trilha.Enabled ~= ligada then
 			e.trilha.Enabled = ligada
+		end
+		if e.trilha2 and e.trilha2.Enabled ~= ligada then
+			e.trilha2.Enabled = ligada
 		end
 	end
 	if e.encaixe and e.arco and e.flecha then
@@ -6713,7 +7344,8 @@ end
 
 local function animarPersonagem(e, agora: number)
 	local final = {} -- junta -> { valores, peso }
-	local postura = POSTURAS[classeDe(e)]
+	local classe = classeDe(e)
+	local postura = POSTURAS[classe]
 	if postura then
 		for junta, valor in postura do
 			final[junta] = { valor, PESO_POSTURA }
@@ -6729,6 +7361,22 @@ local function animarPersonagem(e, agora: number)
 				final[junta] = { valor, peso }
 			end
 		end
+	end
+
+	-- Pose parada: entra suave quando o personagem para e sai quando ele anda ou pula
+	local raiz = e.personagem:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local parado = 0
+	if raiz then
+		-- pela velocidade (funciona também para os personagens dos outros jogadores)
+		local v = raiz.AssemblyLinearVelocity
+		if math.abs(v.Y) < 3 then
+			parado = math.clamp(1 - Vector3.new(v.X, 0, v.Z).Magnitude / 3, 0, 1)
+		end
+	end
+	e.parado = (e.parado or 0) + (parado - (e.parado or 0)) * 0.15
+	local poseParada = PARADO[classe]
+	if poseParada and e.parado > 0.01 then
+		aplicarCamada(poseParada(agora), e.parado * 0.9)
 	end
 
 	local a = e.acao
@@ -7015,6 +7663,24 @@ local function mirar(direcao: Vector3)
 	mirandoAte = os.clock() + 0.35
 end
 
+-- Empurra o próprio personagem (o movimento do personagem é feito neste computador)
+local function impulso(direcao: Vector3, velocidade: number, duracao: number)
+	local raiz = personagem()
+	if not raiz then
+		return
+	end
+	local anexo = Instance.new("Attachment")
+	anexo.Parent = raiz
+	local forca = Instance.new("LinearVelocity")
+	forca.Attachment0 = anexo
+	forca.MaxForce = 1e7
+	forca.RelativeTo = Enum.ActuatorRelativeTo.World
+	forca.VectorVelocity = direcao * velocidade
+	forca.Parent = raiz
+	Debris:AddItem(forca, duracao)
+	Debris:AddItem(anexo, duracao)
+end
+
 local function podeLutar(): boolean
 	return not Estado.caido and not Estado.morto and Estado.menusAbertos == 0
 end
@@ -7124,6 +7790,12 @@ local function soltarCarga()
 				cor = classe.cor,
 				perfeito = fracao >= 0.99,
 			})
+		elseif classe.id == "assassino" then
+			-- Investida Letal: dispara para frente (mesma distância que o servidor usa)
+			local distancia = 12 + 6 * fracao
+			Vfx.investidaLetal({ jogador = jogador, de = raiz.Position, ate = raiz.Position + direcao * distancia, cor = classe.cor, perfeito = fracao >= 0.99 })
+			impulso(direcao, distancia / 0.2, 0.2)
+			mirandoAte = os.clock() + 0.3
 		else
 			Vfx.tremer(0.4 + 0.6 * fracao, 0.15)
 		end
@@ -7140,6 +7812,11 @@ local function usarHabilidade()
 	local direcao = direcaoDaMira()
 	mirar(direcao)
 	Acao:FireServer("habilidade", direcao)
+	-- Arqueiro: salta para trás antes da chuva de flechas
+	local stats = Estado.stats
+	if stats and stats.classe == "arqueiro" then
+		impulso(-direcao, 70, 0.18)
+	end
 end
 
 local function usarSupremo()
@@ -8680,11 +9357,11 @@ end
 
 -- Pontinhos de 1 a 5 (força de um atributo)
 local function pontos(pai: Instance, posicao: UDim2, valor: number, cor: Color3)
-	local linha = criar("Frame", { Position = posicao, Size = UDim2.fromOffset(150, 14), BackgroundTransparency = 1, Parent = pai })
-	criar("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5), Parent = linha })
+	local linha = criar("Frame", { Position = posicao, Size = UDim2.fromOffset(120, 14), BackgroundTransparency = 1, Parent = pai })
+	criar("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), Parent = linha })
 	for i = 1, 5 do
 		local p = criar("Frame", {
-			Size = UDim2.fromOffset(24, 12),
+			Size = UDim2.fromOffset(20, 12),
 			BackgroundColor3 = if i <= valor then cor else Color3.fromRGB(46, 40, 58),
 			BorderSizePixel = 0,
 			Parent = linha,
@@ -8698,7 +9375,7 @@ end
 -- Escolha de classe
 ------------------------------------------------------------------------
 
-local menuClasses = novoMenu("Classes", 1200, 640)
+local menuClasses = novoMenu("Classes", 1220, 690)
 botaoFechar(menuClasses)
 UI.titulo(menuClasses.conteudo, "ESCOLHA SUA CLASSE", 0, 620, 58)
 UI.texto({
@@ -8709,11 +9386,11 @@ UI.texto({
 	TextColor3 = cores.textoSuave,
 	Parent = menuClasses.conteudo,
 })
-local linhaClasses = criar("Frame", { Position = UDim2.fromOffset(0, 108), Size = UDim2.new(1, 0, 0, 530), BackgroundTransparency = 1, Parent = menuClasses.conteudo })
+local linhaClasses = criar("Frame", { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 0, 570), BackgroundTransparency = 1, Parent = menuClasses.conteudo })
 criar("UIListLayout", {
 	FillDirection = Enum.FillDirection.Horizontal,
 	HorizontalAlignment = Enum.HorizontalAlignment.Center,
-	Padding = UDim.new(0, 24),
+	Padding = UDim.new(0, 14),
 	SortOrder = Enum.SortOrder.LayoutOrder,
 	Parent = linhaClasses,
 })
@@ -8721,50 +9398,64 @@ criar("UIListLayout", {
 local botoesClasse = {}
 for ordem, id in Classes.ordem do
 	local classe = Classes.dados[id]
-	local cartao = UI.painel({ Size = UDim2.fromOffset(370, 524), LayoutOrder = ordem, Parent = linhaClasses })
+	local cartao = UI.painel({ Size = UDim2.fromOffset(286, 566), LayoutOrder = ordem, Parent = linhaClasses })
 	local zoom = criar("UIScale", { Parent = cartao })
 	local cabecalho = criar("Frame", {
 		Position = UDim2.fromOffset(8, 8),
-		Size = UDim2.new(1, -16, 0, 150),
+		Size = UDim2.new(1, -16, 0, 130),
 		BackgroundColor3 = cores.branco,
 		Parent = cartao,
 	})
 	UI.cantos(cabecalho, 8)
 	UI.gradiente(cabecalho, classe.cor, classe.cor:Lerp(cores.fundo, 0.75))
-	UI.medalhao({ Parent = cabecalho, Icone = classe.icone, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(110, 110), Cor = classe.cor, EspessuraBorda = 3 })
-	local nome = UI.texto({ Position = UDim2.fromOffset(0, 166), Size = UDim2.new(1, 0, 0, 36), FontFace = fontes.cabecalho, Text = classe.nome, TextColor3 = classe.cor:Lerp(cores.branco, 0.35), Parent = cartao })
+	UI.medalhao({ Parent = cabecalho, Icone = classe.icone, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(96, 96), Cor = classe.cor, EspessuraBorda = 3 })
+	local nome = UI.texto({ Position = UDim2.fromOffset(0, 144), Size = UDim2.new(1, 0, 0, 32), FontFace = fontes.cabecalho, Text = classe.nome, TextColor3 = classe.cor:Lerp(cores.branco, 0.35), Parent = cartao })
 	UI.contorno(nome, 2)
-	UI.texto({ Position = UDim2.fromOffset(0, 202), Size = UDim2.new(1, 0, 0, 20), FontFace = fontes.texto, Text = classe.titulo, TextColor3 = cores.ouro, Parent = cartao })
+	UI.texto({ Position = UDim2.fromOffset(0, 176), Size = UDim2.new(1, 0, 0, 18), FontFace = fontes.texto, Text = classe.titulo, TextColor3 = cores.ouro, Parent = cartao })
 	local descricao = UI.texto({
-		Position = UDim2.fromOffset(22, 228),
-		Size = UDim2.new(1, -44, 0, 50),
+		Position = UDim2.fromOffset(16, 198),
+		Size = UDim2.new(1, -32, 0, 44),
 		FontFace = fontes.texto,
 		Text = classe.descricao,
 		TextColor3 = cores.texto,
 		TextWrapped = true,
 		Parent = cartao,
 	})
-	UI.limiteTexto(descricao, 18)
-	local y = 286
+	UI.limiteTexto(descricao, 15)
+	-- pontos fortes e fracos
+	for i, info in { { "✔ " .. (classe.forte or ""), Color3.fromRGB(130, 230, 140) }, { "✘ " .. (classe.fraco or ""), Color3.fromRGB(255, 120, 120) } } do
+		local linha = UI.texto({
+			Position = UDim2.fromOffset(16, 244 + (i - 1) * 32),
+			Size = UDim2.new(1, -32, 0, 30),
+			FontFace = fontes.forte,
+			Text = info[1],
+			TextColor3 = info[2],
+			TextWrapped = true,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = cartao,
+		})
+		UI.limiteTexto(linha, 13)
+	end
+	local y = 314
 	for _, atributo in { "Vida", "Dano", "Alcance", "Velocidade" } do
 		UI.texto({
-			Position = UDim2.fromOffset(26, y),
-			Size = UDim2.fromOffset(150, 18),
+			Position = UDim2.fromOffset(20, y),
+			Size = UDim2.fromOffset(120, 18),
 			FontFace = fontes.forte,
 			Text = atributo,
 			TextColor3 = cores.textoSuave,
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = cartao,
 		})
-		pontos(cartao, UDim2.fromOffset(186, y + 3), classe.notas[atributo], classe.cor)
-		y += 24
+		pontos(cartao, UDim2.fromOffset(146, y + 3), classe.notas[atributo], classe.cor)
+		y += 22
 	end
 	for i, info in { { classe.habilidade, "E" }, { classe.supremo, "R" } } do
-		local linhaY = 386 + (i - 1) * 50
-		UI.medalhao({ Parent = cartao, Icone = info[1].icone, Position = UDim2.fromOffset(22, linhaY), Size = UDim2.fromOffset(42, 42), Cor = classe.cor })
+		local linhaY = 408 + (i - 1) * 52
+		UI.medalhao({ Parent = cartao, Icone = info[1].icone, Position = UDim2.fromOffset(14, linhaY), Size = UDim2.fromOffset(40, 40), Cor = classe.cor })
 		UI.texto({
-			Position = UDim2.fromOffset(72, linhaY),
-			Size = UDim2.fromOffset(280, 18),
+			Position = UDim2.fromOffset(60, linhaY),
+			Size = UDim2.new(1, -70, 0, 18),
 			FontFace = fontes.forte,
 			Text = info[1].nome .. "  [" .. info[2] .. "]",
 			TextColor3 = cores.ouroClaro,
@@ -8772,8 +9463,8 @@ for ordem, id in Classes.ordem do
 			Parent = cartao,
 		})
 		local d = UI.texto({
-			Position = UDim2.fromOffset(72, linhaY + 19),
-			Size = UDim2.fromOffset(280, 24),
+			Position = UDim2.fromOffset(60, linhaY + 18),
+			Size = UDim2.new(1, -70, 0, 30),
 			FontFace = fontes.texto,
 			Text = info[1].descricao,
 			TextColor3 = cores.textoSuave,
@@ -8781,14 +9472,14 @@ for ordem, id in Classes.ordem do
 			TextXAlignment = Enum.TextXAlignment.Left,
 			Parent = cartao,
 		})
-		UI.limiteTexto(d, 14)
+		UI.limiteTexto(d, 12)
 	end
 	local botao = UI.botao({
 		Parent = cartao,
 		Texto = "ESCOLHER",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -14),
-		Size = UDim2.fromOffset(260, 46),
+		Position = UDim2.new(0.5, 0, 1, -12),
+		Size = UDim2.fromOffset(230, 42),
 	})
 	botao.Activated:Connect(function()
 		if Estado.perfil.classe ~= id or not Estado.perfil.escolheuClasse then
@@ -10989,6 +11680,7 @@ local ESTILOS_PROJETIL = {
 	fogo = { cor = Color3.fromRGB(255, 120, 40), formato = "bola", tamanho = 1.4, fogo = true },
 	orbeCarregado = { cor = Color3.fromRGB(225, 150, 255), formato = "bola", tamanho = 1.2 },
 	flechaCarregada = { cor = Color3.fromRGB(255, 230, 120), formato = "flecha", tamanho = 1 },
+	adaga = { cor = Color3.fromRGB(255, 90, 120), formato = "flecha", tamanho = 0.7 },
 }
 
 local function rastro(p: BasePart, cor: Color3, largura: number, duracao: number)
@@ -11573,6 +12265,7 @@ local COR_ESQUIVA = {
 	cavaleiro = Color3.fromRGB(255, 225, 160),
 	mago = Color3.fromRGB(210, 160, 255),
 	arqueiro = Color3.fromRGB(170, 255, 190),
+	assassino = Color3.fromRGB(120, 30, 60),
 }
 
 function Vfx.esquiva(dados)
@@ -11638,6 +12331,98 @@ function Vfx.cargaCheia(dados)
 	if dados.local_ then
 		Vfx.tremer(0.35, 0.1)
 	end
+end
+
+-- Fumaça escura que fica onde o Assassino some ou aparece
+local function fumaca(posicao: Vector3, cor: Color3, quantidade: number)
+	particulas(posicao, { cor = Color3.fromRGB(30, 22, 40), cor2 = cor, quantidade = quantidade, tamanho = 1.1, velocidade = 7, vida = 0.5, luz = 0 })
+	local nuvem = parte(Vector3.one * 2, CFrame.new(posicao), Color3.fromRGB(25, 18, 32), 0.35, Enum.PartType.Ball, Enum.Material.SmoothPlastic)
+	animar(nuvem, 0.4, { Size = Vector3.one * 5, Transparency = 1 })
+	Debris:AddItem(nuvem, 0.45)
+end
+
+-- Assassino: some numa fumaça e aparece em outro lugar, deixando um risco no ar
+function Vfx.passoSombrio(dados)
+	local de, ate = dados.de, dados.ate
+	local cor = dados.cor
+	fumaca(de, cor, if dados.leve then 6 else 12)
+	fumaca(ate, cor, if dados.leve then 4 else 8)
+	local distancia = (ate - de).Magnitude
+	if distancia > 1 then
+		local risco = parte(Vector3.new(0.35, 0.35, distancia), CFrame.lookAt((de + ate) / 2, ate), cor, 0.2, nil, Enum.Material.Neon)
+		animar(risco, 0.25, { Size = Vector3.new(0.05, 0.05, distancia), Transparency = 1 })
+		Debris:AddItem(risco, 0.3)
+	end
+	if dados.jogador == jogador and not dados.leve then
+		Vfx.tremer(0.4, 0.1)
+	end
+end
+
+-- Investida Letal do Assassino (golpe carregado): linha de cortes no caminho
+function Vfx.investidaLetal(dados)
+	local de, ate = dados.de, dados.ate
+	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.5) else dados.cor
+	local distancia = (ate - de).Magnitude
+	if distancia < 0.5 then
+		return
+	end
+	local direcao = (ate - de).Unit
+	for i = 0, 2 do
+		task.delay(i * 0.04, function()
+			local lado = if i % 2 == 0 then 1 else -1
+			local origem = CFrame.lookAt(de + direcao * distancia * (0.3 + 0.3 * i), de + direcao * distancia * (0.3 + 0.3 * i) + direcao)
+			arcoDeCorte(origem * CFrame.Angles(0, 0, math.rad(35 * lado)), 3.2, 160, cor, { espessura = 0.9, duracao = 0.12, reverso = lado < 0 })
+		end)
+	end
+	local rastro = parte(Vector3.new(1.2, 0.2, distancia), CFrame.lookAt((de + ate) / 2, ate), cor, 0.3, nil, Enum.Material.Neon)
+	animar(rastro, 0.35, { Size = Vector3.new(0.1, 0.05, distancia), Transparency = 1 })
+	Debris:AddItem(rastro, 0.4)
+	particulas(ate, { cor = cor, cor2 = BRANCO, quantidade = 12, tamanho = 0.4, velocidade = 18, vida = 0.3 })
+	Vfx.tremerEm(ate, if dados.perfeito then 1 else 0.6, 0.12)
+end
+
+-- Chão em chamas deixado pelo Meteoro
+function Vfx.zonaFogo(dados)
+	local centro = dados.pos + Vector3.new(0, 0.1, 0)
+	local diametro = dados.raio * 2
+	local base = disco(centro, diametro, FOGO, 0.45)
+	-- peça invisível e achatada: as chamas saem de toda a área dela, para cima
+	local area = parte(Vector3.new(diametro * 0.75, 0.2, diametro * 0.75), CFrame.new(centro), FOGO, 1)
+	local chamas = Instance.new("ParticleEmitter")
+	chamas.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(255, 70, 20))
+	chamas.LightEmission = 1
+	chamas.LightInfluence = 0
+	chamas.Size = sequencia({ { 0, 0.9 }, { 1, 0 } })
+	chamas.Lifetime = NumberRange.new(0.5, 0.9)
+	chamas.Speed = NumberRange.new(3, 6)
+	chamas.SpreadAngle = Vector2.new(10, 10)
+	chamas.Shape = Enum.ParticleEmitterShape.Box
+	chamas.EmissionDirection = Enum.NormalId.Top
+	chamas.Rate = 60
+	chamas.Parent = area
+	local luz = Instance.new("PointLight")
+	luz.Color = FOGO
+	luz.Range = diametro
+	luz.Brightness = 2
+	luz.Parent = area
+	task.delay(dados.duracao, function()
+		chamas.Enabled = false
+		animar(luz, 0.3, { Brightness = 0 })
+	end)
+	sumir({ base }, 0.4, dados.duracao)
+	Debris:AddItem(area, dados.duracao + 1)
+end
+
+-- Escudo ganho com o Julgamento do Cavaleiro
+function Vfx.escudoGanho(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	local bolha = parte(Vector3.one * 2, raiz.CFrame, dados.cor:Lerp(BRANCO, 0.4), 0.3, Enum.PartType.Ball, Enum.Material.ForceField)
+	animar(bolha, 0.5, { Size = Vector3.one * 7, Transparency = 1 })
+	Debris:AddItem(bolha, 0.55)
+	textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "🛡️ ESCUDO", dados.cor:Lerp(BRANCO, 0.4), 26)
 end
 
 -- Giro do Cavaleiro com a espada carregada

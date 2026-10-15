@@ -46,6 +46,8 @@ local JUNTAS_R15 = {
 	joelhoD = { "RightLowerLeg", "RightKnee" },
 	quadrilE = { "LeftUpperLeg", "LeftHip" },
 	joelhoE = { "LeftLowerLeg", "LeftKnee" },
+	tornozeloD = { "RightFoot", "RightAnkle" },
+	tornozeloE = { "LeftFoot", "LeftAnkle" },
 }
 local JUNTAS_R6 = {
 	raiz = { "HumanoidRootPart", "RootJoint" },
@@ -73,10 +75,102 @@ end
 -- Posturas (como cada classe segura a arma parada) e animações
 ------------------------------------------------------------------------
 
+-- Postura: vale sempre (andando ou parado) e mexe só da cintura para cima
 local POSTURAS = {
-	cavaleiro = { ombroD = A(0.35, 0, 0.12), cotoveloD = A(0.6), ombroE = A(0.55, 0.35, -0.1), cotoveloE = A(1.1) },
-	mago = { ombroD = A(0.25, 0, 0.1), cotoveloD = A(0.8), pulsoD = A(-1.05), ombroE = A(0.15, 0, -0.12) },
+	cavaleiro = { ombroD = A(0.35, 0, 0.12), cotoveloD = A(0.6), ombroE = A(0.55, 0.35, -0.1), cotoveloE = A(1.1), pescoco = A(-0.05) },
+	mago = { ombroD = A(0.25, 0, 0.1), cotoveloD = A(0.8), pulsoD = A(-1.05), ombroE = A(0.15, 0, -0.12), cintura = A(0.06) },
 	arqueiro = { ombroE = A(0.45, 0.2, -0.1), cotoveloE = A(0.3), ombroD = A(0.15, 0, 0.1) },
+	-- o Assassino anda sempre curvado, com as adagas baixas e à frente
+	assassino = {
+		cintura = A(-0.3),
+		pescoco = A(0.22),
+		ombroD = A(0.55, 0, 0.3),
+		cotoveloD = A(1.2),
+		pulsoD = A(-0.3),
+		ombroE = A(0.75, 0.25, -0.3),
+		cotoveloE = A(1.35),
+		pulsoE = A(-0.3),
+	},
+}
+
+-- Pose parada: o corpo todo, só quando o personagem está quase sem se mexer.
+-- "t" é o tempo em segundos (para respirar e balançar de leve).
+local PARADO = {
+	-- Guarda firme: base larga, escudo à frente, espada pronta
+	cavaleiro = function(t: number)
+		local respirar = math.sin(t * 1.6) * 0.025
+		return {
+			raiz = A(0, 0.3, 0, 0, -0.22, 0),
+			cintura = A(-0.04 + respirar, -0.22),
+			pescoco = A(-0.05, -0.08),
+			ombroE = A(0.95, 0.55, -0.1),
+			cotoveloE = A(1.25),
+			ombroD = A(0.4, 0, 0.3),
+			cotoveloD = A(0.75),
+			pulsoD = A(-0.45),
+			quadrilD = A(0.32, 0, 0.14),
+			joelhoD = A(-0.5),
+			tornozeloD = A(0.18),
+			quadrilE = A(-0.12, 0, -0.14),
+			joelhoE = A(-0.32),
+			tornozeloE = A(0.18),
+		}
+	end,
+	-- Ereto e confiante: cajado apoiado, a outra mão conjura uma luz, flutua de leve
+	mago = function(t: number)
+		local flutuar = math.sin(t * 2) * 0.06
+		return {
+			raiz = A(0, 0, 0, 0, flutuar, 0),
+			cintura = A(0.1 + math.sin(t * 1.4) * 0.02),
+			pescoco = A(-0.14),
+			ombroD = A(0.2, 0, 0.2),
+			cotoveloD = A(0.9),
+			pulsoD = A(-1.1),
+			ombroE = A(0.75, 0.35, -0.25),
+			cotoveloE = A(1.35),
+			pulsoE = A(0.45 + math.sin(t * 2) * 0.1),
+			quadrilD = A(0, 0, 0.04),
+			quadrilE = A(0, 0, -0.04),
+			brilho = A(0.35 + math.sin(t * 2) * 0.1),
+		}
+	end,
+	-- Relaxado, peso numa perna, arco baixo, olhando em volta
+	arqueiro = function(t: number)
+		return {
+			raiz = A(0, -0.25, 0.07),
+			cintura = A(0.02, 0.15, -0.05),
+			pescoco = A(0, math.sin(t * 0.6) * 0.45),
+			ombroE = A(0.25, 0, -0.18),
+			cotoveloE = A(0.25),
+			ombroD = A(-0.12, 0, 0.18),
+			cotoveloD = A(0.5),
+			quadrilD = A(0, 0, 0.1),
+			quadrilE = A(0.18, 0, -0.16),
+			joelhoE = A(-0.35),
+			tornozeloE = A(0.15),
+		}
+	end,
+	-- Agachado e inclinado para frente, pronto para dar o bote
+	assassino = function(t: number)
+		local respirar = math.sin(t * 3.2) * 0.04
+		return {
+			raiz = A(0, 0.3, 0, 0, -0.42 + respirar, 0),
+			cintura = A(-0.5 + respirar, -0.2),
+			pescoco = A(0.42, 0.15 + math.sin(t * 0.8) * 0.15),
+			ombroD = A(0.7, 0, 0.4),
+			cotoveloD = A(1.35),
+			pulsoD = A(-0.35),
+			ombroE = A(1, 0.35, -0.35),
+			cotoveloE = A(1.55),
+			pulsoE = A(-0.35),
+			quadrilD = A(0.65, 0, 0.15),
+			joelhoD = A(-1.1),
+			tornozeloD = A(0.42),
+			quadrilE = A(0.35, 0, -0.2),
+			joelhoE = A(-1),
+			tornozeloE = A(0.6),
+		}
+	end,
 }
 
 -- Arqueiro mirando: corpo de lado, braço do arco esticado, mão puxando a corda até o rosto
@@ -119,6 +213,131 @@ local function tiroArqueiro()
 end
 
 local ACOES = {
+	assassino = {
+		-- corte rápido da direita para a esquerda (adaga direita)
+		ataque1 = {
+			duracao = 0.24,
+			trilha = true,
+			quadros = {
+				{ t = 0.04, pose = { ombroD = A(1.1, -1, 0.35), cotoveloD = A(0.9), pulsoD = A(-0.6), cintura = A(-0.35, -0.45), raiz = A(0, -0.15, 0, 0, -0.3, 0) } },
+				{ t = 0.11, suave = "forte", pose = { ombroD = A(1.45, 0.95), cotoveloD = A(0.15), pulsoD = A(-0.9), cintura = A(-0.4, 0.45), raiz = A(-0.05, 0.2, 0, 0, -0.35, 0) } },
+			},
+		},
+		-- corte rápido da esquerda para a direita (adaga esquerda)
+		ataque2 = {
+			duracao = 0.24,
+			trilha = true,
+			quadros = {
+				{ t = 0.04, pose = { ombroE = A(1.1, 1, -0.35), cotoveloE = A(0.9), pulsoE = A(-0.6), cintura = A(-0.35, 0.45), raiz = A(0, 0.15, 0, 0, -0.3, 0) } },
+				{ t = 0.11, suave = "forte", pose = { ombroE = A(1.45, -0.95), cotoveloE = A(0.15), pulsoE = A(-0.9), cintura = A(-0.4, -0.45), raiz = A(-0.05, -0.2, 0, 0, -0.35, 0) } },
+			},
+		},
+		-- golpe final: salta e cruza as duas adagas para baixo
+		ataque3 = {
+			duracao = 0.4,
+			trilha = true,
+			quadros = {
+				{ t = 0.1, pose = { ombroD = A(2.4, 0.35), ombroE = A(2.4, -0.35), cotoveloD = A(1.1), cotoveloE = A(1.1), cintura = A(0.2), raiz = A(0.05, 0, 0, 0, 0.35, 0) } },
+				{
+					t = 0.19,
+					suave = "forte",
+					pose = {
+						ombroD = A(1.25, 0.55),
+						ombroE = A(1.25, -0.55),
+						cotoveloD = A(0.1),
+						cotoveloE = A(0.1),
+						cintura = A(-0.55),
+						raiz = A(-0.2, 0, 0, 0, -0.5, 0),
+						quadrilD = A(0.9),
+						joelhoD = A(-1),
+						quadrilE = A(-0.45),
+						joelhoE = A(-0.5),
+					},
+				},
+			},
+		},
+		-- carregando: encolhido como uma mola, adagas para trás
+		carregar = {
+			manter = true,
+			quadros = {
+				{
+					t = 0.15,
+					pose = {
+						raiz = A(0, 0, 0, 0, -0.65, 0),
+						cintura = A(-0.6),
+						pescoco = A(0.5),
+						ombroD = A(-0.45, 0, 0.55),
+						ombroE = A(-0.45, 0, -0.55),
+						cotoveloD = A(0.5),
+						cotoveloE = A(0.5),
+						quadrilD = A(0.95),
+						joelhoD = A(-1.45),
+						tornozeloD = A(0.5),
+						quadrilE = A(-0.15),
+						joelhoE = A(-1),
+						tornozeloE = A(0.7),
+					},
+				},
+			},
+		},
+		-- Investida Letal: dispara para frente com as duas adagas esticadas
+		soltar = {
+			duracao = 0.42,
+			trilha = true,
+			quadros = {
+				{
+					t = 0.04,
+					suave = "forte",
+					pose = {
+						ombroD = A(1.6, -0.25),
+						ombroE = A(1.6, 0.25),
+						cotoveloD = A(0),
+						cotoveloE = A(0),
+						pulsoD = A(-1.4),
+						pulsoE = A(-1.4),
+						cintura = A(-0.55),
+						pescoco = A(0.5),
+						raiz = A(-0.3, 0, 0, 0, -0.55, 0),
+						quadrilD = A(1.05),
+						joelhoD = A(-0.7),
+						quadrilE = A(-0.85),
+						joelhoE = A(-0.25),
+					},
+				},
+			},
+		},
+		-- Passo Sombrio: agacha, some e reaparece cravando a adaga
+		habilidade = {
+			duracao = 0.4,
+			trilha = true,
+			quadros = {
+				{ t = 0.05, pose = { raiz = A(0, 0, 0, 0, -0.7, 0), cintura = A(-0.6), ombroD = A(-0.4, 0, 0.5), ombroE = A(-0.4, 0, -0.5), quadrilD = A(1), joelhoD = A(-1.5), quadrilE = A(0.6), joelhoE = A(-1.3) } },
+				{ t = 0.16, suave = "forte", pose = { raiz = A(-0.1, 0, 0, 0, -0.3, 0), cintura = A(-0.45), ombroD = A(1.55, 0.3), cotoveloD = A(0.05), pulsoD = A(-1.3), ombroE = A(0.4, 0, -0.6), quadrilD = A(0.7), joelhoD = A(-0.8), quadrilE = A(-0.3), joelhoE = A(-0.4) } },
+			},
+		},
+		-- Lâminas da Noite: cortes em X sem parar
+		supremo = {
+			trilha = true,
+			continuo = function(tau)
+				local f = math.sin(tau * 24)
+				return {
+					raiz = A(-0.1, f * 0.35, 0, 0, -0.35, 0),
+					cintura = A(-0.45, f * 0.5),
+					ombroD = A(1.35, f * 1.1, 0.2),
+					cotoveloD = A(0.2),
+					pulsoD = A(-1),
+					ombroE = A(1.35, -f * 1.1, -0.2),
+					cotoveloE = A(0.2),
+					pulsoE = A(-1),
+					quadrilD = A(0.7),
+					joelhoD = A(-0.9),
+					quadrilE = A(-0.3),
+					joelhoE = A(-0.5),
+				}
+			end,
+		},
+	},
+
 	cavaleiro = {
 		-- corte da direita para a esquerda
 		ataque1 = {
@@ -292,6 +511,29 @@ local ACOES = {
 
 -- Esquivas (uma por classe). Duram um pouco mais que o impulso para o corpo "assentar".
 local ESQUIVAS = {
+	-- Passo de sombra: corrida baixa de ninja, braços para trás
+	assassino = {
+		duracao = 0.3,
+		quadros = {
+			{
+				t = 0.035,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.6, 0, 0, 0, -0.6, 0),
+					cintura = A(-0.3),
+					pescoco = A(0.6),
+					ombroD = A(-1.25, 0, 0.25),
+					ombroE = A(-1.25, 0, -0.25),
+					cotoveloD = A(0.1),
+					cotoveloE = A(0.1),
+					quadrilD = A(1.15),
+					joelhoD = A(-1.4),
+					quadrilE = A(-0.55),
+					joelhoE = A(-0.7),
+				},
+			},
+		},
+	},
 	-- Investida: ombro e escudo à frente, passada longa
 	cavaleiro = {
 		duracao = 0.34,
@@ -529,32 +771,39 @@ local function prepararArma(e)
 	end
 	e.detalhes = {}
 	e.arma = arma
-	e.trilha, e.encaixe, e.flecha, e.glow, e.esfera, e.emissorCarga = nil, nil, nil, nil, nil, nil
+	e.trilha, e.trilha2, e.encaixe, e.flecha, e.glow, e.esfera, e.emissorCarga = nil, nil, nil, nil, nil, nil, nil
 	if not arma then
 		return
 	end
 	local classe = Classes.obter(classeDe(e))
 
-	local lamina = arma:FindFirstChild("Lamina")
-	if lamina then
-		local base = lamina:FindFirstChild("TrilhaBase") :: Attachment?
-		local ponta = lamina:FindFirstChild("TrilhaPonta") :: Attachment?
-		if base and ponta then
-			local trilha = Instance.new("Trail")
-			trilha.Attachment0 = base
-			trilha.Attachment1 = ponta
-			trilha.Color = ColorSequence.new(Color3.new(1, 1, 1), classe.cor)
-			trilha.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
-			trilha.Lifetime = 0.16
-			trilha.LightEmission = 1
-			trilha.LightInfluence = 0
-			trilha.Enabled = false
-			trilha.Parent = lamina
-			e.trilha = trilha
-			table.insert(e.detalhes, trilha)
-			e.pontaArma = ponta
+	local function rastroDaLamina(modelo: Instance?): (Trail?, Attachment?)
+		local lamina = modelo and modelo:FindFirstChild("Lamina")
+		local base = lamina and lamina:FindFirstChild("TrilhaBase") :: Attachment?
+		local ponta = lamina and lamina:FindFirstChild("TrilhaPonta") :: Attachment?
+		if not base or not ponta then
+			return nil, nil
 		end
+		local trilha = Instance.new("Trail")
+		trilha.Attachment0 = base
+		trilha.Attachment1 = ponta
+		trilha.Color = ColorSequence.new(Color3.new(1, 1, 1), classe.cor)
+		trilha.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 1) })
+		trilha.Lifetime = 0.16
+		trilha.LightEmission = 1
+		trilha.LightInfluence = 0
+		trilha.Enabled = false
+		trilha.Parent = lamina
+		table.insert(e.detalhes, trilha)
+		return trilha, ponta
 	end
+	local trilha, ponta = rastroDaLamina(arma)
+	if trilha then
+		e.trilha = trilha
+		e.pontaArma = ponta
+	end
+	-- Assassino: rastro também na adaga da mão esquerda
+	e.trilha2 = rastroDaLamina(acessorios:FindFirstChild("ArmaSecundaria"))
 
 	local arco = arma:FindFirstChild("Arco")
 	if arco then
@@ -671,6 +920,9 @@ local function atualizarArma(e, agora: number)
 		local ligada = acao ~= nil and acao.def.trilha == true and (acao.soltando == nil) and (agora - acao.inicio) < (if acao.def.continuo then math.huge else acao.duracao * 0.8)
 		if e.trilha.Enabled ~= ligada then
 			e.trilha.Enabled = ligada
+		end
+		if e.trilha2 and e.trilha2.Enabled ~= ligada then
+			e.trilha2.Enabled = ligada
 		end
 	end
 	if e.encaixe and e.arco and e.flecha then
@@ -789,7 +1041,8 @@ end
 
 local function animarPersonagem(e, agora: number)
 	local final = {} -- junta -> { valores, peso }
-	local postura = POSTURAS[classeDe(e)]
+	local classe = classeDe(e)
+	local postura = POSTURAS[classe]
 	if postura then
 		for junta, valor in postura do
 			final[junta] = { valor, PESO_POSTURA }
@@ -805,6 +1058,22 @@ local function animarPersonagem(e, agora: number)
 				final[junta] = { valor, peso }
 			end
 		end
+	end
+
+	-- Pose parada: entra suave quando o personagem para e sai quando ele anda ou pula
+	local raiz = e.personagem:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local parado = 0
+	if raiz then
+		-- pela velocidade (funciona também para os personagens dos outros jogadores)
+		local v = raiz.AssemblyLinearVelocity
+		if math.abs(v.Y) < 3 then
+			parado = math.clamp(1 - Vector3.new(v.X, 0, v.Z).Magnitude / 3, 0, 1)
+		end
+	end
+	e.parado = (e.parado or 0) + (parado - (e.parado or 0)) * 0.15
+	local poseParada = PARADO[classe]
+	if poseParada and e.parado > 0.01 then
+		aplicarCamada(poseParada(agora), e.parado * 0.9)
 	end
 
 	local a = e.acao
