@@ -1,0 +1,46 @@
+{
+  "name": "MasmorraDasCartas",
+  "tree": {
+    "$className": "DataModel",
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "Technology": { "Enum": 4 },
+        "Ambient": { "Color3": [0.35, 0.35, 0.4] },
+        "OutdoorAmbient": { "Color3": [0.5, 0.5, 0.55] },
+        "Brightness": { "Float32": 2.2 },
+        "TimeOfDay": "14:30:00",
+        "GlobalShadows": true
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": false
+      }
+    },
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      },
+      "StarterCharacterScripts": {
+        "$path": "src/character"
+      }
+    }
+  }
+}

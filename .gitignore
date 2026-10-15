@@ -1,0 +1,16 @@
+# Roblox Studio temporary lock files
+*.rbxlx.lock
+*.rbxmx.lock
+
+# System & OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local helper scripts
+powershell.bat
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class

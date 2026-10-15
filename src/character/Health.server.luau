@@ -1,0 +1,2 @@
+-- Substitui o script "Health" padrão do Roblox, que regenera vida sozinho.
+-- Neste jogo, regenerar vida é um poder (carta "Regeneração").

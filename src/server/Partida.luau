@@ -1,0 +1,856 @@
+-- Controla cada partida: salas, ondas de inimigos, cartas, elevador e fim de jogo.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared:WaitForChild("Config"))
+local Cartas = require(Shared:WaitForChild("Cartas"))
+
+local servidor = script.Parent
+local Remotos = require(servidor.Remotos)
+local Dados = require(servidor.Dados)
+local Vfx = require(servidor.Vfx)
+local Masmorra = require(servidor.Masmorra)
+local Combate = require(servidor.Combate)
+local Projeteis = require(servidor.Projeteis)
+local Inimigos = require(servidor.Inimigos)
+
+local Partida = {}
+
+local partidasAtivas = {} -- [run] = true
+local partidaDoJogador = {} -- [Player] = run
+local contadorPartidas = 0
+
+local COR_OURO = Color3.fromRGB(255, 205, 60)
+local COR_VERDE = Color3.fromRGB(120, 255, 150)
+local COR_VERMELHO = Color3.fromRGB(255, 80, 80)
+
+------------------------------------------------------------------------
+-- Objeto da partida
+------------------------------------------------------------------------
+local Run = {}
+Run.__index = Run
+
+function Run:enviar(player: Player, tipo: string, dados)
+	Remotos.enviar(player, tipo, dados)
+end
+
+function Run:enviarTodos(tipo: string, dados)
+	for player in self.jogadores do
+		Remotos.enviar(player, tipo, dados)
+	end
+end
+
+function Run:anunciar(texto: string, cor: Color3?)
+	self:enviarTodos("banner", { texto = texto, cor = cor })
+end
+
+-- Jogadores de pé (vivos e não caídos)
+function Run:jogadoresAtivos(): number
+	local total = 0
+	for _, estado in self.jogadores do
+		if estado.vivo and not estado.caido then
+			total += 1
+		end
+	end
+	return total
+end
+
+function Run:quantidadeJogadores(): number
+	local total = 0
+	for _ in self.jogadores do
+		total += 1
+	end
+	return total
+end
+
+function Run:quantidadeInimigos(): number
+	local total = 0
+	for _ in self.inimigos do
+		total += 1
+	end
+	return total
+end
+
+local function darOuro(run, estado, base: number)
+	local valor = math.max(1, math.floor(base * estado.stats.multOuro + 0.5))
+	estado.ouro += valor
+	run:enviar(estado.player, "ouro", { total = estado.ouro, ganho = valor })
+end
+
+-- Cria um inimigo. Sem "imediato", ele sai de um portal no chão (o jogador vê de onde vem).
+function Run:invocar(tipo: string, posicao: Vector3, elite: string?, imediato: boolean?)
+	local sala = self.sala
+	if imediato then
+		Inimigos.criar(self, tipo, posicao, self.mult, elite)
+		return
+	end
+	self.inimigosPendentes += 1
+	Vfx.partida(self, "portal", { pos = posicao, duracao = 0.9, elite = elite ~= nil })
+	task.delay(0.9, function()
+		self.inimigosPendentes -= 1
+		if self.ativa and self.sala == sala then
+			Inimigos.criar(self, tipo, posicao, self.mult, elite)
+		end
+	end)
+end
+
+function Run:aoMorrerInimigo(inimigo, estadoMatador)
+	if not inimigo.vivo then
+		return
+	end
+	local posicao = inimigo.raiz.Position
+	local eraChefe = inimigo.chefe
+	Inimigos.morrer(self, inimigo)
+
+	if estadoMatador then
+		local ouroBase = inimigo.ouro * (1 + self.numeroSala * 0.08)
+		for _, estado in self.jogadores do
+			darOuro(self, estado, ouroBase)
+		end
+		Vfx.partida(self, "moedas", { pos = posicao, quantidade = math.clamp(math.floor(ouroBase / 2), 2, 14) })
+		estadoMatador.abates += 1
+		Combate.adicionarCarga(estadoMatador, Config.CARGA_POR_ABATE)
+
+		local stats = estadoMatador.stats
+		if stats.arquimago then
+			Combate.reduzirRecarga(estadoMatador, 1)
+		end
+		-- Carta Combustão: explosões em cadeia
+		if stats.explosaoMorte > 0 then
+			task.delay(0.12, function()
+				if not self.ativa then
+					return
+				end
+				Vfx.partida(self, "explosao", { pos = posicao, raio = 10, cor = Color3.fromRGB(255, 140, 40) })
+				Combate.danoEmArea(self, posicao, 10, stats.dano * 0.6 * stats.explosaoMorte, estadoMatador, {
+					semEfeitos = true,
+					cor = Color3.fromRGB(255, 140, 40),
+				})
+			end)
+		end
+	end
+
+	if eraChefe then
+		self:enviarTodos("chefe", { fim = true })
+	end
+end
+
+------------------------------------------------------------------------
+-- Personagens
+------------------------------------------------------------------------
+
+local function personagemVivo(player: Player): boolean
+	local personagem = player.Character
+	local humanoid = personagem and personagem:FindFirstChildOfClass("Humanoid")
+	return humanoid ~= nil and humanoid.Health > 0
+end
+
+local function configurarPersonagem(run, estado)
+	local player = estado.player
+	local personagem = player.Character
+	local humanoid = personagem and personagem:WaitForChild("Humanoid", 5) :: Humanoid?
+	if not humanoid then
+		return
+	end
+	for _, conexao in estado.conexoes do
+		conexao:Disconnect()
+	end
+	estado.conexoes = {}
+
+	Combate.aplicarStats(estado, true)
+	Combate.equipar(estado)
+	Combate.enviarStats(estado)
+
+	table.insert(estado.conexoes, humanoid.Died:Connect(function()
+		if run.jogadores[player] ~= estado or not estado.vivo then
+			return
+		end
+		estado.vivo = false
+		estado.caido = false
+		run:enviar(player, "morreu", {})
+	end))
+end
+
+local function reviver(run, estado, cframe: CFrame)
+	local player = estado.player
+	if not player.Parent then
+		return
+	end
+	player:LoadCharacterAsync()
+	if not player.Parent or run.jogadores[player] ~= estado then
+		return
+	end
+	local personagem = player.Character
+	if not personagem then
+		return
+	end
+	personagem:PivotTo(cframe)
+	estado.vivo = true
+	estado.caido = false
+	configurarPersonagem(run, estado)
+	run:enviar(player, "reviveu", {})
+end
+
+------------------------------------------------------------------------
+-- Fim da partida para um jogador
+------------------------------------------------------------------------
+
+-- motivo: "saiu" (elevador), "morreu" ou "desconectou"
+local function finalizarJogador(run, estado, motivo: string)
+	local player = estado.player
+	if run.jogadores[player] ~= estado then
+		return
+	end
+	run.jogadores[player] = nil
+	partidaDoJogador[player] = nil
+	for _, conexao in estado.conexoes do
+		conexao:Disconnect()
+	end
+
+	local ganho = if motivo == "saiu" then estado.ouro else math.floor(estado.ouro * Config.OURO_MANTIDO_AO_MORRER)
+	Dados.adicionarOuro(player, ganho)
+	local novoRecorde = Dados.registrarRecorde(player, run.numeroSala)
+
+	if motivo == "desconectou" then
+		return
+	end
+	task.spawn(Dados.salvar, player)
+
+	Remotos.enviar(player, "fimPartida", {
+		motivo = motivo,
+		sala = run.numeroSala,
+		ouroPartida = estado.ouro,
+		ganho = ganho,
+		novoRecorde = novoRecorde,
+		abates = estado.abates,
+		dano = estado.danoCausado,
+		cartas = estado.cartas,
+		classe = estado.classe,
+	})
+	task.spawn(function()
+		if player.Parent and not partidaDoJogador[player] then
+			player:LoadCharacterAsync()
+			Remotos.enviar(player, "lobby", {})
+			Dados.enviarPerfil(player)
+		end
+	end)
+end
+
+------------------------------------------------------------------------
+-- Salas
+------------------------------------------------------------------------
+
+local function escolherTipoSala(run, numero: number): string
+	if numero % Config.SALAS_POR_ANDAR == 0 then
+		return "chefe"
+	end
+	local depoisDoChefe = numero % Config.SALAS_POR_ANDAR == 1
+	if numero > 1 and not depoisDoChefe and run.ultimoTesouro ~= numero - 1 and run.rng:NextNumber() < Config.CHANCE_SALA_TESOURO then
+		run.ultimoTesouro = numero
+		return "tesouro"
+	end
+	return "combate"
+end
+
+local function multiplicadores(run, numero: number)
+	local jogadores = run:quantidadeJogadores()
+	local ciclo = (numero - 1) // (Config.SALAS_POR_ANDAR * #Config.TEMAS)
+	return {
+		vida = (1 + (numero - 1) * Config.VIDA_INIMIGO_POR_SALA) * (1 + (jogadores - 1) * Config.VIDA_INIMIGO_POR_JOGADOR_EXTRA) * (1 + ciclo * 0.5),
+		dano = (1 + (numero - 1) * Config.DANO_INIMIGO_POR_SALA) * (1 + ciclo * 0.25),
+	}
+end
+
+local function prepararSala(run, numero: number, tipo: string)
+	run:enviarTodos("transicao", {})
+	task.wait(0.45)
+	if not run.ativa then
+		return
+	end
+
+	Inimigos.limparTodos(run)
+	Projeteis.limpar(run)
+	local salaAntiga = run.sala
+	run.usarSegundoEspaco = not run.usarSegundoEspaco
+	local origem = run.origemBase + (if run.usarSegundoEspaco then Vector3.new(0, 0, 400) else Vector3.zero)
+
+	local sala = Masmorra.construir(origem, numero, tipo, run.rng)
+	sala.modelo.Parent = run.pasta
+	run.sala = sala
+	run.numeroSala = numero
+	run.mult = multiplicadores(run, numero)
+
+	local jogadores = {}
+	for _, estado in run.jogadores do
+		table.insert(jogadores, estado)
+	end
+	for indice, estado in jogadores do
+		local cframe = sala.spawn * CFrame.new((indice - 1) * 4 - 6, 0, 0)
+		if not estado.vivo or estado.caido or not personagemVivo(estado.player) then
+			reviver(run, estado, cframe)
+		else
+			local personagem = estado.player.Character
+			if personagem then
+				personagem:PivotTo(cframe)
+			end
+		end
+		Combate.novaSala(estado)
+	end
+
+	if salaAntiga then
+		salaAntiga.modelo:Destroy()
+	end
+
+	local tema = sala.tema
+	run:enviarTodos("sala", {
+		numero = numero,
+		tipo = tipo,
+		posicaoNoAndar = (numero - 1) % Config.SALAS_POR_ANDAR + 1,
+		tema = {
+			id = tema.id,
+			nome = tema.nome,
+			ambiente = tema.ambiente,
+			nevoa = tema.nevoa,
+			luz = tema.luz,
+			tinta = tema.tinta,
+		},
+	})
+end
+
+local function sortearDaTabela(rng: Random, pesos): string
+	local total = 0
+	for _, peso in pesos do
+		total += peso
+	end
+	local sorteio = rng:NextNumber() * total
+	local ultimo = nil
+	for tipo, peso in pesos do
+		ultimo = tipo
+		sorteio -= peso
+		if sorteio <= 0 then
+			return tipo
+		end
+	end
+	return ultimo
+end
+
+local function sortearElite(run, numero: number): string?
+	local chance = math.min(Config.CHANCE_ELITE_BASE + numero * Config.CHANCE_ELITE_POR_SALA, Config.CHANCE_ELITE_MAXIMA)
+	if numero >= 2 and run.rng:NextNumber() < chance then
+		return Inimigos.LISTA_ELITES[run.rng:NextInteger(1, #Inimigos.LISTA_ELITES)]
+	end
+	return nil
+end
+
+-- Retorna true se a sala foi limpa, false se o grupo inteiro caiu
+local function salaDeCombate(run, tipo: string): boolean
+	local sala = run.sala
+	local numero = run.numeroSala
+	local jogadores = run:quantidadeJogadores()
+	run.inimigosPendentes = 0
+	local terminouDeInvocar = false
+
+	if tipo == "chefe" then
+		local chefe = Inimigos.TIPOS[sala.tema.chefe]
+		run:enviarTodos("introChefe", { nome = chefe.nome, titulo = chefe.titulo or "" })
+		task.wait(2)
+		run:invocar(sala.tema.chefe, sala.origem + Vector3.new(0, 0, sala.comprimento / 5), nil)
+		terminouDeInvocar = true
+	else
+		local total = math.min(5 + math.floor(numero * 0.9) + (jogadores - 1) * 3, 34)
+		local maximoVivos = math.min(6 + numero // 3 + (jogadores - 1) * 2, 15)
+		task.spawn(function()
+			local criados = 0
+			while run.ativa and run.sala == sala and criados < total do
+				if run:quantidadeInimigos() + run.inimigosPendentes < maximoVivos then
+					local tipoInimigo = sortearDaTabela(run.rng, sala.tema.inimigos)
+					local grupo = Inimigos.TIPOS[tipoInimigo].grupo or 1
+					local base = Masmorra.posicaoInimigo(sala, run.rng)
+					for g = 1, grupo do
+						local pos = if g == 1 then base else base + Vector3.new(run.rng:NextNumber(-3, 3), 0, run.rng:NextNumber(-3, 3))
+						run:invocar(tipoInimigo, pos, if g == 1 then sortearElite(run, numero) else nil)
+					end
+					criados += grupo
+					task.wait(0.4)
+				else
+					task.wait(0.3)
+				end
+			end
+			terminouDeInvocar = true
+		end)
+	end
+
+	while run.ativa do
+		if run:jogadoresAtivos() == 0 then
+			return false
+		end
+		if terminouDeInvocar and run.inimigosPendentes == 0 and run:quantidadeInimigos() == 0 then
+			return true
+		end
+		task.wait(0.25)
+	end
+	return false
+end
+
+local function salaDoTesouro(run): boolean
+	local sala = run.sala
+	local aberto = false
+
+	local function abrir()
+		if aberto then
+			return
+		end
+		aberto = true
+		sala.promptBau.Enabled = false
+		Masmorra.abrirBau(sala)
+		local base = 25 + run.numeroSala * 6
+		for _, estado in run.jogadores do
+			darOuro(run, estado, base)
+		end
+		Vfx.partida(run, "moedas", { pos = sala.bau.Position + Vector3.new(0, 2, 0), quantidade = 30 })
+		run:anunciar("💰 Baú aberto! Ouro para todos!", COR_OURO)
+	end
+
+	run:anunciar("🎁 Sala do Tesouro!", COR_OURO)
+	run:enviarTodos("aviso", { texto = "Abra o baú: as cartas daqui são raras ou melhores!" })
+	local conexao = sala.promptBau.Triggered:Connect(function(player)
+		if run.jogadores[player] then
+			abrir()
+		end
+	end)
+	local limite = os.clock() + 45
+	while run.ativa and not aberto and os.clock() < limite do
+		task.wait(0.25)
+	end
+	conexao:Disconnect()
+	abrir()
+	task.wait(1)
+	return true
+end
+
+-- Ao limpar a sala, quem caiu levanta e quem morreu volta
+local function reviverTodos(run)
+	local sala = run.sala
+	for _, estado in run.jogadores do
+		if estado.caido then
+			Combate.levantar(run, estado, 1)
+		elseif not estado.vivo then
+			task.spawn(reviver, run, estado, sala.spawn)
+		end
+	end
+	task.wait(0.5)
+end
+
+------------------------------------------------------------------------
+-- Cartas
+------------------------------------------------------------------------
+
+local function indiceRaridade(raridade: string): number
+	return table.find(Config.ORDEM_RARIDADES, raridade) or 1
+end
+
+local function sortearCartas(estado, quantidade: number, raridadeMinima: string?)
+	local sorte = estado.perfil.Melhorias.Sorte or 0
+	local minimo = if raridadeMinima then indiceRaridade(raridadeMinima) else 1
+	local disponiveis = {}
+	for _, carta in Cartas.lista do
+		local daClasse = carta.classe == estado.classe
+		local permitida = carta.classe == nil or daClasse
+		if permitida and (estado.cartas[carta.id] or 0) < carta.maxPilha and indiceRaridade(carta.raridade) >= minimo then
+			local raridade = Config.RARIDADES[carta.raridade]
+			local peso = math.max(0.5, raridade.peso + Config.SORTE_POR_NIVEL[carta.raridade] * sorte)
+			if daClasse then
+				peso *= Config.PESO_EXTRA_CARTA_DE_CLASSE
+			end
+			table.insert(disponiveis, { id = carta.id, peso = peso })
+		end
+	end
+
+	local escolhidas = {}
+	for _ = 1, quantidade do
+		if #disponiveis == 0 then
+			break
+		end
+		local total = 0
+		for _, item in disponiveis do
+			total += item.peso
+		end
+		local sorteio = math.random() * total
+		local escolhido = #disponiveis
+		for i, item in disponiveis do
+			sorteio -= item.peso
+			if sorteio <= 0 then
+				escolhido = i
+				break
+			end
+		end
+		table.insert(escolhidas, disponiveis[escolhido].id)
+		table.remove(disponiveis, escolhido)
+	end
+	return escolhidas
+end
+
+local function aplicarCarta(run, estado, id: string)
+	estado.opcoesCartas = nil
+	estado.cartas[id] = (estado.cartas[id] or 0) + 1
+	Combate.calcularStats(estado)
+	Combate.aplicarStats(estado, id == "coracao")
+	if Cartas.porId[id].efeitos.escudo then
+		estado.escudoAtivo = true
+	end
+	Combate.enviarStats(estado)
+	run:enviar(estado.player, "minhasCartas", { cartas = estado.cartas })
+	local carta = Cartas.porId[id]
+	local cor = Config.RARIDADES[carta.raridade].cor
+	Vfx.partida(run, "carta", { jogador = estado.player, cor = cor, raridade = carta.raridade })
+	if carta.raridade == "Lendaria" then
+		run:anunciar("🌟 " .. estado.player.DisplayName .. " pegou uma LENDÁRIA: " .. carta.nome .. "!", COR_OURO)
+	end
+end
+
+local function oferecerCartas(run, raridadeMinima: string?)
+	for player, estado in run.jogadores do
+		local opcoes = sortearCartas(estado, 3, raridadeMinima)
+		if #opcoes > 0 then
+			estado.opcoesCartas = opcoes
+			run:enviar(player, "cartas", { opcoes = opcoes, tempo = Config.TEMPO_ESCOLHER_CARTA, classe = estado.classe })
+		end
+	end
+
+	local limite = os.clock() + Config.TEMPO_ESCOLHER_CARTA + 1
+	while run.ativa and os.clock() < limite do
+		local falta = false
+		for _, estado in run.jogadores do
+			if estado.opcoesCartas then
+				falta = true
+			end
+		end
+		if not falta then
+			break
+		end
+		task.wait(0.2)
+	end
+
+	for player, estado in run.jogadores do
+		if estado.opcoesCartas then
+			aplicarCarta(run, estado, estado.opcoesCartas[math.random(#estado.opcoesCartas)])
+			run:enviar(player, "cartasFechar", {})
+		end
+	end
+end
+
+function Partida.escolherCarta(player: Player, indice: any)
+	local run = partidaDoJogador[player]
+	local estado = run and run.jogadores[player]
+	if not estado or not estado.opcoesCartas or type(indice) ~= "number" then
+		return
+	end
+	local id = estado.opcoesCartas[indice]
+	if id then
+		aplicarCarta(run, estado, id)
+	end
+end
+
+------------------------------------------------------------------------
+-- Elevador (depois de cada chefe)
+------------------------------------------------------------------------
+
+local function elevador(run)
+	for player, estado in run.jogadores do
+		estado.escolhaElevador = "pendente"
+		run:enviar(player, "elevador", { ouro = estado.ouro, tempo = Config.TEMPO_ELEVADOR, proximaSala = run.numeroSala + 1 })
+	end
+
+	local limite = os.clock() + Config.TEMPO_ELEVADOR + 1
+	while run.ativa and os.clock() < limite do
+		local falta = false
+		for _, estado in run.jogadores do
+			if estado.escolhaElevador == "pendente" then
+				falta = true
+			end
+		end
+		if not falta then
+			break
+		end
+		task.wait(0.2)
+	end
+
+	local saindo, ficando = {}, 0
+	for _, estado in run.jogadores do
+		if estado.escolhaElevador == "continuar" then
+			ficando += 1
+		else
+			table.insert(saindo, estado) -- quem não respondeu sobe e guarda o ouro
+		end
+		estado.escolhaElevador = nil
+	end
+	for _, estado in saindo do
+		finalizarJogador(run, estado, "saiu")
+		if ficando > 0 then
+			run:anunciar("⬆️ " .. estado.player.DisplayName .. " subiu com o ouro!", COR_OURO)
+		end
+	end
+	if ficando > 0 then
+		run:anunciar("⬇️ Descendo mais fundo...", COR_VERMELHO)
+	end
+end
+
+function Partida.escolherElevador(player: Player, escolha: any)
+	local run = partidaDoJogador[player]
+	local estado = run and run.jogadores[player]
+	if estado and estado.escolhaElevador == "pendente" and (escolha == "sair" or escolha == "continuar") then
+		estado.escolhaElevador = escolha
+	end
+end
+
+local function aguardarPorta(run)
+	local porta = Masmorra.abrirPorta(run.sala)
+	run:enviarTodos("aviso", { texto = "A grade subiu! Entre na porta para seguir ➜" })
+	local passou = false
+	local conexao = porta.Touched:Connect(function(peca)
+		local player = Players:GetPlayerFromCharacter(peca.Parent)
+		local estado = player and run.jogadores[player]
+		if estado and estado.vivo and not estado.caido then
+			passou = true
+		end
+	end)
+	local limite = os.clock() + Config.TEMPO_PORTA_AUTOMATICA
+	while run.ativa and not passou and os.clock() < limite do
+		task.wait(0.15)
+	end
+	conexao:Disconnect()
+end
+
+------------------------------------------------------------------------
+-- Loop principal de uma partida
+------------------------------------------------------------------------
+
+local function encerrar(run)
+	run.ativa = false
+	partidasAtivas[run] = nil
+	for _, estado in run.jogadores do
+		finalizarJogador(run, estado, "morreu")
+	end
+	Inimigos.limparTodos(run)
+	Projeteis.limpar(run)
+	run.pasta:Destroy()
+end
+
+local function loopDaPartida(run)
+	local aliados = {}
+	for player, estado in run.jogadores do
+		table.insert(aliados, { userId = player.UserId, nome = player.DisplayName, classe = estado.classe })
+	end
+	run:enviarTodos("inicioPartida", { aliados = aliados })
+
+	local numero = 1
+	while run.ativa do
+		local tipo = escolherTipoSala(run, numero)
+		prepararSala(run, numero, tipo)
+		if not run.ativa then
+			break
+		end
+
+		local venceu = if tipo == "tesouro" then salaDoTesouro(run) else salaDeCombate(run, tipo)
+		if not run.ativa then
+			break
+		end
+		if not venceu then
+			run:anunciar("💀 O grupo inteiro caiu...", COR_VERMELHO)
+			task.wait(2.5)
+			break
+		end
+
+		if tipo == "chefe" then
+			run:anunciar("🏆 CHEFE DERROTADO!", COR_OURO)
+		elseif tipo == "combate" then
+			run:anunciar("✨ Sala limpa!", COR_VERDE)
+		end
+		reviverTodos(run)
+
+		local raridadeMinima = if tipo == "tesouro" then "Rara" elseif tipo == "chefe" then "Epica" else nil
+		oferecerCartas(run, raridadeMinima)
+		if not run.ativa then
+			break
+		end
+
+		if tipo == "chefe" then
+			elevador(run)
+			if run:quantidadeJogadores() == 0 then
+				break
+			end
+		end
+
+		aguardarPorta(run)
+		numero += 1
+	end
+end
+
+------------------------------------------------------------------------
+-- API pública
+------------------------------------------------------------------------
+
+function Partida.emPartida(player: Player): boolean
+	return partidaDoJogador[player] ~= nil
+end
+
+function Partida.iniciar(lista: { Player })
+	contadorPartidas += 1
+	local pasta = Instance.new("Folder")
+	pasta.Name = "Partida" .. contadorPartidas
+	pasta.Parent = workspace
+
+	local run = setmetatable({
+		id = contadorPartidas,
+		origemBase = Vector3.new(2000 + (contadorPartidas % 20) * 700, 0, 0),
+		jogadores = {},
+		inimigos = {},
+		projeteis = {},
+		inimigosPendentes = 0,
+		sala = nil,
+		numeroSala = 0,
+		mult = { vida = 1, dano = 1 },
+		ativa = true,
+		rng = Random.new(),
+		pasta = pasta,
+		usarSegundoEspaco = false,
+		ultimoTesouro = nil,
+		acumulador = 0,
+	}, Run)
+
+	for _, player in lista do
+		local perfil = Dados.obter(player)
+		if player.Parent and perfil and not partidaDoJogador[player] then
+			local estado = {
+				player = player,
+				perfil = perfil,
+				classe = perfil.Classe,
+				cartas = {},
+				vivo = false, -- todos "renascem" na primeira sala
+				caido = false,
+				ouro = 0,
+				abates = 0,
+				danoCausado = 0,
+				combo = 0,
+				ultimoAtaque = 0,
+				ultimoFoiFinal = false,
+				habilidadeProntaEm = 0,
+				esquivaProntaEm = 0,
+				carga = 0,
+				cargaEnviada = 0,
+				progressoReviver = 0,
+				escudoAtivo = false,
+				invulneravelAte = 0,
+				conexoes = {},
+			}
+			Combate.calcularStats(estado)
+			run.jogadores[player] = estado
+			partidaDoJogador[player] = run
+		end
+	end
+
+	if run:quantidadeJogadores() == 0 then
+		pasta:Destroy()
+		return
+	end
+	partidasAtivas[run] = true
+	task.spawn(function()
+		-- Se algo der erro no meio da partida, os jogadores voltam ao lobby em vez de ficarem presos
+		local ok, erro = pcall(loopDaPartida, run)
+		if not ok then
+			warn("[Partida] Erro na partida " .. run.id .. ": " .. tostring(erro))
+		end
+		encerrar(run)
+	end)
+end
+
+function Partida.removerJogador(player: Player)
+	local run = partidaDoJogador[player]
+	local estado = run and run.jogadores[player]
+	if estado then
+		finalizarJogador(run, estado, "desconectou")
+		if run:quantidadeJogadores() == 0 then
+			run.ativa = false
+		end
+	end
+end
+
+-- No lobby os ataques são só para exibir a classe: os outros jogadores veem a animação
+local cargaNoLobby = {} -- [Player] = momento em que começou a carregar
+
+local function animacaoNoLobby(player: Player, tipo: string, extra: any)
+	local dados = { jogador = player, classe = player:GetAttribute("Classe") or "cavaleiro" }
+	if tipo == "atacar" then
+		dados.acao = "ataque"
+		dados.combo = if type(extra) == "number" then math.clamp(math.floor(extra), 1, 3) else 1
+	elseif tipo == "carregar" then
+		cargaNoLobby[player] = os.clock()
+		dados.acao = "carregar"
+	elseif tipo == "soltar" then
+		local inicio = cargaNoLobby[player]
+		cargaNoLobby[player] = nil
+		if not inicio then
+			return
+		end
+		dados.acao = "soltar"
+		dados.fracao = math.clamp((os.clock() - inicio - Config.CARGA_ATAQUE_MIN) / (Config.CARGA_ATAQUE_MAX - Config.CARGA_ATAQUE_MIN), 0, 1)
+	elseif tipo == "cancelar" then
+		cargaNoLobby[player] = nil
+		dados.acao = "cancelar"
+	elseif tipo == "esquiva" then
+		dados.acao = "esquiva"
+	else
+		return
+	end
+	Vfx.todos("anim", dados)
+end
+
+-- Ações de combate vindas do jogador
+function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any, extra: any)
+	local run = partidaDoJogador[player]
+	local estado = run and run.jogadores[player]
+	if not estado then
+		animacaoNoLobby(player, tipo, extra)
+		return
+	end
+	if tipo == "atacar" then
+		Combate.atacar(run, estado, direcao)
+	elseif tipo == "carregar" then
+		Combate.carregar(run, estado)
+	elseif tipo == "soltar" then
+		Combate.soltar(run, estado, direcao)
+	elseif tipo == "cancelar" then
+		Combate.cancelarCarga(run, estado)
+	elseif tipo == "habilidade" then
+		Combate.habilidade(run, estado, direcao)
+	elseif tipo == "esquiva" then
+		Combate.esquiva(run, estado, direcao)
+	elseif tipo == "supremo" then
+		Combate.supremo(run, estado)
+	end
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	cargaNoLobby[player] = nil
+end)
+
+-- Inteligência dos inimigos e projéteis a cada frame; o resto a cada 0,25s
+RunService.Heartbeat:Connect(function(dt)
+	local agora = os.clock()
+	for run in partidasAtivas do
+		if run.ativa then
+			Inimigos.atualizar(run, agora)
+			Projeteis.atualizar(run, dt)
+			run.acumulador += dt
+			if run.acumulador >= 0.25 then
+				Combate.tick(run, run.acumulador)
+				run.acumulador = 0
+			end
+		end
+	end
+end)
+
+return Partida

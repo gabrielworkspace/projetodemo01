@@ -1,0 +1,244 @@
+{
+  "name": "MasmorraDasCartas",
+  "className": "DataModel",
+  "filePaths": [
+    "default.project.json"
+  ],
+  "children": [
+    {
+      "name": "Workspace",
+      "className": "Workspace"
+    },
+    {
+      "name": "Lighting",
+      "className": "Lighting"
+    },
+    {
+      "name": "Players",
+      "className": "Players"
+    },
+    {
+      "name": "ReplicatedStorage",
+      "className": "ReplicatedStorage",
+      "children": [
+        {
+          "name": "Shared",
+          "className": "Folder",
+          "children": [
+            {
+              "name": "Cartas",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/shared/Cartas.luau"
+              ]
+            },
+            {
+              "name": "Classes",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/shared/Classes.luau"
+              ]
+            },
+            {
+              "name": "Config",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/shared/Config.luau"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ServerScriptService",
+      "className": "ServerScriptService",
+      "children": [
+        {
+          "name": "Server",
+          "className": "Folder",
+          "children": [
+            {
+              "name": "Armas",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Armas.luau"
+              ]
+            },
+            {
+              "name": "Combate",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Combate.luau"
+              ]
+            },
+            {
+              "name": "Dados",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Dados.luau"
+              ]
+            },
+            {
+              "name": "Inimigos",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Inimigos.luau"
+              ]
+            },
+            {
+              "name": "Lobby",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Lobby.luau"
+              ]
+            },
+            {
+              "name": "Main",
+              "className": "Script",
+              "filePaths": [
+                "src/server/Main.server.luau"
+              ]
+            },
+            {
+              "name": "Masmorra",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Masmorra.luau"
+              ]
+            },
+            {
+              "name": "Partida",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Partida.luau"
+              ]
+            },
+            {
+              "name": "Projeteis",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Projeteis.luau"
+              ]
+            },
+            {
+              "name": "Remotos",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Remotos.luau"
+              ]
+            },
+            {
+              "name": "Vfx",
+              "className": "ModuleScript",
+              "filePaths": [
+                "src/server/Vfx.luau"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "StarterPlayer",
+      "className": "StarterPlayer",
+      "children": [
+        {
+          "name": "StarterPlayerScripts",
+          "className": "StarterPlayerScripts",
+          "children": [
+            {
+              "name": "Client",
+              "className": "Folder",
+              "children": [
+                {
+                  "name": "Ambiente",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Ambiente.luau"
+                  ]
+                },
+                {
+                  "name": "Controles",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Controles.luau"
+                  ]
+                },
+                {
+                  "name": "Estado",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Estado.luau"
+                  ]
+                },
+                {
+                  "name": "Hud",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Hud.luau"
+                  ]
+                },
+                {
+                  "name": "Main",
+                  "className": "LocalScript",
+                  "filePaths": [
+                    "src/client/Main.client.luau"
+                  ]
+                },
+                {
+                  "name": "Menus",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Menus.luau"
+                  ]
+                },
+                {
+                  "name": "Modelos",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Modelos.luau"
+                  ]
+                },
+                {
+                  "name": "UI",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/UI.luau"
+                  ]
+                },
+                {
+                  "name": "Vfx",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Vfx.luau"
+                  ]
+                },
+                {
+                  "name": "VisualInimigos",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/VisualInimigos.luau"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "StarterCharacterScripts",
+          "className": "StarterCharacterScripts",
+          "children": [
+            {
+              "name": "Health",
+              "className": "Script",
+              "filePaths": [
+                "src/character/Health.server.luau"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
