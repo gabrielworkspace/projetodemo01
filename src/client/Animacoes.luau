@@ -13,6 +13,7 @@ local Classes = require(Shared:WaitForChild("Classes"))
 
 local Vfx = require(script.Parent.Vfx)
 local Poses = require(script.Parent.Poses)
+local Sons = require(script.Parent.Sons)
 
 local Animacoes = {}
 
@@ -572,6 +573,42 @@ end
 	acao: "ataque" (dados.combo), "carregar", "soltar" (dados.fracao), "cancelar",
 	      "esquiva", "habilidade", "supremo" (dados.duracao), "defender", "pararDefesa",
 	      "bloqueou", "atingido" ]]
+-- Sons de cada golpe, no ritmo da animação: o vulto da lâmina chega no auge junto com o
+-- impacto; o arqueiro puxa a corda e solta no disparo. (As magias tocam ao sair, em Vfx.)
+local function sonsDoAtaque(personagem: Model, classe: string, combo: number)
+	local raiz = personagem:FindFirstChild("HumanoidRootPart")
+	if not raiz then
+		return
+	end
+	local impacto = Classes.obter(classe).ataque.impacto
+	local momento = if impacto then impacto[combo] or 0 else 0
+	local function depois(segundos: number, nome: string, opcoes)
+		task.delay(math.max(0, segundos), function()
+			if raiz.Parent then
+				opcoes = opcoes or {}
+				opcoes.pai = raiz
+				Sons.tocar(nome, opcoes)
+			end
+		end)
+	end
+	if classe == "cavaleiro" then
+		if combo == 3 then
+			depois(momento - 0.2, "espadaPesada")
+		else
+			depois(momento - 0.13, "espada")
+		end
+	elseif classe == "assassino" then
+		if combo == 3 then
+			depois(momento - 0.13, "espada", { tom = 1.3 })
+		else
+			depois(momento - 0.06, "adaga")
+		end
+	elseif classe == "arqueiro" then
+		depois(momento * 0.55, "arcoPuxar")
+		depois(momento, "arcoSoltar")
+	end
+end
+
 function Animacoes.tocar(personagem: Model, acao: string, dados)
 	if not personagem or not personagem.Parent then
 		return
@@ -580,9 +617,23 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 	local e = estadoDe(personagem)
 	local classe = if Classes.existe(dados.classe) then dados.classe else classeDe(e)
 	local acoes = ACOES[classe]
+	-- o zumbido de carregar para quando o golpe sai, é cancelado ou o personagem esquiva
+	if acao == "soltar" or acao == "cancelar" or acao == "esquiva" or acao == "defender" then
+		Sons.parar(e.somCarga)
+		e.somCarga = nil
+	end
+	local raizSom = personagem:FindFirstChild("HumanoidRootPart")
 	if acao == "ataque" then
-		comecar(e, acoes["ataque" .. math.clamp(dados.combo or 1, 1, 3)], dados)
+		local combo = math.clamp(dados.combo or 1, 1, 3)
+		sonsDoAtaque(personagem, classe, combo)
+		comecar(e, acoes["ataque" .. combo], dados)
 	elseif acao == "carregar" then
+		if raizSom then
+			e.somCarga = Sons.tocar("carregar", { pai = raizSom })
+			if classe == "arqueiro" then
+				Sons.tocar("arcoPuxar", { pai = raizSom, tom = 0.85 })
+			end
+		end
 		e.carregando = true
 		e.cargaInicio = os.clock()
 		e.cheioAvisado = false
@@ -606,8 +657,16 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 		e.dash = { inicio = os.clock(), def = ESQUIVAS[classe] or ESQUIVAS.cavaleiro }
 		Vfx.esquiva({ jogador = e.jogador, classe = classe })
 	elseif acao == "habilidade" or acao == "supremo" then
+		if acao == "habilidade" and classe == "arqueiro" and raizSom then
+			task.delay(0.18, function()
+				Sons.tocar("arcoSoltar", { pai = raizSom, tom = 1.1 })
+			end)
+		end
 		comecar(e, acoes[acao], dados)
 	elseif acao == "defender" then
+		if raizSom then
+			Sons.tocar("escudo", { pai = raizSom, volume = 0.25, tom = 1.5 })
+		end
 		e.carregando = false
 		e.defendendo = true
 		comecar(e, acoes.defender, dados)

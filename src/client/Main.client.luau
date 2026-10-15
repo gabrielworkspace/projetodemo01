@@ -16,6 +16,7 @@ local Animacoes = require(modulos.Animacoes)
 local Hud = require(modulos.Hud)
 local Menus = require(modulos.Menus)
 local Atalhos = require(modulos.Atalhos)
+local Sons = require(modulos.Sons)
 
 local jogador = Players.LocalPlayer
 local Remotos = ReplicatedStorage:WaitForChild("Remotos")
@@ -41,6 +42,7 @@ workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(acompanharCamera)
 acompanharCamera()
 
 Ambiente.iniciar()
+Sons.iniciar()
 Animacoes.iniciar()
 VisualInimigos.iniciar()
 Hud.iniciar()

@@ -58,6 +58,20 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 - **Elites:** inimigos com ★ e um poder (Blindado, Veloz, Gélido, Explosivo, Gigante). Dão 3x mais ouro.
 - **Temas e chefes:** Calabouço (Rei Esqueleto), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas). Os chefes têm uma segunda fase com metade da vida.
 
+## Efeitos sonoros
+
+O jogo tem 38 efeitos sonoros (cortes, flechas, magias, escudo, impactos, explosões, moedas, interface...). Eles foram **criados do zero por síntese** pelo script `ferramentas/gerar_sons.py` e ficam todos juntos em um arquivo só: `sons/MasmorraSons.ogg`. O Roblox não deixa colocar áudio dentro do arquivo `.rbxlx`, então é preciso enviar esse arquivo **uma vez**:
+
+1. No Roblox Studio, abra **Window > Asset Manager** (ou **View > Asset Manager**) e clique em **Bulk Import**. Também dá pelo site: **create.roblox.com > Creations > Audio > Upload Asset**.
+2. Escolha `sons/MasmorraSons.ogg` e confirme. Espere a moderação aprovar (costuma levar poucos minutos).
+3. Copie o ID do áudio (no Asset Manager: botão direito > **Copy Asset ID**).
+4. Em `src/shared/Config.luau`, cole o ID: `Config.SONS_ID = "rbxassetid://SEU_ID_AQUI"`.
+5. Rode `py build.py` de novo e abra o `MasmorraDasCartas.rbxlx` (ou faça a mesma troca direto no Studio, em **ReplicatedStorage > Shared > Config**).
+
+Envie o áudio pela **mesma conta (ou grupo) dona do jogo**; áudio de outra conta não toca. Enquanto o ID não for colocado, só as explosões têm som (um som que já vem com o Roblox) e aparece um aviso na janela Output.
+
+Se preferir enviar os sons um por um, eles também estão separados em `sons/individuais/`; coloque cada ID em `Config.SONS_IDS` (por exemplo `espada = "rbxassetid://..."`). Para mudar um som, edite `ferramentas/gerar_sons.py` e rode `py ferramentas/gerar_sons.py` (precisa de `pip install numpy scipy` e do ffmpeg); depois envie o arquivo novo.
+
 ## Publicar no Roblox
 
 1. **File > Publish to Roblox**.
@@ -74,6 +88,8 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 | `src/server/Inimigos.luau` | Vida, dano e ataques de inimigos e chefes |
 | `src/server/Combate.luau` | Combos, habilidades, supremos, esquiva, escudo, mana, sangramento, dano |
 | `src/shared/Teclas.luau` | Ações e teclas padrão (menu ⚙️ Teclas) |
+| `src/client/Sons.luau` | Volume e variação de cada efeito sonoro |
+| `ferramentas/gerar_sons.py` | Como cada som é criado (síntese) |
 | `src/client/Poses.luau` | Poses e golpes de cada classe (quadros-chave das animações) |
 | `src/server/Masmorra.luau` | Construção e decoração das salas |
 | `src/server/Lobby.luau` | Acampamento, altares, portal, mercador |
@@ -84,7 +100,3 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 | `src/client/UI.luau` | Cores, fontes e estilo dos painéis e botões |
 
 Depois de editar os arquivos em `src/`, rode `py build.py` para gerar o `.rbxlx` de novo e reabra no Studio. Se preferir, use o [Rojo](https://rojo.space/) (`rojo serve`) para sincronizar ao vivo.
-
-## Sons
-
-O jogo usa só sons que já vêm com o Roblox. Para deixar mais imersivo, pegue sons na Creator Store do Roblox (golpes, explosões, música ambiente) e coloque os IDs em `UI.SONS` (`src/client/UI.luau`).

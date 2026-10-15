@@ -396,7 +396,7 @@ local function criarCarta(id: string, indice: number)
 			return
 		end
 		escolhaFeita = true
-		UI.tocar(UI.SONS.clique, 0.5)
+		UI.tocar(UI.SONS.carta, 0.5)
 		Acao:FireServer("escolherCarta", indice)
 		for _, outro in linhaCartas:GetChildren() do
 			if outro:IsA("TextButton") and outro ~= botao then

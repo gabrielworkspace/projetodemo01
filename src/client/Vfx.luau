@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local UI = require(script.Parent.UI)
+local Sons = require(script.Parent.Sons)
 
 local Vfx = {}
 Vfx.extras = {} -- outros módulos podem registrar efeitos aqui (ex.: salto dos inimigos)
@@ -633,7 +634,38 @@ MAGIAS.flechaCarregada = function(escala: number)
 	return haste, cor, extras
 end
 
+-- Som de cada magia/projétil ao sair (um por leva; a Saraivada solta várias flechas juntas)
+local SOM_DISPARO = {
+	dardoArcano = { "dardoArcano" },
+	lancaGelo = { "lancaGelo" },
+	bolaFogo = { "bolaFogo" },
+	orbeCarregado = { "bolaFogo", { tom = 0.55, volume = 1.2 } },
+	flechaCarregada = { "arcoSoltar", { tom = 0.85, volume = 1.2 } },
+	adaga = { "adaga" },
+	onda = { "espada", { volume = 0.6 } },
+	fogo = { "bolaFogo", { tom = 1.25, volume = 0.5 } },
+	gelo = { "lancaGelo", { tom = 0.8, volume = 0.5 } },
+	veneno = { "sangue", { tom = 0.6, volume = 0.5 } },
+	flechaOssea = { "arcoSoltar", { tom = 0.8, volume = 0.5 } },
+}
+
+local function somDeDisparo(lista)
+	local primeiro = lista[1]
+	if not primeiro then
+		return
+	end
+	local info = SOM_DISPARO[primeiro.tipo]
+	if info then
+		local opcoes = table.clone(info[2] or {})
+		opcoes.pos = primeiro.pos
+		Sons.tocar(info[1], opcoes)
+	elseif primeiro.tipo == "flecha" and #lista >= 6 then
+		Sons.tocar("arcoSoltar", { pos = primeiro.pos, volume = 0.6 })
+	end
+end
+
 function Vfx.projeteis(dados)
+	somDeDisparo(dados.lista)
 	for _, info in dados.lista do
 		local construtor = MAGIAS[info.tipo]
 		local visual, cor, extras, girar
@@ -678,6 +710,12 @@ local function removerProjetil(id: number, impacto: boolean, pos: Vector3?)
 		Debris:AddItem(extra.parte, 0.15)
 	end
 	if impacto then
+		local tipo = p.tipo or ""
+		if tipo == "lancaGelo" then
+			Sons.tocar("geloQuebra", { pos = onde })
+		elseif string.find(tipo, "flecha") or tipo == "adaga" or tipo == "fantasma" then
+			Sons.tocar("flechaImpacto", { pos = onde })
+		end
 		if p.tipo == "lancaGelo" then
 			-- o cristal estilhaça
 			for _ = 1, 6 do
@@ -741,6 +779,7 @@ function Vfx.explosao(dados)
 	local pos, raio, cor = dados.pos, dados.raio or 6, dados.cor or FOGO
 	local forte = dados.forte == true
 	local leve = dados.leve == true
+	Sons.tocar("explosao", { pos = pos, volume = if leve then 0.5 elseif forte then 1.15 else 0.9, tom = if leve then 1.3 else 1, alcance = 220 })
 	local nucleo = parte(Vector3.one * 1.5, CFrame.new(pos), cor:Lerp(BRANCO, 0.5), 0, Enum.PartType.Ball)
 	animar(nucleo, if leve then 0.22 else 0.35, { Size = Vector3.one * raio * 2, Transparency = 1, Color = cor })
 	Debris:AddItem(nucleo, 0.4)
@@ -765,6 +804,7 @@ end
 
 -- Orbe do Vazio: primeiro tudo é sugado para um ponto escuro, depois explode em violeta
 function Vfx.vazio(dados)
+	Sons.tocar("vazioExplode", { pos = dados.pos, alcance = 220 })
 	local pos, raio = dados.pos, dados.raio or 8
 	local cor = Color3.fromRGB(170, 70, 255)
 	local escuro = Color3.fromRGB(18, 6, 30)
@@ -1084,6 +1124,13 @@ end
 
 function Vfx.dano(dados)
 	local critico = dados.critico
+	-- som do golpe (dano contínuo de fogo/sangramento não faz barulho a cada tique)
+	if dados.impacto and not dados.dot then
+		Sons.tocar(if critico then "critico" else "impacto", { pos = dados.impacto })
+		if dados.sangue == true then
+			Sons.tocar("sangue", { pos = dados.impacto })
+		end
+	end
 	-- cada acerto seu dá um tranco leve na câmera (sensação de impacto)
 	if dados.autor == jogador and not critico then
 		Vfx.tremer(0.18, 0.05)
@@ -1110,6 +1157,9 @@ end
 
 function Vfx.danoJogador(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	if raiz then
+		Sons.tocar("danoJogador", { pos = raiz.Position, volume = if dados.jogador == jogador then 1 else 0.5 })
+	end
 	if Vfx.aoJogadorAtingido then
 		Vfx.aoJogadorAtingido(dados.jogador)
 	end
@@ -1146,6 +1196,9 @@ end
 
 function Vfx.carta(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	if dados.jogador == jogador then
+		Sons.tocar("carta")
+	end
 	if raiz then
 		local lendaria = dados.raridade == "Lendaria"
 		pilarDeLuz(raiz, dados.cor, if lendaria then 60 else 30, if lendaria then 6 else 3.5)
@@ -1164,6 +1217,7 @@ end
 
 function Vfx.reviver(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	Sons.tocar("reviver", { pos = raiz and raiz.Position })
 	if raiz then
 		pilarDeLuz(raiz, Color3.fromRGB(140, 255, 170), 30, 4)
 		textoFlutuante(raiz.Position + Vector3.new(0, 4, 0), "DE PÉ!", Color3.fromRGB(140, 255, 170), 34, { pop = 1.8 })
@@ -1172,6 +1226,7 @@ end
 
 function Vfx.segundaChance(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	Sons.tocar("reviver", { pos = raiz and raiz.Position })
 	if raiz then
 		pilarDeLuz(raiz, Color3.fromRGB(255, 220, 110), 50, 6)
 		textoFlutuante(raiz.Position + Vector3.new(0, 4, 0), "SEGUNDA CHANCE!", Color3.fromRGB(255, 220, 110), 40, { pop = 2 })
@@ -1180,6 +1235,7 @@ end
 
 function Vfx.caiu(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	Sons.tocar("caiu", { pos = raiz and raiz.Position })
 	if raiz then
 		particulas(raiz.Position, { cor = Color3.fromRGB(80, 70, 90), quantidade = 20, velocidade = 10, vida = 0.8, luz = 0, gravidade = 5 })
 	end
@@ -1187,6 +1243,7 @@ end
 
 function Vfx.bloqueio(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	Sons.tocar("escudo", { pos = raiz and raiz.Position })
 	if raiz then
 		local cor = Color3.fromRGB(110, 190, 255)
 		local bolha = parte(Vector3.one * 5, CFrame.new(raiz.Position), cor, 0.4, Enum.PartType.Ball, Enum.Material.ForceField)
@@ -1208,6 +1265,7 @@ function Vfx.esquiva(dados)
 	if not raiz then
 		return
 	end
+	Sons.tocar("esquiva", { pai = raiz })
 	local personagem = raiz.Parent
 	local cor = COR_ESQUIVA[dados.classe] or Color3.fromRGB(200, 230, 255)
 	-- "fantasmas" do personagem que ficam para trás
@@ -1257,6 +1315,7 @@ end
 
 -- Carga cheia: clarão dourado na ponta da arma
 function Vfx.cargaCheia(dados)
+	Sons.tocar("cargaCheia", { pos = dados.pos, volume = if dados.local_ then 1 else 0.5 })
 	local ouro = Color3.fromRGB(255, 214, 90)
 	local bola = parte(Vector3.one * 0.6, CFrame.new(dados.pos), ouro:Lerp(BRANCO, 0.4), 0.1, Enum.PartType.Ball, Enum.Material.Neon)
 	animar(bola, 0.25, { Size = Vector3.one * 4, Transparency = 1 })
@@ -1278,6 +1337,10 @@ end
 
 -- Assassino: some numa fumaça e aparece em outro lugar, deixando um risco no ar
 function Vfx.passoSombrio(dados)
+	Sons.tocar("passoSombrio", { pos = dados.ate, volume = if dados.leve then 0.6 else 1 })
+	if dados.leve then
+		Sons.tocar("adaga", { pos = dados.ate })
+	end
 	local de, ate = dados.de, dados.ate
 	local cor = dados.cor
 	fumaca(de, cor, if dados.leve then 6 else 12)
@@ -1316,6 +1379,7 @@ end
 
 -- Investida Letal do Assassino (golpe carregado): linha de cortes no caminho
 function Vfx.investidaLetal(dados)
+	Sons.tocar("investida", { pos = dados.de })
 	local de, ate = dados.de, dados.ate
 	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.5) else dados.cor
 	local distancia = (ate - de).Magnitude
@@ -1339,6 +1403,7 @@ end
 
 -- Chão em chamas deixado pelo Meteoro
 function Vfx.zonaFogo(dados)
+	Sons.tocar("bolaFogo", { pos = dados.pos, tom = 0.7, volume = 0.5 })
 	local centro = dados.pos + Vector3.new(0, 0.1, 0)
 	local diametro = dados.raio * 2
 	local base = disco(centro, diametro, FOGO, 0.45)
@@ -1371,6 +1436,7 @@ end
 
 -- Escudo do Cavaleiro bloqueou um golpe: faíscas no escudo. Defesa perfeita: clarão dourado.
 function Vfx.defesa(dados)
+	Sons.tocar(if dados.perfeita then "escudoPerfeito" else "escudo", { pos = dados.pos })
 	local pos = dados.pos + Vector3.new(0, 0.6, 0)
 	local dir = dados.dir or Vector3.new(0, 0, -1)
 	local cor = if dados.perfeita then Color3.fromRGB(255, 214, 90) else Color3.fromRGB(150, 200, 255)
@@ -1404,6 +1470,7 @@ function Vfx.escudoGanho(dados)
 	if not raiz then
 		return
 	end
+	Sons.tocar("escudo", { pos = raiz.Position, tom = 1.4, volume = 0.5 })
 	local bolha = parte(Vector3.one * 2, raiz.CFrame, dados.cor:Lerp(BRANCO, 0.4), 0.3, Enum.PartType.Ball, Enum.Material.ForceField)
 	animar(bolha, 0.5, { Size = Vector3.one * 7, Transparency = 1 })
 	Debris:AddItem(bolha, 0.55)
@@ -1416,6 +1483,7 @@ function Vfx.giroCarregado(dados)
 	if not raiz then
 		return
 	end
+	Sons.tocar("espadaPesada", { pos = raiz.Position, tom = 0.85, volume = 1.2 })
 	local base = raiz.Position
 	local raio = dados.raio
 	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.6) else dados.cor
@@ -1455,6 +1523,7 @@ end
 ------------------------------------------------------------------------
 
 function Vfx.portal(dados)
+	Sons.tocar("portal", { pos = dados.pos, volume = 0.7 })
 	local cor = if dados.elite then Color3.fromRGB(255, 200, 60) else Color3.fromRGB(150, 70, 255)
 	local centro = dados.pos + Vector3.new(0, 0.12, 0)
 	local base = disco(centro, 0.5, cor, 0.3)
@@ -1488,6 +1557,7 @@ function Vfx.portal(dados)
 end
 
 function Vfx.moedas(dados)
+	Sons.tocar("moeda", { pos = dados.pos })
 	local destino = raizDoJogador(jogador)
 	local ouro = Color3.fromRGB(255, 206, 70)
 	for _ = 1, dados.quantidade do
@@ -1520,6 +1590,7 @@ end
 
 -- Estouro genérico (usado na morte dos inimigos)
 function Vfx.estouro(posicao: Vector3, cor: Color3, quantidade: number, velocidade: number)
+	Sons.tocar("inimigoMorre", { pos = posicao })
 	particulas(posicao, { cor = cor:Lerp(BRANCO, 0.3), cor2 = cor, quantidade = quantidade, tamanho = 0.7, velocidade = velocidade, vida = 0.6, gravidade = 20 })
 	clarao(posicao, cor, 16, 0.3, 3)
 end
@@ -1569,6 +1640,7 @@ function Vfx.redemoinho(dados)
 	end
 	local cor = if dados.fogo then FOGO else dados.cor
 	local raio = dados.raio
+	Sons.tocar("giro", { pai = raiz })
 	-- arcos da espada (dois, girando)
 	local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
 	local b0, b1 = Instance.new("Attachment"), Instance.new("Attachment")
@@ -1631,6 +1703,7 @@ end
 -- Julgamento: uma espada de luz gigante cai do céu e crava no chão; o chão racha,
 -- pilares de luz sobem em volta e pedras voam
 function Vfx.julgamento(dados)
+	Sons.tocar("julgamento", { pos = dados.pos, alcance = 260 })
 	local pos, raio = dados.pos, dados.raio
 	local cor = Color3.fromRGB(255, 220, 120)
 	local corClasse = dados.cor or cor
@@ -1690,6 +1763,7 @@ end
 
 -- Meteoro: rocha em brasa girando, com fumaça e fogo, que cai e abre uma cratera
 function Vfx.meteoro(dados)
+	Sons.tocar("meteoro", { pos = dados.pos, alcance = 200 })
 	local alvo = dados.pos
 	local inicio = alvo + Vector3.new(-16, 55, -16)
 	local rocha = parte(Vector3.one * 3.2, CFrame.new(inicio), Color3.fromRGB(60, 40, 35), 0, Enum.PartType.Ball, Enum.Material.Basalt)
@@ -1788,6 +1862,7 @@ end
 
 -- Raio que vem do céu, com galhos que se abrem e marca queimada no chão
 function Vfx.raioCeu(dados)
+	Sons.tocar("raio", { pos = dados.pos, volume = 0.7, alcance = 220 })
 	local cor = dados.cor or Color3.fromRGB(200, 150, 255)
 	local topo = dados.pos + Vector3.new(math.random(-3, 3), 34, math.random(-3, 3))
 	zigueZague(topo, dados.pos, cor:Lerp(BRANCO, 0.6), 0.6, 4, 8)
@@ -1810,6 +1885,7 @@ end
 
 -- Chuva de Flechas: um círculo mágico abre no céu e despeja flechas com rastro
 function Vfx.chuvaFlechas(dados)
+	Sons.tocar("chuvaFlechas", { pos = dados.pos })
 	local centro, raio, duracao, cor = dados.pos, dados.raio, dados.duracao, dados.cor
 	local partes = anel(centro + Vector3.new(0, 0.15, 0), raio, cor, 0.35, 28, 0.45)
 	local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
@@ -1845,6 +1921,7 @@ end
 
 -- Saraivada: vendaval verde girando em volta do Arqueiro enquanto ele atira
 local function vendaval(raiz: BasePart, cor: Color3, duracao: number)
+	Sons.tocar("giro", { pai = raiz, tom = 1.3, volume = 0.6 })
 	local itens = {}
 	for i = 0, 2 do
 		local largura = 6 + i * 2.5
@@ -1868,8 +1945,10 @@ function Vfx.supremo(dados)
 	if not raiz then
 		return
 	end
+	Sons.tocar("supremo", { pos = raiz.Position, alcance = 220 })
 	if dados.nome == "Tempestade Arcana" then
 		nuvemDeTempestade(raiz, dados.cor, 5)
+		Sons.tocar("tempestade", { pos = raiz.Position + Vector3.new(0, 20, 0), alcance = 260 })
 	elseif dados.nome == "Saraivada" then
 		vendaval(raiz, dados.cor, 4)
 	elseif dados.nome == "Lâminas da Noite" then

@@ -229,6 +229,20 @@
                   ]
                 },
                 {
+                  "name": "Sons",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/Sons.luau"
+                  ]
+                },
+                {
+                  "name": "SonsMapa",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/SonsMapa.luau"
+                  ]
+                },
+                {
                   "name": "UI",
                   "className": "ModuleScript",
                   "filePaths": [

@@ -4,6 +4,12 @@ local Config = {}
 
 Config.NOME_DO_JOGO = "Masmorra das Cartas"
 
+-- Efeitos sonoros: envie sons/MasmorraSons.ogg para o Roblox e cole o ID aqui
+-- (ex.: "rbxassetid://1234567890"). Veja "Efeitos sonoros" em COMO_USAR.md.
+Config.SONS_ID = ""
+-- Opcional: um ID por som (tem preferência sobre o arquivo único). Ex.: espada = "rbxassetid://..."
+Config.SONS_IDS = {}
+
 -- Partida
 Config.MAX_JOGADORES_POR_PARTIDA = 4
 Config.CONTAGEM_PORTAL = 10 -- segundos em cima do portal até a partida começar

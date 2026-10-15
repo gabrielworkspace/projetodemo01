@@ -16,6 +16,7 @@ local UI = require(modulos.UI)
 local Estado = require(modulos.Estado)
 local Vfx = require(modulos.Vfx)
 local Atalhos = require(modulos.Atalhos)
+local Sons = require(modulos.Sons)
 
 local Hud = {}
 Hud.aoAbrir = nil :: ((string) -> ())?
@@ -1015,6 +1016,7 @@ function Hud.iniciar()
 	local semManaAte = 0
 	Estado.Mudou:Connect(function(chave)
 		if chave == "semMana" then
+			Sons.tocar("semMana")
 			semManaAte = os.clock() + 0.4
 			Hud.aviso("💧 Sem mana!")
 		end

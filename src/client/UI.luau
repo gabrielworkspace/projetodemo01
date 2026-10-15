@@ -3,7 +3,7 @@
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
-local SoundService = game:GetService("SoundService")
+local Sons = require(script.Parent.Sons)
 local TweenService = game:GetService("TweenService")
 
 local UI = {}
@@ -142,27 +142,17 @@ function UI.ehCelular(): boolean
 end
 
 ------------------------------------------------------------------------
--- Sons da interface (sons que já vêm com o Roblox; troque pelos seus IDs se quiser)
+-- Sons da interface (os sons em si ficam em Sons.luau)
 ------------------------------------------------------------------------
 
 UI.SONS = {
-	clique = "rbxasset://sounds/electronicpingshort.wav",
+	clique = "clique",
+	carta = "carta",
 }
 
-function UI.tocar(id: string, volume: number?)
-	local som = Instance.new("Sound")
-	som.SoundId = id
-	som.Volume = volume or 0.4
-	som.Parent = SoundService
-	som:Play()
-	som.Ended:Once(function()
-		som:Destroy()
-	end)
-	task.delay(4, function()
-		if som.Parent then
-			som:Destroy()
-		end
-	end)
+-- volume relativo: 0.4 é o normal
+function UI.tocar(nome: string, volume: number?)
+	Sons.tocar(nome, { volume = (volume or 0.4) / 0.4 })
 end
 
 ------------------------------------------------------------------------

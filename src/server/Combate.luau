@@ -383,6 +383,7 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		critico = opcoes.critico == true,
 		cor = opcoes.cor,
 		autor = estado and estado.player,
+		dot = opcoes.dot, -- dano contínuo (fogo, sangramento): sem som de golpe
 		sangue = opcoes.sangue or (estado ~= nil and opcoes.principal == true and estado.stats.sangueMax > 0),
 	})
 
@@ -1608,7 +1609,7 @@ function Combate.tick(run, dt: number)
 		local sangue = inimigo.sangue
 		if sangue then
 			if agora < sangue.ate then
-				Combate.danoAoInimigo(run, inimigo, sangue.dps * sangue.pilhas * dt, sangue.fonte, { semEfeitos = true, cor = COR_SANGUE, sangue = "gota" })
+				Combate.danoAoInimigo(run, inimigo, sangue.dps * sangue.pilhas * dt, sangue.fonte, { semEfeitos = true, cor = COR_SANGUE, sangue = "gota", dot = true })
 			else
 				inimigo.sangue = nil
 				inimigo.modelo:SetAttribute("Sangrando", 0)
@@ -1616,7 +1617,7 @@ function Combate.tick(run, dt: number)
 		end
 		if inimigo.vivo and inimigo.queimaAte then
 			if agora < inimigo.queimaAte then
-				Combate.danoAoInimigo(run, inimigo, inimigo.queimaDps * dt, inimigo.queimaFonte, { semEfeitos = true, cor = COR_FOGO })
+				Combate.danoAoInimigo(run, inimigo, inimigo.queimaDps * dt, inimigo.queimaFonte, { semEfeitos = true, cor = COR_FOGO, dot = true })
 			else
 				inimigo.queimaAte = nil
 				inimigo.queimaDps = 0

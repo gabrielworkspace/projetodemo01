@@ -356,6 +356,12 @@ local Config = {}
 
 Config.NOME_DO_JOGO = "Masmorra das Cartas"
 
+-- Efeitos sonoros: envie sons/MasmorraSons.ogg para o Roblox e cole o ID aqui
+-- (ex.: "rbxassetid://1234567890"). Veja "Efeitos sonoros" em COMO_USAR.md.
+Config.SONS_ID = ""
+-- Opcional: um ID por som (tem preferência sobre o arquivo único). Ex.: espada = "rbxassetid://..."
+Config.SONS_IDS = {}
+
 -- Partida
 Config.MAX_JOGADORES_POR_PARTIDA = 4
 Config.CONTAGEM_PORTAL = 10 -- segundos em cima do portal até a partida começar
@@ -1365,6 +1371,7 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		critico = opcoes.critico == true,
 		cor = opcoes.cor,
 		autor = estado and estado.player,
+		dot = opcoes.dot, -- dano contínuo (fogo, sangramento): sem som de golpe
 		sangue = opcoes.sangue or (estado ~= nil and opcoes.principal == true and estado.stats.sangueMax > 0),
 	})
 
@@ -2590,7 +2597,7 @@ function Combate.tick(run, dt: number)
 		local sangue = inimigo.sangue
 		if sangue then
 			if agora < sangue.ate then
-				Combate.danoAoInimigo(run, inimigo, sangue.dps * sangue.pilhas * dt, sangue.fonte, { semEfeitos = true, cor = COR_SANGUE, sangue = "gota" })
+				Combate.danoAoInimigo(run, inimigo, sangue.dps * sangue.pilhas * dt, sangue.fonte, { semEfeitos = true, cor = COR_SANGUE, sangue = "gota", dot = true })
 			else
 				inimigo.sangue = nil
 				inimigo.modelo:SetAttribute("Sangrando", 0)
@@ -2598,7 +2605,7 @@ function Combate.tick(run, dt: number)
 		end
 		if inimigo.vivo and inimigo.queimaAte then
 			if agora < inimigo.queimaAte then
-				Combate.danoAoInimigo(run, inimigo, inimigo.queimaDps * dt, inimigo.queimaFonte, { semEfeitos = true, cor = COR_FOGO })
+				Combate.danoAoInimigo(run, inimigo, inimigo.queimaDps * dt, inimigo.queimaFonte, { semEfeitos = true, cor = COR_FOGO, dot = true })
 			else
 				inimigo.queimaAte = nil
 				inimigo.queimaDps = 0
@@ -6810,6 +6817,7 @@ local Classes = require(Shared:WaitForChild("Classes"))
 
 local Vfx = require(script.Parent.Vfx)
 local Poses = require(script.Parent.Poses)
+local Sons = require(script.Parent.Sons)
 
 local Animacoes = {}
 
@@ -7369,6 +7377,42 @@ end
 	acao: "ataque" (dados.combo), "carregar", "soltar" (dados.fracao), "cancelar",
 	      "esquiva", "habilidade", "supremo" (dados.duracao), "defender", "pararDefesa",
 	      "bloqueou", "atingido" ]]
+-- Sons de cada golpe, no ritmo da animação: o vulto da lâmina chega no auge junto com o
+-- impacto; o arqueiro puxa a corda e solta no disparo. (As magias tocam ao sair, em Vfx.)
+local function sonsDoAtaque(personagem: Model, classe: string, combo: number)
+	local raiz = personagem:FindFirstChild("HumanoidRootPart")
+	if not raiz then
+		return
+	end
+	local impacto = Classes.obter(classe).ataque.impacto
+	local momento = if impacto then impacto[combo] or 0 else 0
+	local function depois(segundos: number, nome: string, opcoes)
+		task.delay(math.max(0, segundos), function()
+			if raiz.Parent then
+				opcoes = opcoes or {}
+				opcoes.pai = raiz
+				Sons.tocar(nome, opcoes)
+			end
+		end)
+	end
+	if classe == "cavaleiro" then
+		if combo == 3 then
+			depois(momento - 0.2, "espadaPesada")
+		else
+			depois(momento - 0.13, "espada")
+		end
+	elseif classe == "assassino" then
+		if combo == 3 then
+			depois(momento - 0.13, "espada", { tom = 1.3 })
+		else
+			depois(momento - 0.06, "adaga")
+		end
+	elseif classe == "arqueiro" then
+		depois(momento * 0.55, "arcoPuxar")
+		depois(momento, "arcoSoltar")
+	end
+end
+
 function Animacoes.tocar(personagem: Model, acao: string, dados)
 	if not personagem or not personagem.Parent then
 		return
@@ -7377,9 +7421,23 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 	local e = estadoDe(personagem)
 	local classe = if Classes.existe(dados.classe) then dados.classe else classeDe(e)
 	local acoes = ACOES[classe]
+	-- o zumbido de carregar para quando o golpe sai, é cancelado ou o personagem esquiva
+	if acao == "soltar" or acao == "cancelar" or acao == "esquiva" or acao == "defender" then
+		Sons.parar(e.somCarga)
+		e.somCarga = nil
+	end
+	local raizSom = personagem:FindFirstChild("HumanoidRootPart")
 	if acao == "ataque" then
-		comecar(e, acoes["ataque" .. math.clamp(dados.combo or 1, 1, 3)], dados)
+		local combo = math.clamp(dados.combo or 1, 1, 3)
+		sonsDoAtaque(personagem, classe, combo)
+		comecar(e, acoes["ataque" .. combo], dados)
 	elseif acao == "carregar" then
+		if raizSom then
+			e.somCarga = Sons.tocar("carregar", { pai = raizSom })
+			if classe == "arqueiro" then
+				Sons.tocar("arcoPuxar", { pai = raizSom, tom = 0.85 })
+			end
+		end
 		e.carregando = true
 		e.cargaInicio = os.clock()
 		e.cheioAvisado = false
@@ -7403,8 +7461,16 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 		e.dash = { inicio = os.clock(), def = ESQUIVAS[classe] or ESQUIVAS.cavaleiro }
 		Vfx.esquiva({ jogador = e.jogador, classe = classe })
 	elseif acao == "habilidade" or acao == "supremo" then
+		if acao == "habilidade" and classe == "arqueiro" and raizSom then
+			task.delay(0.18, function()
+				Sons.tocar("arcoSoltar", { pai = raizSom, tom = 1.1 })
+			end)
+		end
 		comecar(e, acoes[acao], dados)
 	elseif acao == "defender" then
+		if raizSom then
+			Sons.tocar("escudo", { pai = raizSom, volume = 0.25, tom = 1.5 })
+		end
 		e.carregando = false
 		e.defendendo = true
 		comecar(e, acoes.defender, dados)
@@ -8191,6 +8257,7 @@ local UI = require(modulos.UI)
 local Estado = require(modulos.Estado)
 local Vfx = require(modulos.Vfx)
 local Atalhos = require(modulos.Atalhos)
+local Sons = require(modulos.Sons)
 
 local Hud = {}
 Hud.aoAbrir = nil :: ((string) -> ())?
@@ -9190,6 +9257,7 @@ function Hud.iniciar()
 	local semManaAte = 0
 	Estado.Mudou:Connect(function(chave)
 		if chave == "semMana" then
+			Sons.tocar("semMana")
 			semManaAte = os.clock() + 0.4
 			Hud.aviso("💧 Sem mana!")
 		end
@@ -9305,6 +9373,7 @@ local Animacoes = require(modulos.Animacoes)
 local Hud = require(modulos.Hud)
 local Menus = require(modulos.Menus)
 local Atalhos = require(modulos.Atalhos)
+local Sons = require(modulos.Sons)
 
 local jogador = Players.LocalPlayer
 local Remotos = ReplicatedStorage:WaitForChild("Remotos")
@@ -9330,6 +9399,7 @@ workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(acompanharCamera)
 acompanharCamera()
 
 Ambiente.iniciar()
+Sons.iniciar()
 Animacoes.iniciar()
 VisualInimigos.iniciar()
 Hud.iniciar()
@@ -9906,7 +9976,7 @@ local function criarCarta(id: string, indice: number)
 			return
 		end
 		escolhaFeita = true
-		UI.tocar(UI.SONS.clique, 0.5)
+		UI.tocar(UI.SONS.carta, 0.5)
 		Acao:FireServer("escolherCarta", indice)
 		for _, outro in linhaCartas:GetChildren() do
 			if outro:IsA("TextButton") and outro ~= botao then
@@ -12442,13 +12512,240 @@ return Poses
         </Item>
         <Item class="ModuleScript" referent="RBX00000036">
           <Properties>
+            <string name="Name">Sons</string>
+            <ProtectedString name="Source"><![CDATA[-- Efeitos sonoros. Todos os sons ficam num arquivo só (sons/MasmorraSons.ogg, gerado por
+-- ferramentas/gerar_sons.py); cada som é um trecho dele (SonsMapa.luau diz onde começa e
+-- quanto dura). Depois de enviar o arquivo para o Roblox, cole o ID em Config.SONS_ID.
+-- Também dá para usar um ID por som em Config.SONS_IDS (tem preferência).
+--
+-- Sons.tocar("espada", { pos = Vector3 })   -> som no mundo (mais baixo de longe)
+-- Sons.tocar("clique")                      -> som da interface (sem posição)
+
+local ContentProvider = game:GetService("ContentProvider")
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Mapa = require(script.Parent.SonsMapa)
+
+local Sons = {}
+
+-- volume base e quanto o tom varia a cada vez (para não soar repetido)
+local AJUSTES = {
+	espada = { 0.6, 0.08 },
+	espadaPesada = { 0.75, 0.06 },
+	adaga = { 0.5, 0.1 },
+	impacto = { 0.5, 0.12 },
+	critico = { 0.7, 0.05 },
+	sangue = { 0.45, 0.12 },
+	escudo = { 0.7, 0.05 },
+	escudoPerfeito = { 0.85, 0 },
+	giro = { 0.55, 0.03 },
+	julgamento = { 0.95, 0 },
+	arcoPuxar = { 0.35, 0.05 },
+	arcoSoltar = { 0.85, 0.06 },
+	flechaImpacto = { 0.5, 0.1 },
+	chuvaFlechas = { 0.5, 0 },
+	dardoArcano = { 0.5, 0.08 },
+	lancaGelo = { 0.55, 0.06 },
+	geloQuebra = { 0.5, 0.1 },
+	bolaFogo = { 0.6, 0.06 },
+	explosao = { 0.75, 0.08 },
+	vazioExplode = { 0.85, 0 },
+	meteoro = { 0.7, 0 },
+	raio = { 0.55, 0.12 },
+	tempestade = { 0.6, 0 },
+	semMana = { 0.5, 0 },
+	passoSombrio = { 0.65, 0.05 },
+	investida = { 0.7, 0.05 },
+	carregar = { 0.45, 0 },
+	cargaCheia = { 0.6, 0 },
+	esquiva = { 0.5, 0.1 },
+	supremo = { 0.75, 0 },
+	inimigoMorre = { 0.5, 0.12 },
+	danoJogador = { 0.6, 0.08 },
+	moeda = { 0.35, 0.1 },
+	carta = { 0.5, 0.05 },
+	clique = { 0.3, 0.03 },
+	reviver = { 0.6, 0 },
+	caiu = { 0.6, 0 },
+	portal = { 0.55, 0 },
+}
+
+-- Antes de enviar o arquivo de sons, as explosões usam um som que já vem com o Roblox
+local SEM_ARQUIVO = {
+	explosao = "rbxasset://sounds/impact_explosion_03.mp3",
+	vazioExplode = "rbxasset://sounds/impact_explosion_03.mp3",
+	julgamento = "rbxasset://sounds/impact_explosion_03.mp3",
+}
+
+local grupo = Instance.new("SoundGroup")
+grupo.Name = "Efeitos"
+grupo.Volume = 1
+grupo.Parent = SoundService
+
+local terreno = workspace.Terrain
+local ultimaVez = {} -- [nome] = quando tocou (evita o mesmo som 20 vezes no mesmo quadro)
+local tocando = 0
+local MAXIMO_JUNTOS = 28
+
+local function idValido(id: any): boolean
+	return type(id) == "string" and string.match(id, "%d+") ~= nil and not string.match(id, "^rbxassetid://0+$")
+end
+
+-- ID e trecho (início, duração) de um som; nil se não houver como tocar
+local function origem(nome: string): (string?, { number }?)
+	local individual = Config.SONS_IDS and Config.SONS_IDS[nome]
+	if idValido(individual) then
+		return individual, nil
+	end
+	if idValido(Config.SONS_ID) and Mapa[nome] then
+		return Config.SONS_ID, Mapa[nome]
+	end
+	return SEM_ARQUIVO[nome], nil
+end
+
+--[[ opcoes: pos (Vector3: som no mundo), pai (Instance: segue a peça), volume (multiplica),
+	tom (multiplica a velocidade/altura), alcance (distância em que some, padrão 140)
+	Devolve o Sound (para parar antes, se precisar). ]]
+function Sons.tocar(nome: string, opcoes): Sound?
+	opcoes = opcoes or {}
+	local id, trecho = origem(nome)
+	if not id then
+		return nil
+	end
+	local agora = os.clock()
+	if agora - (ultimaVez[nome] or 0) < 0.04 or tocando >= MAXIMO_JUNTOS then
+		return nil
+	end
+	ultimaVez[nome] = agora
+
+	local ajuste = AJUSTES[nome] or { 0.5, 0 }
+	local som = Instance.new("Sound")
+	som.Name = nome
+	som.SoundId = id
+	som.Volume = ajuste[1] * (opcoes.volume or 1)
+	som.PlaybackSpeed = (opcoes.tom or 1) * (1 + (math.random() * 2 - 1) * ajuste[2])
+	som.SoundGroup = grupo
+	if trecho then
+		som.PlaybackRegionsEnabled = true
+		som.PlaybackRegion = NumberRange.new(trecho[1], trecho[1] + trecho[2])
+	end
+
+	local remover: Instance = som
+	if opcoes.pos then
+		local ponto = Instance.new("Attachment")
+		ponto.WorldPosition = opcoes.pos
+		ponto.Parent = terreno
+		som.Parent = ponto
+		remover = ponto
+	elseif opcoes.pai then
+		som.Parent = opcoes.pai
+	else
+		som.Parent = SoundService
+	end
+	if opcoes.pos or opcoes.pai then
+		som.RollOffMode = Enum.RollOffMode.InverseTapered
+		som.RollOffMinDistance = 14
+		som.RollOffMaxDistance = opcoes.alcance or 140
+	end
+
+	som:Play()
+	tocando += 1
+	local duracao = (if trecho then trecho[2] else 5) / som.PlaybackSpeed + 0.3
+	task.delay(duracao, function()
+		tocando -= 1
+	end)
+	Debris:AddItem(remover, duracao)
+	return som
+end
+
+-- Para um som antes do fim (ex.: o som de carregar quando o jogador solta)
+function Sons.parar(som: Sound?)
+	if som and som.Parent then
+		som:Stop()
+	end
+end
+
+function Sons.iniciar()
+	if not idValido(Config.SONS_ID) and next(Config.SONS_IDS or {}) == nil then
+		warn("[Sons] Os efeitos sonoros ainda não foram enviados para o Roblox. Envie sons/MasmorraSons.ogg e cole o ID em Config.SONS_ID (veja COMO_USAR.md).")
+		return
+	end
+	-- carrega o arquivo antes de precisar dele (o primeiro golpe já sai com som)
+	task.spawn(function()
+		local previa = Instance.new("Sound")
+		previa.SoundId = Config.SONS_ID
+		pcall(function()
+			ContentProvider:PreloadAsync({ previa })
+		end)
+		previa:Destroy()
+	end)
+end
+
+return Sons
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX00000037">
+          <Properties>
+            <string name="Name">SonsMapa</string>
+            <ProtectedString name="Source"><![CDATA[-- ARQUIVO GERADO por ferramentas/gerar_sons.py (não edite à mão: rode o script de novo).
+-- Onde cada som começa e quanto dura dentro de sons/MasmorraSons.ogg (em segundos).
+
+return {
+	espada = { 0.0000, 0.3200 },
+	espadaPesada = { 0.5700, 0.4500 },
+	adaga = { 1.2700, 0.1800 },
+	impacto = { 1.7000, 0.2200 },
+	critico = { 2.1700, 0.5000 },
+	sangue = { 2.9200, 0.2200 },
+	escudo = { 3.3900, 1.1000 },
+	escudoPerfeito = { 4.7400, 1.8000 },
+	giro = { 6.7899, 2.0000 },
+	julgamento = { 9.0399, 3.3000 },
+	arcoPuxar = { 12.5899, 0.3000 },
+	arcoSoltar = { 13.1399, 0.4500 },
+	flechaImpacto = { 13.8399, 0.1800 },
+	chuvaFlechas = { 14.2699, 2.8000 },
+	dardoArcano = { 17.3199, 0.3500 },
+	lancaGelo = { 17.9199, 0.4500 },
+	geloQuebra = { 18.6199, 0.5000 },
+	bolaFogo = { 19.3699, 0.7000 },
+	explosao = { 20.3198, 2.0000 },
+	vazioExplode = { 22.5698, 2.2800 },
+	meteoro = { 25.0998, 0.9000 },
+	raio = { 26.2498, 1.4000 },
+	tempestade = { 27.8997, 3.0000 },
+	semMana = { 31.1497, 0.3500 },
+	passoSombrio = { 31.7497, 1.0000 },
+	investida = { 32.9997, 0.3000 },
+	carregar = { 33.5497, 1.1000 },
+	cargaCheia = { 34.8997, 1.2000 },
+	esquiva = { 36.3497, 0.2500 },
+	supremo = { 36.8497, 1.7000 },
+	inimigoMorre = { 38.7996, 0.4500 },
+	danoJogador = { 39.4996, 0.2500 },
+	moeda = { 39.9996, 0.3500 },
+	carta = { 40.5996, 0.2000 },
+	clique = { 41.0496, 0.0600 },
+	reviver = { 41.3596, 1.4700 },
+	caiu = { 43.0796, 1.4000 },
+	portal = { 44.7295, 1.5000 },
+}
+]]></ProtectedString>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="RBX00000038">
+          <Properties>
             <string name="Name">UI</string>
             <ProtectedString name="Source"><![CDATA[-- Kit visual da interface: cores, fontes e componentes (painéis, botões, barras, medalhões).
 -- Estilo "fantasia sombria": painéis escuros, bordas douradas duplas e losangos nos cantos.
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
-local SoundService = game:GetService("SoundService")
+local Sons = require(script.Parent.Sons)
 local TweenService = game:GetService("TweenService")
 
 local UI = {}
@@ -12587,27 +12884,17 @@ function UI.ehCelular(): boolean
 end
 
 ------------------------------------------------------------------------
--- Sons da interface (sons que já vêm com o Roblox; troque pelos seus IDs se quiser)
+-- Sons da interface (os sons em si ficam em Sons.luau)
 ------------------------------------------------------------------------
 
 UI.SONS = {
-	clique = "rbxasset://sounds/electronicpingshort.wav",
+	clique = "clique",
+	carta = "carta",
 }
 
-function UI.tocar(id: string, volume: number?)
-	local som = Instance.new("Sound")
-	som.SoundId = id
-	som.Volume = volume or 0.4
-	som.Parent = SoundService
-	som:Play()
-	som.Ended:Once(function()
-		som:Destroy()
-	end)
-	task.delay(4, function()
-		if som.Parent then
-			som:Destroy()
-		end
-	end)
+-- volume relativo: 0.4 é o normal
+function UI.tocar(nome: string, volume: number?)
+	Sons.tocar(nome, { volume = (volume or 0.4) / 0.4 })
 end
 
 ------------------------------------------------------------------------
@@ -12915,7 +13202,7 @@ return UI
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000037">
+        <Item class="ModuleScript" referent="RBX00000039">
           <Properties>
             <string name="Name">Vfx</string>
             <ProtectedString name="Source"><![CDATA[-- Efeitos visuais desenhados no computador do jogador: cortes, projéteis, explosões,
@@ -12928,6 +13215,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local UI = require(script.Parent.UI)
+local Sons = require(script.Parent.Sons)
 
 local Vfx = {}
 Vfx.extras = {} -- outros módulos podem registrar efeitos aqui (ex.: salto dos inimigos)
@@ -13553,7 +13841,38 @@ MAGIAS.flechaCarregada = function(escala: number)
 	return haste, cor, extras
 end
 
+-- Som de cada magia/projétil ao sair (um por leva; a Saraivada solta várias flechas juntas)
+local SOM_DISPARO = {
+	dardoArcano = { "dardoArcano" },
+	lancaGelo = { "lancaGelo" },
+	bolaFogo = { "bolaFogo" },
+	orbeCarregado = { "bolaFogo", { tom = 0.55, volume = 1.2 } },
+	flechaCarregada = { "arcoSoltar", { tom = 0.85, volume = 1.2 } },
+	adaga = { "adaga" },
+	onda = { "espada", { volume = 0.6 } },
+	fogo = { "bolaFogo", { tom = 1.25, volume = 0.5 } },
+	gelo = { "lancaGelo", { tom = 0.8, volume = 0.5 } },
+	veneno = { "sangue", { tom = 0.6, volume = 0.5 } },
+	flechaOssea = { "arcoSoltar", { tom = 0.8, volume = 0.5 } },
+}
+
+local function somDeDisparo(lista)
+	local primeiro = lista[1]
+	if not primeiro then
+		return
+	end
+	local info = SOM_DISPARO[primeiro.tipo]
+	if info then
+		local opcoes = table.clone(info[2] or {})
+		opcoes.pos = primeiro.pos
+		Sons.tocar(info[1], opcoes)
+	elseif primeiro.tipo == "flecha" and #lista >= 6 then
+		Sons.tocar("arcoSoltar", { pos = primeiro.pos, volume = 0.6 })
+	end
+end
+
 function Vfx.projeteis(dados)
+	somDeDisparo(dados.lista)
 	for _, info in dados.lista do
 		local construtor = MAGIAS[info.tipo]
 		local visual, cor, extras, girar
@@ -13598,6 +13917,12 @@ local function removerProjetil(id: number, impacto: boolean, pos: Vector3?)
 		Debris:AddItem(extra.parte, 0.15)
 	end
 	if impacto then
+		local tipo = p.tipo or ""
+		if tipo == "lancaGelo" then
+			Sons.tocar("geloQuebra", { pos = onde })
+		elseif string.find(tipo, "flecha") or tipo == "adaga" or tipo == "fantasma" then
+			Sons.tocar("flechaImpacto", { pos = onde })
+		end
 		if p.tipo == "lancaGelo" then
 			-- o cristal estilhaça
 			for _ = 1, 6 do
@@ -13661,6 +13986,7 @@ function Vfx.explosao(dados)
 	local pos, raio, cor = dados.pos, dados.raio or 6, dados.cor or FOGO
 	local forte = dados.forte == true
 	local leve = dados.leve == true
+	Sons.tocar("explosao", { pos = pos, volume = if leve then 0.5 elseif forte then 1.15 else 0.9, tom = if leve then 1.3 else 1, alcance = 220 })
 	local nucleo = parte(Vector3.one * 1.5, CFrame.new(pos), cor:Lerp(BRANCO, 0.5), 0, Enum.PartType.Ball)
 	animar(nucleo, if leve then 0.22 else 0.35, { Size = Vector3.one * raio * 2, Transparency = 1, Color = cor })
 	Debris:AddItem(nucleo, 0.4)
@@ -13685,6 +14011,7 @@ end
 
 -- Orbe do Vazio: primeiro tudo é sugado para um ponto escuro, depois explode em violeta
 function Vfx.vazio(dados)
+	Sons.tocar("vazioExplode", { pos = dados.pos, alcance = 220 })
 	local pos, raio = dados.pos, dados.raio or 8
 	local cor = Color3.fromRGB(170, 70, 255)
 	local escuro = Color3.fromRGB(18, 6, 30)
@@ -14004,6 +14331,13 @@ end
 
 function Vfx.dano(dados)
 	local critico = dados.critico
+	-- som do golpe (dano contínuo de fogo/sangramento não faz barulho a cada tique)
+	if dados.impacto and not dados.dot then
+		Sons.tocar(if critico then "critico" else "impacto", { pos = dados.impacto })
+		if dados.sangue == true then
+			Sons.tocar("sangue", { pos = dados.impacto })
+		end
+	end
 	-- cada acerto seu dá um tranco leve na câmera (sensação de impacto)
 	if dados.autor == jogador and not critico then
 		Vfx.tremer(0.18, 0.05)
@@ -14030,6 +14364,9 @@ end
 
 function Vfx.danoJogador(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	if raiz then
+		Sons.tocar("danoJogador", { pos = raiz.Position, volume = if dados.jogador == jogador then 1 else 0.5 })
+	end
 	if Vfx.aoJogadorAtingido then
 		Vfx.aoJogadorAtingido(dados.jogador)
 	end
@@ -14066,6 +14403,9 @@ end
 
 function Vfx.carta(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	if dados.jogador == jogador then
+		Sons.tocar("carta")
+	end
 	if raiz then
 		local lendaria = dados.raridade == "Lendaria"
 		pilarDeLuz(raiz, dados.cor, if lendaria then 60 else 30, if lendaria then 6 else 3.5)
@@ -14084,6 +14424,7 @@ end
 
 function Vfx.reviver(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	Sons.tocar("reviver", { pos = raiz and raiz.Position })
 	if raiz then
 		pilarDeLuz(raiz, Color3.fromRGB(140, 255, 170), 30, 4)
 		textoFlutuante(raiz.Position + Vector3.new(0, 4, 0), "DE PÉ!", Color3.fromRGB(140, 255, 170), 34, { pop = 1.8 })
@@ -14092,6 +14433,7 @@ end
 
 function Vfx.segundaChance(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	Sons.tocar("reviver", { pos = raiz and raiz.Position })
 	if raiz then
 		pilarDeLuz(raiz, Color3.fromRGB(255, 220, 110), 50, 6)
 		textoFlutuante(raiz.Position + Vector3.new(0, 4, 0), "SEGUNDA CHANCE!", Color3.fromRGB(255, 220, 110), 40, { pop = 2 })
@@ -14100,6 +14442,7 @@ end
 
 function Vfx.caiu(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	Sons.tocar("caiu", { pos = raiz and raiz.Position })
 	if raiz then
 		particulas(raiz.Position, { cor = Color3.fromRGB(80, 70, 90), quantidade = 20, velocidade = 10, vida = 0.8, luz = 0, gravidade = 5 })
 	end
@@ -14107,6 +14450,7 @@ end
 
 function Vfx.bloqueio(dados)
 	local raiz = raizDoJogador(dados.jogador)
+	Sons.tocar("escudo", { pos = raiz and raiz.Position })
 	if raiz then
 		local cor = Color3.fromRGB(110, 190, 255)
 		local bolha = parte(Vector3.one * 5, CFrame.new(raiz.Position), cor, 0.4, Enum.PartType.Ball, Enum.Material.ForceField)
@@ -14128,6 +14472,7 @@ function Vfx.esquiva(dados)
 	if not raiz then
 		return
 	end
+	Sons.tocar("esquiva", { pai = raiz })
 	local personagem = raiz.Parent
 	local cor = COR_ESQUIVA[dados.classe] or Color3.fromRGB(200, 230, 255)
 	-- "fantasmas" do personagem que ficam para trás
@@ -14177,6 +14522,7 @@ end
 
 -- Carga cheia: clarão dourado na ponta da arma
 function Vfx.cargaCheia(dados)
+	Sons.tocar("cargaCheia", { pos = dados.pos, volume = if dados.local_ then 1 else 0.5 })
 	local ouro = Color3.fromRGB(255, 214, 90)
 	local bola = parte(Vector3.one * 0.6, CFrame.new(dados.pos), ouro:Lerp(BRANCO, 0.4), 0.1, Enum.PartType.Ball, Enum.Material.Neon)
 	animar(bola, 0.25, { Size = Vector3.one * 4, Transparency = 1 })
@@ -14198,6 +14544,10 @@ end
 
 -- Assassino: some numa fumaça e aparece em outro lugar, deixando um risco no ar
 function Vfx.passoSombrio(dados)
+	Sons.tocar("passoSombrio", { pos = dados.ate, volume = if dados.leve then 0.6 else 1 })
+	if dados.leve then
+		Sons.tocar("adaga", { pos = dados.ate })
+	end
 	local de, ate = dados.de, dados.ate
 	local cor = dados.cor
 	fumaca(de, cor, if dados.leve then 6 else 12)
@@ -14236,6 +14586,7 @@ end
 
 -- Investida Letal do Assassino (golpe carregado): linha de cortes no caminho
 function Vfx.investidaLetal(dados)
+	Sons.tocar("investida", { pos = dados.de })
 	local de, ate = dados.de, dados.ate
 	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.5) else dados.cor
 	local distancia = (ate - de).Magnitude
@@ -14259,6 +14610,7 @@ end
 
 -- Chão em chamas deixado pelo Meteoro
 function Vfx.zonaFogo(dados)
+	Sons.tocar("bolaFogo", { pos = dados.pos, tom = 0.7, volume = 0.5 })
 	local centro = dados.pos + Vector3.new(0, 0.1, 0)
 	local diametro = dados.raio * 2
 	local base = disco(centro, diametro, FOGO, 0.45)
@@ -14291,6 +14643,7 @@ end
 
 -- Escudo do Cavaleiro bloqueou um golpe: faíscas no escudo. Defesa perfeita: clarão dourado.
 function Vfx.defesa(dados)
+	Sons.tocar(if dados.perfeita then "escudoPerfeito" else "escudo", { pos = dados.pos })
 	local pos = dados.pos + Vector3.new(0, 0.6, 0)
 	local dir = dados.dir or Vector3.new(0, 0, -1)
 	local cor = if dados.perfeita then Color3.fromRGB(255, 214, 90) else Color3.fromRGB(150, 200, 255)
@@ -14324,6 +14677,7 @@ function Vfx.escudoGanho(dados)
 	if not raiz then
 		return
 	end
+	Sons.tocar("escudo", { pos = raiz.Position, tom = 1.4, volume = 0.5 })
 	local bolha = parte(Vector3.one * 2, raiz.CFrame, dados.cor:Lerp(BRANCO, 0.4), 0.3, Enum.PartType.Ball, Enum.Material.ForceField)
 	animar(bolha, 0.5, { Size = Vector3.one * 7, Transparency = 1 })
 	Debris:AddItem(bolha, 0.55)
@@ -14336,6 +14690,7 @@ function Vfx.giroCarregado(dados)
 	if not raiz then
 		return
 	end
+	Sons.tocar("espadaPesada", { pos = raiz.Position, tom = 0.85, volume = 1.2 })
 	local base = raiz.Position
 	local raio = dados.raio
 	local cor = if dados.perfeito then dados.cor:Lerp(Color3.fromRGB(255, 214, 90), 0.6) else dados.cor
@@ -14375,6 +14730,7 @@ end
 ------------------------------------------------------------------------
 
 function Vfx.portal(dados)
+	Sons.tocar("portal", { pos = dados.pos, volume = 0.7 })
 	local cor = if dados.elite then Color3.fromRGB(255, 200, 60) else Color3.fromRGB(150, 70, 255)
 	local centro = dados.pos + Vector3.new(0, 0.12, 0)
 	local base = disco(centro, 0.5, cor, 0.3)
@@ -14408,6 +14764,7 @@ function Vfx.portal(dados)
 end
 
 function Vfx.moedas(dados)
+	Sons.tocar("moeda", { pos = dados.pos })
 	local destino = raizDoJogador(jogador)
 	local ouro = Color3.fromRGB(255, 206, 70)
 	for _ = 1, dados.quantidade do
@@ -14440,6 +14797,7 @@ end
 
 -- Estouro genérico (usado na morte dos inimigos)
 function Vfx.estouro(posicao: Vector3, cor: Color3, quantidade: number, velocidade: number)
+	Sons.tocar("inimigoMorre", { pos = posicao })
 	particulas(posicao, { cor = cor:Lerp(BRANCO, 0.3), cor2 = cor, quantidade = quantidade, tamanho = 0.7, velocidade = velocidade, vida = 0.6, gravidade = 20 })
 	clarao(posicao, cor, 16, 0.3, 3)
 end
@@ -14489,6 +14847,7 @@ function Vfx.redemoinho(dados)
 	end
 	local cor = if dados.fogo then FOGO else dados.cor
 	local raio = dados.raio
+	Sons.tocar("giro", { pai = raiz })
 	-- arcos da espada (dois, girando)
 	local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
 	local b0, b1 = Instance.new("Attachment"), Instance.new("Attachment")
@@ -14551,6 +14910,7 @@ end
 -- Julgamento: uma espada de luz gigante cai do céu e crava no chão; o chão racha,
 -- pilares de luz sobem em volta e pedras voam
 function Vfx.julgamento(dados)
+	Sons.tocar("julgamento", { pos = dados.pos, alcance = 260 })
 	local pos, raio = dados.pos, dados.raio
 	local cor = Color3.fromRGB(255, 220, 120)
 	local corClasse = dados.cor or cor
@@ -14610,6 +14970,7 @@ end
 
 -- Meteoro: rocha em brasa girando, com fumaça e fogo, que cai e abre uma cratera
 function Vfx.meteoro(dados)
+	Sons.tocar("meteoro", { pos = dados.pos, alcance = 200 })
 	local alvo = dados.pos
 	local inicio = alvo + Vector3.new(-16, 55, -16)
 	local rocha = parte(Vector3.one * 3.2, CFrame.new(inicio), Color3.fromRGB(60, 40, 35), 0, Enum.PartType.Ball, Enum.Material.Basalt)
@@ -14708,6 +15069,7 @@ end
 
 -- Raio que vem do céu, com galhos que se abrem e marca queimada no chão
 function Vfx.raioCeu(dados)
+	Sons.tocar("raio", { pos = dados.pos, volume = 0.7, alcance = 220 })
 	local cor = dados.cor or Color3.fromRGB(200, 150, 255)
 	local topo = dados.pos + Vector3.new(math.random(-3, 3), 34, math.random(-3, 3))
 	zigueZague(topo, dados.pos, cor:Lerp(BRANCO, 0.6), 0.6, 4, 8)
@@ -14730,6 +15092,7 @@ end
 
 -- Chuva de Flechas: um círculo mágico abre no céu e despeja flechas com rastro
 function Vfx.chuvaFlechas(dados)
+	Sons.tocar("chuvaFlechas", { pos = dados.pos })
 	local centro, raio, duracao, cor = dados.pos, dados.raio, dados.duracao, dados.cor
 	local partes = anel(centro + Vector3.new(0, 0.15, 0), raio, cor, 0.35, 28, 0.45)
 	local fundo = disco(centro + Vector3.new(0, 0.12, 0), raio * 2, cor, 0.85)
@@ -14765,6 +15128,7 @@ end
 
 -- Saraivada: vendaval verde girando em volta do Arqueiro enquanto ele atira
 local function vendaval(raiz: BasePart, cor: Color3, duracao: number)
+	Sons.tocar("giro", { pai = raiz, tom = 1.3, volume = 0.6 })
 	local itens = {}
 	for i = 0, 2 do
 		local largura = 6 + i * 2.5
@@ -14788,8 +15152,10 @@ function Vfx.supremo(dados)
 	if not raiz then
 		return
 	end
+	Sons.tocar("supremo", { pos = raiz.Position, alcance = 220 })
 	if dados.nome == "Tempestade Arcana" then
 		nuvemDeTempestade(raiz, dados.cor, 5)
+		Sons.tocar("tempestade", { pos = raiz.Position + Vector3.new(0, 20, 0), alcance = 260 })
 	elseif dados.nome == "Saraivada" then
 		vendaval(raiz, dados.cor, 4)
 	elseif dados.nome == "Lâminas da Noite" then
@@ -14819,7 +15185,7 @@ return Vfx
 ]]></ProtectedString>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="RBX00000038">
+        <Item class="ModuleScript" referent="RBX00000040">
           <Properties>
             <string name="Name">VisualInimigos</string>
             <ProtectedString name="Source"><![CDATA[-- Dá vida aos inimigos no computador do jogador: monta o modelo (Modelos.luau), anima
@@ -15715,11 +16081,11 @@ return VisualInimigos
         </Item>
       </Item>
     </Item>
-    <Item class="StarterCharacterScripts" referent="RBX00000039">
+    <Item class="StarterCharacterScripts" referent="RBX00000041">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
-      <Item class="Script" referent="RBX00000040">
+      <Item class="Script" referent="RBX00000042">
         <Properties>
           <string name="Name">Health</string>
           <ProtectedString name="Source"><![CDATA[-- Substitui o script "Health" padrão do Roblox, que regenera vida sozinho.
