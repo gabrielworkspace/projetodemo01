@@ -265,17 +265,8 @@ local function construirPortal()
 		cor = Color3.fromRGB(170, 100, 255),
 		deslocamento = CFrame.Angles(0, math.pi, 0),
 	})
-	-- o mesmo portal deitado no chão: o círculo onde o grupo se junta
-	local circulo = pecaDoMarcador("Portal")
-	efeitoPronto("PortalChuva", circulo, {
-		escala = RAIO_PORTAL * 2 / 3,
-		velocidade = 0.8,
-		cor = Color3.fromRGB(180, 120, 255),
-		taxa = 0.8,
-		deslocamento = CFrame.new(0, -0.1, 0) * CFrame.Angles(math.rad(90), 0, 0), -- logo acima da pedra do círculo
-	})
-	luz(circulo, ROXO, 22, 1.2)
-	letreiro(POSICAO_PORTAL + Vector3.new(0, 11, 0), "⚔️ A MASMORRA", "Fique no círculo roxo com seu grupo (1 a 4)", Color3.fromRGB(210, 170, 255))
+	-- o círculo onde o grupo se junta fica só desenhado no chão (pedra e runas do mapa), sem brilho
+	letreiro(POSICAO_PORTAL + Vector3.new(0, 11, 0), "⚔️ A MASMORRA", "Fique no círculo de runas com seu grupo (1 a 4)", Color3.fromRGB(210, 170, 255))
 end
 
 -- Altares: um santuário por classe (no mapa, pasta Santuarios). O marcador Altar_<classe> fica em
@@ -366,7 +357,7 @@ local function construirPlaca()
 	regras.TextWrapped = true
 	regras.TextXAlignment = Enum.TextXAlignment.Left
 	regras.Text = "1. Escolha sua classe nos santuários (à esquerda)\n"
-		.. "2. Entre no círculo roxo com seu grupo\n"
+		.. "2. Entre no círculo de runas (portal) com seu grupo\n"
 		.. "3. Combo de 3 golpes, habilidade (E), esquiva (Q) e supremo (R)\n"
 		.. "4. Limpe a sala e escolha uma carta de poder\n"
 		.. "5. Aliado caído? Fique perto para reviver!\n"
