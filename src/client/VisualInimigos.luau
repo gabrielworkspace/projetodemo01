@@ -9,8 +9,10 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Modelos = require(script.Parent.Modelos)
+local Sons = require(script.Parent.Sons)
 local UI = require(script.Parent.UI)
 local Vfx = require(script.Parent.Vfx)
+local VfxKit = require(script.Parent.VfxKit)
 
 local VisualInimigos = {}
 
@@ -198,6 +200,57 @@ local function tocarPronto(ancora: BasePart, nome: string, escala: number): (() 
 	end, 0, escala)
 end
 
+-- Entrada de chefe com câmera: a câmera desce para o chão na frente dele, olhando para cima
+-- enquanto ele sobe da tumba e ruge, e depois volta para o jogador
+local function cinematicaDeEntrada(v)
+	local camera = workspace.CurrentCamera
+	local personagem = Players.LocalPlayer.Character
+	local minha = personagem and personagem:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not camera or not minha or (minha.Position - v.raiz.Position).Magnitude > 220 then
+		return
+	end
+	local duracao = (v.rig.subida or 2) + 1.1
+	local volta = 0.55
+	local altura = (v.rig.altura or 8) * v.escala
+	local chao = v.raiz.Position - Vector3.new(0, v.alturaRaiz, 0)
+	local frente = v.raiz.CFrame.LookVector
+	local lado = v.raiz.CFrame.RightVector
+	local olhar = chao + Vector3.new(0, altura * 0.62, 0)
+	local de = chao + frente * altura * 1.9 + lado * altura * 0.5 + Vector3.new(0, 2.5, 0)
+	local para = chao + frente * altura * 1.25 + lado * altura * 0.18 + Vector3.new(0, altura * 0.22, 0)
+	local original = camera.CFrame
+	local tipoAntes = camera.CameraType
+	camera.CameraType = Enum.CameraType.Scriptable
+	local inicio = os.clock()
+	local nome = "CinematicaChefe"
+	local terminou = false
+	local function terminar()
+		if terminou then
+			return
+		end
+		terminou = true
+		pcall(function()
+			RunService:UnbindFromRenderStep(nome)
+		end)
+		camera.CameraType = if tipoAntes == Enum.CameraType.Scriptable then Enum.CameraType.Custom else tipoAntes
+	end
+	RunService:BindToRenderStep(nome, Enum.RenderPriority.Camera.Value, function()
+		local t = os.clock() - inicio
+		if t < duracao then
+			local s = math.clamp(t / duracao, 0, 1)
+			s = s * s * (3 - 2 * s)
+			camera.CFrame = CFrame.lookAt(de:Lerp(para, s), olhar + Vector3.new(0, s * altura * 0.1, 0))
+		elseif t < duracao + volta then
+			local s = (t - duracao) / volta
+			s = s * s * (3 - 2 * s)
+			camera.CFrame = CFrame.lookAt(para, olhar):Lerp(original, s)
+		else
+			terminar()
+		end
+	end)
+	task.delay(duracao + volta + 1, terminar) -- segurança: a câmera sempre volta
+end
+
 local function criarVisual(modelo: Model)
 	local raiz = modelo:WaitForChild("HumanoidRootPart", 5) :: BasePart?
 	local humanoid = modelo:WaitForChild("Humanoid", 5) :: Humanoid?
@@ -245,6 +298,7 @@ local function criarVisual(modelo: Model)
 			olho = extra and extra.olho,
 			geleia = extra and extra.geleia,
 			ancora = extra and extra.ancora,
+			modelo3d = extra and extra.modelo3d,
 		})
 	end
 
@@ -252,6 +306,43 @@ local function criarVisual(modelo: Model)
 		local parte, malha = construirPeca(definicao, escala)
 		local cf = CFrame.new(definicao.cf.Position * escala) * definicao.cf.Rotation
 		adicionar(parte, definicao.osso, cf, { malha = malha, olho = definicao.olho, geleia = definicao.geleia })
+	end
+
+	-- Modelos 3D prontos (ReplicatedStorage > ModelosChefes): a peça é copiada, ganha o tamanho
+	-- pedido e fica com os pés no chão. Um Highlight faz o contorno brilhante e o piscar de dano.
+	local destaque = nil
+	local pastaModelos = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
+	for _, definicao in rig.malhas or {} do
+		local origem = pastaModelos and pastaModelos:FindFirstChild(definicao.nome)
+		local original = origem and (if origem:IsA("MeshPart") then origem else origem:FindFirstChildWhichIsA("MeshPart", true))
+		if original then
+			local malha = original:Clone() :: MeshPart
+			for _, filho in malha:GetChildren() do
+				if not filho:IsA("SurfaceAppearance") then
+					filho:Destroy()
+				end
+			end
+			local tamanho = malha.Size * (definicao.altura * escala / malha.Size.Y)
+			malha.Size = tamanho
+			malha.Anchored = true
+			malha.CanCollide = false
+			malha.CanQuery = false
+			malha.CanTouch = false
+			malha.CastShadow = true
+			malha.Massless = true
+			local cf = CFrame.new((definicao.centroX or 0) * tamanho.X, tamanho.Y / 2, 0) * CFrame.Angles(0, math.rad(definicao.giro or 0), 0)
+			adicionar(malha, definicao.osso, cf, { modelo3d = true })
+			if not destaque and rig.aura then
+				destaque = Instance.new("Highlight")
+				destaque.Adornee = malha
+				destaque.DepthMode = Enum.HighlightDepthMode.Occluded
+				destaque.FillColor = rig.aura.cor
+				destaque.FillTransparency = 0.9
+				destaque.OutlineColor = rig.aura.cor:Lerp(BRANCO, 0.25)
+				destaque.OutlineTransparency = 0.35
+				destaque.Parent = malha
+			end
+		end
 	end
 
 	-- Âncoras invisíveis para luzes e efeitos
@@ -281,6 +372,63 @@ local function criarVisual(modelo: Model)
 	if ossos.corpo then
 		local pivoCorpo = rig.ossos.corpo.pivo
 		ancoraCorpo = novaAncora("corpo", pivoCorpo + Vector3.new(0, (rig.altura or 2) * 0.5, 0))
+	end
+	-- Aura: chamas e brasas nascendo de uma caixa invisível do tamanho do corpo, fumaça escura e
+	-- um círculo de runas girando no chão
+	local aura = nil
+	if rig.aura then
+		local cor = rig.aura.cor
+		local volume = novaAncora("corpo", rig.aura.centro)
+		volume.Size = rig.aura.tamanho * escala
+		local chao = novaAncora("corpo", Vector3.new(0, 0.25, 0))
+		aura = {
+			chamas = VfxKit.continuo(volume, "fogo", 16, {
+				cor = cor,
+				escala = 1.3 * escala,
+				extra = {
+					Speed = NumberRange.new(1, 4),
+					Acceleration = Vector3.new(0, 12, 0),
+					Lifetime = NumberRange.new(0.6, 1.1),
+					Transparency = VfxKit.seq({ { 0, 0.45 }, { 0.3, 0.3 }, { 1, 1 } }),
+				},
+			}),
+			brasas = VfxKit.continuo(volume, "brasas", 30, { cor = cor, escala = 1.2 * escala, extra = { Acceleration = Vector3.new(0, 9, 0) } }),
+			fumaca = VfxKit.continuo(volume, "fumaca", 3, {
+				cor = cor:Lerp(Color3.new(0, 0, 0), 0.75),
+				escala = 1.6 * escala,
+				extra = { Acceleration = Vector3.new(0, 3, 0), Transparency = VfxKit.seq({ { 0, 1 }, { 0.3, 0.75 }, { 1, 1 } }) },
+			}),
+			circulo = VfxKit.continuo(chao, "circulo", 0.6, {
+				cor = cor,
+				escala = 2.3 * escala,
+				extra = { Lifetime = NumberRange.new(2.6, 2.6), RotSpeed = NumberRange.new(25, 25) },
+			}),
+		}
+	end
+	-- Lâmina: rastro verde ligado só durante os golpes, e o ponto da ponta (faíscas quando presa)
+	local trilhaLamina, pontaLamina = nil, nil
+	if rig.lamina then
+		local base, ponta = rig.lamina.base * escala, rig.lamina.ponta * escala
+		local meio = novaAncora("corpo", (rig.lamina.base + rig.lamina.ponta) / 2)
+		local a0 = Instance.new("Attachment")
+		a0.Position = base - (base + ponta) / 2
+		a0.Parent = meio
+		local a1 = Instance.new("Attachment")
+		a1.Position = ponta - (base + ponta) / 2
+		a1.Parent = meio
+		local cor = rig.aura and rig.aura.cor or BRANCO
+		trilhaLamina = Instance.new("Trail")
+		trilhaLamina.Attachment0 = a0
+		trilhaLamina.Attachment1 = a1
+		trilhaLamina.Color = ColorSequence.new(cor:Lerp(BRANCO, 0.5), cor)
+		trilhaLamina.Transparency = sequencia({ { 0, 0.2 }, { 1, 1 } })
+		trilhaLamina.Lifetime = 0.25
+		trilhaLamina.LightEmission = 1
+		trilhaLamina.LightInfluence = 0
+		trilhaLamina.Enabled = false
+		VfxKit.texturaFeixe(trilhaLamina :: any, "rastro")
+		trilhaLamina.Parent = meio
+		pontaLamina = a1
 	end
 	-- efeitos prontos dos pacotes (chamas, névoa...) presos em ossos; começam depois de montar
 	local ancorasProntas = {}
@@ -313,6 +461,11 @@ local function criarVisual(modelo: Model)
 		impacto = 0,
 		chefe = modelo:GetAttribute("Chefe") == true,
 		conexoes = {},
+		escalaFx = escala * (rig.escalaEfeitos or 1),
+		destaque = destaque,
+		aura = aura,
+		trilhaLamina = trilhaLamina,
+		pontaLamina = pontaLamina,
 	}
 
 	if not v.chefe then
@@ -327,14 +480,20 @@ local function criarVisual(modelo: Model)
 	-- entrada de chefe: o chão racha onde ele vai subir e, quando termina de subir, ele ruge
 	if rig.entrada then
 		local chao = raiz.Position - Vector3.new(0, v.alturaRaiz, 0)
-		Vfx.prefab(rig.entrada.tumulo, CFrame.new(chao), nil, escala)
+		Vfx.prefab(rig.entrada.tumulo, CFrame.new(chao), nil, v.escalaFx)
 		Vfx.tremerEm(chao, 1.5, rig.subida or 1)
 		task.delay(rig.subida or 0.4, function()
 			if v.ancoraCorpo and v.ancoraCorpo.Parent then
-				Vfx.prefab(rig.entrada.rugido, CFrame.new(v.ancoraCorpo.Position), nil, 0.25 * escala)
+				Vfx.prefab(rig.entrada.rugido, CFrame.new(v.ancoraCorpo.Position), nil, 0.25 * v.escalaFx)
 				Vfx.tremerEm(v.ancoraCorpo.Position, 3, 0.6)
+				if rig.cinematica then
+					Sons.tocar("supremo", { pos = v.ancoraCorpo.Position, tom = 0.5, volume = 1.3, alcance = 300 })
+				end
 			end
 		end)
+		if rig.cinematica then
+			task.spawn(cinematicaDeEntrada, v)
+		end
 	end
 
 	-- Elite: aura colorida
@@ -398,6 +557,9 @@ local function atualizarAcao(v)
 	local texto = v.modelo:GetAttribute("Acao") or ""
 	v.acao = string.match(texto, "^([^|]*)") or ""
 	v.acaoInicio = os.clock()
+	if v.acao == "golpe" then
+		v.golpes = (v.golpes or 0) + 1 -- golpes seguidos alternam o lado
+	end
 end
 
 local function atualizarEstados(v)
@@ -526,6 +688,17 @@ local function atualizarEstados(v)
 
 	if modelo:GetAttribute("Furioso") == true and not v.furioso then
 		v.furioso = true
+		if v.aura then
+			-- 2ª fase: a aura dobra e o contorno acende
+			v.aura.chamas.Rate *= 2.2
+			v.aura.brasas.Rate *= 2.5
+			v.aura.fumaca.Rate *= 2
+			v.aura.circulo.Rate *= 1.6
+		end
+		if v.destaque then
+			v.destaque.FillTransparency = 0.8
+			v.destaque.OutlineTransparency = 0.1
+		end
 		for _, peca in v.pecas do
 			if peca.olho then
 				peca.corBase = Color3.fromRGB(255, 40, 40)
@@ -542,7 +715,7 @@ local function atualizarEstados(v)
 					item.parar = tocarPronto(item.ancora, item.def.furia, item.def.escala * v.escala)
 				end
 			end
-			Vfx.prefab(v.rig.furia.rugido, CFrame.new(ancora.Position), nil, 0.25 * v.escala)
+			Vfx.prefab(v.rig.furia.rugido, CFrame.new(ancora.Position), nil, 0.25 * v.escalaFx)
 		else
 			emissor(ancora, Color3.fromRGB(255, 60, 40), { Rate = 30, Speed = NumberRange.new(3, 6), Acceleration = Vector3.new(0, 6, 0), Size = sequencia({ { 0, 0.8 * v.escala }, { 1, 0 } }) })
 		end
@@ -825,7 +998,82 @@ local function poseRei(v, t: number, andar: number, alvos)
 	alvos.corpo.rx += v.impacto * 0.12
 end
 
+-- Skullbane (modelo 3D de uma peça): o corpo inteiro inclina, torce, agacha e gira pelo
+-- quadril. Ergue a lâmina torcendo para trás, desce com tudo para a frente, crava a lâmina no
+-- chão (preso) e luta para soltar; golpes seguidos alternam o lado.
+local function poseSenhor(v, t: number, andar: number, alvos)
+	local e = v.escala
+	local s = math.sin(v.fase)
+	local c = {
+		rx = -0.04 - 0.07 * andar + math.sin(t * 1.3) * 0.015,
+		ry = s * 0.06 * andar,
+		rz = s * 0.045 * andar + math.sin(t * 0.9) * 0.012,
+		oy = (math.abs(math.cos(v.fase)) * 0.45 - 0.15) * andar * e + math.sin(t * 1.3) * 0.12 * e,
+	}
+	local acao, at = v.acao, v.acaoT
+	local lado = if (v.golpes or 0) % 2 == 0 then -1 else 1
+	if acao == "preparar" then
+		-- lâmina (lado direito) vai para trás e para cima; treme de força
+		c.rx = 0.22
+		c.ry = -0.45
+		c.rz = math.sin(t * 40) * 0.012
+		c.oy = 0.3 * e
+	elseif acao == "golpe" then
+		c.rx = -0.4
+		c.ry = 0.35 * lado
+		c.oz = -1.6 * e
+		c.oy = -0.8 * e
+		c.rapido = true
+	elseif acao == "preso" then
+		-- a lâmina cravada no chão: curvado, puxando o braço
+		c.rx = -0.5
+		c.ry = 0.3
+		c.oz = -1.4 * e
+		c.oy = -1.2 * e + math.abs(math.sin(t * 9)) * 0.15 * e
+		c.rz = math.sin(t * 9) * 0.035
+	elseif acao == "prepararGiro" then
+		c.ry = -0.9
+		c.oy = -0.5 * e
+		c.rx = -0.1
+	elseif acao == "giro" then
+		c.ry = at * 18
+		c.direto = true
+		c.oy = -0.35 * e
+		c.rx = -0.12
+	elseif acao == "conjurar" then
+		-- peito para cima, braços abertos (rugido / invocação / transformação)
+		c.rx = 0.18
+		c.oy = 0.6 * e
+		c.rz = math.sin(t * 30) * 0.012
+	elseif acao == "disparo" then
+		c.rx = -0.15
+		c.oz = -0.6 * e
+		c.rapido = true
+	elseif acao == "prepararSalto" then
+		c.oy = -1.4 * e
+		c.rx = -0.25
+	elseif acao == "salto" then
+		c.rx = 0.15
+	elseif acao == "prepararInvestida" then
+		c.rx = -0.32
+		c.ry = -0.2
+		c.oy = -0.7 * e
+	elseif acao == "investida" then
+		c.rx = -0.4
+		c.rz = math.sin(t * 22) * 0.05
+		c.oy = math.abs(math.sin(t * 22)) * 0.4 * e
+	end
+	if v.atordoado then
+		c.rx = -0.28
+		c.rz = math.sin(t * 3) * 0.06
+		c.oy = -0.6 * e
+	end
+	c.rx += v.impacto * 0.06
+	alvos.corpo = c
+end
+
 local POSES = {
+	senhor = poseSenhor,
 	rei = poseRei,
 	bipede = poseBipede,
 	flutuante = poseFlutuante,
@@ -865,6 +1113,19 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 		else
 			local p = v.salto.de:Lerp(v.salto.para, s) + Vector3.new(0, v.salto.altura * 4 * s * (1 - s), 0)
 			base = CFrame.new(p - Vector3.new(0, v.alturaRaiz, 0)) * raizCF.Rotation
+		end
+	end
+	-- rastro da lâmina nos golpes; presa no chão, solta faíscas verdes na ponta
+	if v.trilhaLamina then
+		local acao = v.acao
+		v.trilhaLamina.Enabled = acao == "golpe" or acao == "giro" or acao == "investida"
+		if acao == "preso" and v.pontaLamina and agora >= (v.proximaFaisca or 0) then
+			v.proximaFaisca = agora + 0.12
+			local cor = v.rig.aura and v.rig.aura.cor or BRANCO
+			VfxKit.soltar(v.pontaLamina.WorldPosition, "faiscas", { cor = cor, quantidade = 5, escala = 0.8 })
+			if math.random() < 0.3 then
+				VfxKit.soltar(v.pontaLamina.WorldPosition, "poeira", { cor = Color3.fromRGB(140, 125, 110), quantidade = 1, escala = 1 })
+			end
 		end
 	end
 	-- bolha do escudo de runas acompanha o inimigo, girando devagar
@@ -911,14 +1172,25 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 	if agora < v.flashAte and not v.flashAtivo then
 		v.flashAtivo = true
 		for _, peca in v.pecas do
-			if not peca.ancora then
+			if not peca.ancora and not peca.modelo3d then
 				peca.parte.Color = BRANCO
 			end
+		end
+		if v.destaque then
+			v.destaque.FillColor = BRANCO
+			v.flashTransparencia = v.destaque.FillTransparency
+			v.destaque.FillTransparency = 0.45
 		end
 	elseif v.flashAtivo and agora >= v.flashAte then
 		v.flashAtivo = false
 		for _, peca in v.pecas do
-			peca.parte.Color = peca.corBase
+			if not peca.modelo3d then
+				peca.parte.Color = peca.corBase
+			end
+		end
+		if v.destaque then
+			v.destaque.FillColor = v.rig.aura and v.rig.aura.cor or BRANCO
+			v.destaque.FillTransparency = v.flashTransparencia or 0.9
 		end
 	end
 
@@ -940,7 +1212,8 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 
 	if v.estrelas then
 		local cabeca = v.ossos.cabeca or v.ossos.corpo
-		local centro = cabeca.mundo.Position + Vector3.new(0, 2.2 * v.escala, 0)
+		local altura = if v.ossos.cabeca then 2.2 else (v.rig.alturaCabeca or 2.2)
+		local centro = cabeca.mundo.Position + Vector3.new(0, altura * v.escala, 0)
 		for i, estrela in v.estrelas do
 			local angulo = agora * 6 + i * (math.pi * 2 / 3)
 			table.insert(partes, estrela)
@@ -953,9 +1226,121 @@ end
 -- Morte: as peças se soltam e voam
 ------------------------------------------------------------------------
 
+-- Morte de chefe com modelo 3D: ele cambaleia, cai de joelhos, as almas escapam pelas
+-- rachaduras e ele explode numa coluna de luz verde, sumindo aos poucos
+local function morteDeModelo3D(v)
+	local cor = v.rig.aura and v.rig.aura.cor or BRANCO
+	local corpo = v.ossos.corpo
+	local inicio = os.clock()
+	local queda = 2.2
+	local mundo0 = corpo.mundo
+	local centro = v.ancoraCorpo and v.ancoraCorpo.Position or v.ultimaPos
+	local fx = v.escalaFx
+	Sons.tocar("supremo", { pos = centro, tom = 0.45, volume = 1.3, alcance = 300 })
+	if v.aura then
+		v.aura.chamas.Rate *= 3
+		v.aura.brasas.Rate *= 4
+	end
+	if v.trilhaLamina then
+		v.trilhaLamina.Enabled = false
+	end
+	task.spawn(function()
+		local proximaAlma = 0
+		while true do
+			local t = os.clock() - inicio
+			if t >= queda then
+				break
+			end
+			local s = t / queda
+			-- cambaleia e cai de joelhos para a frente
+			local tremor = math.sin(t * 38) * 0.02 * (1 - s)
+			local cf = mundo0 * CFrame.new(0, -s * s * 4.5 * v.escala, -s * 1.5 * v.escala) * CFrame.Angles(-0.35 * s * s + tremor, 0, math.sin(t * 6) * 0.05 * (1 - s))
+			local partes, cframes = {}, {}
+			for _, peca in v.pecas do
+				if peca.parte.Parent then
+					table.insert(partes, peca.parte)
+					table.insert(cframes, cf * peca.local_)
+				end
+			end
+			workspace:BulkMoveTo(partes, cframes, Enum.BulkMoveMode.FireCFrameChanged)
+			if t >= proximaAlma then
+				proximaAlma = t + 0.18
+				local ponto = (cf * CFrame.new((math.random() - 0.5) * 8 * v.escala, math.random() * 8 * v.escala, (math.random() - 0.5) * 3 * v.escala)).Position
+				VfxKit.soltar(ponto, "fogo", { cor = cor, quantidade = 3, escala = 1.2 })
+				VfxKit.soltar(ponto, "faiscas", { cor = cor, quantidade = 8, escala = 1 })
+				Vfx.tremerEm(ponto, 0.6 + s * 1.5, 0.2)
+			end
+			if v.destaque then
+				v.destaque.FillTransparency = 0.9 - 0.6 * s
+				v.destaque.FillColor = cor
+			end
+			task.wait()
+		end
+		-- explosão final: coluna de luz, onda no chão e as almas subindo
+		local chao = centro - Vector3.new(0, v.alturaRaiz, 0)
+		Vfx.explosao({ pos = centro, raio = 6 * fx, cor = cor, forte = true })
+		VfxKit.soltar(centro, "clarao", { cor = cor, escala = 2 * fx, quantidade = 1 })
+		VfxKit.soltar(centro, "faiscas", { cor = cor, escala = 1.6 * fx, quantidade = 80 })
+		VfxKit.soltar(chao + Vector3.new(0, 0.4, 0), "onda", { cor = cor, escala = 1.8 * fx, quantidade = 1 })
+		VfxKit.soltar(chao + Vector3.new(0, 0.4, 0), "circulo", { cor = cor, escala = 2 * fx, quantidade = 1 })
+		VfxKit.soltar(centro, "brasas", { cor = cor, escala = 1.5 * fx, quantidade = 60, extra = { Acceleration = Vector3.new(0, 30, 0) } })
+		if v.rig.entrada then
+			Vfx.prefab(v.rig.entrada.tumulo, CFrame.new(chao), nil, fx)
+		end
+		local coluna = Instance.new("Part")
+		coluna.Shape = Enum.PartType.Cylinder
+		coluna.Material = Enum.Material.Neon
+		coluna.Color = cor
+		coluna.Anchored = true
+		coluna.CanCollide = false
+		coluna.CanQuery = false
+		coluna.CanTouch = false
+		coluna.CastShadow = false
+		coluna.Size = Vector3.new(1, 3 * fx, 3 * fx)
+		coluna.CFrame = CFrame.new(chao) * CFrame.Angles(0, 0, math.rad(90))
+		coluna.Parent = pasta
+		TweenService:Create(coluna, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = Vector3.new(90, 4 * fx, 4 * fx),
+			CFrame = CFrame.new(chao + Vector3.new(0, 45, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		}):Play()
+		task.delay(0.35, function()
+			TweenService:Create(coluna, TweenInfo.new(0.9), { Size = Vector3.new(90, 0.2, 0.2), Transparency = 1 }):Play()
+		end)
+		Debris:AddItem(coluna, 1.4)
+		Sons.tocar("trovao", { pos = centro, tom = 0.7, volume = 1.2, alcance = 300 })
+		Vfx.tremerEm(centro, 4, 0.9)
+		for _, peca in v.pecas do
+			if peca.ancora then
+				peca.parte:Destroy()
+			else
+				TweenService:Create(peca.parte, TweenInfo.new(0.8), { Transparency = 1 }):Play()
+			end
+		end
+		if v.destaque then
+			TweenService:Create(v.destaque, TweenInfo.new(0.8), { FillTransparency = 1, OutlineTransparency = 1 }):Play()
+		end
+		Debris:AddItem(v.visual, 1)
+	end)
+end
+
 local function morrer(v)
 	for _, conexao in v.conexoes do
 		conexao:Disconnect()
+	end
+	if v.rig.malhas and v.destaque then
+		if v.placa then
+			v.placa:Destroy()
+		end
+		if v.estrelas then
+			for _, estrela in v.estrelas do
+				estrela:Destroy()
+			end
+		end
+		if v.bolha then
+			v.bolha:Destroy()
+		end
+		morteDeModelo3D(v)
+		return
 	end
 	if v.placa then
 		v.placa:Destroy()
@@ -971,8 +1356,8 @@ local function morrer(v)
 		Vfx.tremerEm(centro, 3, 0.8)
 		if v.rig.entrada then
 			-- o rei cai com um último rugido e o chão racha de novo
-			Vfx.prefab(v.rig.entrada.rugido, CFrame.new(centro), nil, 0.3 * v.escala)
-			Vfx.prefab(v.rig.entrada.tumulo, CFrame.new(centro - Vector3.new(0, v.alturaRaiz, 0)), nil, v.escala)
+			Vfx.prefab(v.rig.entrada.rugido, CFrame.new(centro), nil, 0.3 * v.escalaFx)
+			Vfx.prefab(v.rig.entrada.tumulo, CFrame.new(centro - Vector3.new(0, v.alturaRaiz, 0)), nil, v.escalaFx)
 		end
 	end
 	for _, peca in v.pecas do

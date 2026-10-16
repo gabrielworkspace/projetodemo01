@@ -44,6 +44,9 @@
       },
       "EfeitosVFX": {
         "$path": "vfx"
+      },
+      "ModelosChefes": {
+        "$path": "chefes"
       }
     },
     "ServerStorage": {

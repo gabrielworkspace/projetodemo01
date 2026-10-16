@@ -730,6 +730,7 @@ end
 
 local EFEITOS_CHEFE = {
 	reiEsqueleto = { giro = "GiroRei", golpe = "GolpeRei", salto = "SaltoRei", invocacao = "TumuloRei", furia = "RugidoFuria" },
+	skullbane = { giro = "GiroRei", golpe = "GolpeRei", salto = "SaltoRei", invocacao = "TumuloRei", furia = "RugidoRei", escala = 1.35 },
 }
 
 -- Chão logo abaixo de um ponto (ignora jogadores, inimigos e efeitos)
@@ -769,14 +770,14 @@ function Vfx.golpeInimigo(dados)
 		if dados.arco >= 360 and Vfx.temPrefab(efeitos.giro) then
 			-- giro com o espadão: anel de cortes em volta, rente ao chão
 			local chao = chaoAbaixo(dados.pos)
-			Vfx.prefab(efeitos.giro, CFrame.new(chao + Vector3.new(0, 1.5, 0)), nil, dados.alcance * 0.9)
+			Vfx.prefab(efeitos.giro, CFrame.new(chao + Vector3.new(0, 1.5, 0)), nil, dados.alcance * 0.9 * (efeitos.escala or 1))
 			Sons.tocar("giro", { pos = dados.pos, tom = 0.7, volume = 1.2 })
 			Vfx.tremerEm(dados.pos, 1.2, 0.15)
 			return
 		elseif dados.arco < 360 and Vfx.temPrefab(efeitos.golpe) then
 			-- golpe de cima: onda de choque onde a lâmina bate no chão
 			local chao = chaoAbaixo(dados.pos + dados.dir * dados.alcance * 0.6)
-			Vfx.prefab(efeitos.golpe, CFrame.new(chao + Vector3.new(0, 0.2, 0)), nil, 0.55)
+			Vfx.prefab(efeitos.golpe, CFrame.new(chao + Vector3.new(0, 0.2, 0)), nil, 0.55 * (efeitos.escala or 1))
 			Sons.tocar("espadaPesada", { pos = chao, tom = 0.6, volume = 1.3 })
 			Vfx.tremerEm(chao, 1.8, 0.25)
 			return
@@ -827,6 +828,7 @@ local ESTILOS_PROJETIL = {
 	onda = { cor = Color3.fromRGB(140, 190, 255), formato = "onda", tamanho = 1 },
 	flechaOssea = { cor = Color3.fromRGB(255, 90, 80), formato = "flecha", tamanho = 1 },
 	veneno = { cor = Color3.fromRGB(130, 255, 80), formato = "bola", tamanho = 1.2 },
+	alma = { cor = Color3.fromRGB(90, 255, 120), formato = "bola", tamanho = 1.5 },
 	gelo = { cor = Color3.fromRGB(140, 220, 255), formato = "cristal", tamanho = 1.3 },
 	fogo = { cor = Color3.fromRGB(255, 120, 40), formato = "bola", tamanho = 1.4, fogo = true },
 	orbeCarregado = { cor = Color3.fromRGB(225, 150, 255), formato = "bola", tamanho = 1.2 },
@@ -1141,6 +1143,7 @@ local SOM_DISPARO = {
 	fogo = { "bolaFogo", { tom = 1.25, volume = 0.5 } },
 	gelo = { "lancaGelo", { tom = 0.8, volume = 0.5 } },
 	veneno = { "sangue", { tom = 0.6, volume = 0.5 } },
+	alma = { "dardoArcano", { tom = 0.55, volume = 0.5 } },
 	flechaOssea = { "arcoSoltar", { tom = 0.8, volume = 0.5 } },
 }
 
@@ -1468,7 +1471,7 @@ function Vfx.impacto(dados)
 	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
 	if efeitos and Vfx.temPrefab(efeitos.salto) then
 		-- chefe caindo do salto: pancada no chão e rachadura
-		Vfx.prefab(efeitos.salto, CFrame.new(pos + Vector3.new(0, 0.2, 0)), nil, raio / 18)
+		Vfx.prefab(efeitos.salto, CFrame.new(pos + Vector3.new(0, 0.2, 0)), nil, raio / 18 * (efeitos.escala or 1))
 		Sons.tocar("pouso", { pos = pos, tom = 0.5, volume = 1.5 })
 		Vfx.tremerEm(pos, 2.8, 0.4)
 		return
@@ -1485,7 +1488,20 @@ end
 
 function Vfx.impactoArea(dados)
 	local pos, raio = dados.pos, dados.raio
-	if dados.visual == "gelo" then
+	if dados.visual == "alma" then
+		-- chuva de almas: coluna de luz verde caindo do céu, estouro e fogo verde no chão
+		local verde = Color3.fromRGB(90, 255, 120)
+		local coluna = parte(Vector3.new(60, raio * 0.9, raio * 0.9), CFrame.new(pos + Vector3.new(0, 30, 0)) * CFrame.Angles(0, 0, math.rad(90)), verde, 0.15, Enum.PartType.Cylinder)
+		animar(coluna, 0.35, { Size = Vector3.new(60, 0.2, 0.2), Transparency = 1 })
+		Debris:AddItem(coluna, 0.4)
+		soltar(pos + Vector3.new(0, 0.5, 0), "clarao", { cor = verde, escala = raio / 4, quantidade = 1 })
+		soltar(pos + Vector3.new(0, 0.5, 0), "fogo", { cor = verde, escala = raio / 5, quantidade = 14 })
+		soltar(pos + Vector3.new(0, 0.5, 0), "faiscas", { cor = verde, escala = raio / 5, quantidade = 24 })
+		soltar(pos + Vector3.new(0, 0.3, 0), "onda", { cor = verde, escala = raio / 6, quantidade = 1 })
+		soltar(pos + Vector3.new(0, 0.5, 0), "fumaca", { cor = Color3.fromRGB(20, 50, 30), escala = raio / 6, quantidade = 6 })
+		Sons.tocar("explosao", { pos = pos, volume = 0.7, tom = 1.3, alcance = 200 })
+		Vfx.tremerEm(pos, 1.2, 0.2)
+	elseif dados.visual == "gelo" then
 		for _ = 1, 7 do
 			local p = pos + Vector3.new(math.random() - 0.5, 0, math.random() - 0.5) * raio * 1.6
 			local altura = math.random(3, 6)
@@ -3615,6 +3631,37 @@ function Vfx.gritoGuerra(dados)
 	end
 	Sons.tocar("supremo", { pos = dados.pos, tom = 0.7, volume = 0.6 })
 	Vfx.tremerEm(dados.pos, 0.6, 0.2)
+end
+
+------------------------------------------------------------------------
+-- Fissura de Almas (Skullbane): cada ponto da linha racha o chão e explode em fogo verde,
+-- com lascas de pedra subindo
+------------------------------------------------------------------------
+
+function Vfx.fissura(dados)
+	local pos, raio = dados.pos, dados.raio or 3
+	local cor = dados.cor or Color3.fromRGB(90, 255, 120)
+	local chao = pos + Vector3.new(0, 0.2, 0)
+	-- rachadura brilhando no chão
+	local fenda = parte(Vector3.new(raio * 1.6, 0.12, 0.7), CFrame.new(chao) * CFrame.Angles(0, math.random() * math.pi, 0), cor, 0.1)
+	sumir({ fenda }, 0.5, 0.35)
+	-- lascas de pedra que saltam
+	for _ = 1, 3 do
+		local lasca = parte(Vector3.new(0.7, 1.6, 0.7) * (0.6 + math.random() * 0.6), CFrame.new(chao) * CFrame.Angles(math.random() - 0.5, math.random() * 3, math.random() - 0.5), Color3.fromRGB(70, 66, 72), 0, nil, Enum.Material.Slate)
+		local destino = chao + Vector3.new((math.random() - 0.5) * raio, 1.5 + math.random() * 2.5, (math.random() - 0.5) * raio)
+		animar(lasca, 0.18, { CFrame = CFrame.new(destino) * CFrame.Angles(math.random() * 3, math.random() * 3, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		sumir({ lasca }, 0.4, 0.3)
+	end
+	soltar(pos + Vector3.new(0, 0.6, 0), "fogo", { cor = cor, quantidade = if dados.forte then 10 else 5, escala = raio / 3 })
+	soltar(pos + Vector3.new(0, 0.6, 0), "faiscas", { cor = cor, quantidade = 8, escala = raio / 3.5 })
+	soltar(pos + Vector3.new(0, 0.3, 0), "poeira", { cor = Color3.fromRGB(130, 120, 110), quantidade = 2, escala = raio / 3 })
+	if dados.forte then
+		soltar(pos + Vector3.new(0, 0.6, 0), "clarao", { cor = cor, quantidade = 1, escala = raio / 2 })
+		soltar(pos + Vector3.new(0, 0.3, 0), "onda", { cor = cor, quantidade = 1, escala = raio / 3 })
+	end
+	clarao(pos + Vector3.new(0, 1, 0), cor, raio * 4, 0.25, 2)
+	Sons.tocar("explosao", { pos = pos, volume = if dados.forte then 0.7 else 0.35, tom = 1.5, alcance = 160 })
+	Vfx.tremerEm(pos, if dados.forte then 1.2 else 0.5, 0.12)
 end
 
 ------------------------------------------------------------------------

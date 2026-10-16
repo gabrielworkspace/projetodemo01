@@ -592,6 +592,19 @@
               ]
             }
           ]
+        },
+        {
+          "name": "ModelosChefes",
+          "className": "Folder",
+          "children": [
+            {
+              "name": "Skullbane",
+              "className": "Model",
+              "filePaths": [
+                "chefes/Skullbane.rbxmx"
+              ]
+            }
+          ]
         }
       ]
     },

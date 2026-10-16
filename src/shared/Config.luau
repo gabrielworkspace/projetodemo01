@@ -110,7 +110,7 @@ Config.TEMAS = {
 		id = "calabouco",
 		nome = "Calabouço",
 		inimigos = { gosma = 4, esqueleto = 4, esqueletoArqueiro = 2.5, rato = 2, acolito = 1.3, guardiao = 0.9, portaEstandarte = 0.8 },
-		chefe = "reiEsqueleto",
+		chefe = "skullbane", -- (o Rei Esqueleto continua no jogo: troque aqui para voltar a ele)
 		chao = { material = Enum.Material.Cobblestone, cor = Color3.fromRGB(98, 94, 100) },
 		parede = { material = Enum.Material.Brick, cor = Color3.fromRGB(84, 74, 76) },
 		detalhe = { material = Enum.Material.Slate, cor = Color3.fromRGB(58, 52, 58) },

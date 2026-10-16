@@ -170,6 +170,40 @@ Inimigos.TIPOS = {
 	},
 
 	-- Chefes ---------------------------------------------------------------
+	--[[ Skullbane (primeiro chefe): senhor da guerra morto-vivo com a lâmina presa no braço.
+		A luta é feita de golpes pesados e bem avisados: a Fissura de Almas corre pelo chão até o
+		alvo, o Corte Devastador deixa a lâmina presa no chão (janela para bater com +35% de
+		dano), o giro acerta três vezes em volta e a investida atravessa a sala. Na 2ª fase as
+		almas acordam: três fissuras em leque, anéis verdes, espiral de almas e chuva de almas. ]]
+	skullbane = {
+		nome = "Skullbane", titulo = "O Senhor da Guerra Caído", chefe = true, pesado = true,
+		raiz = V(5, 6, 4), quadril = 5, raio = 4, alturaBarra = 11,
+		vida = 1500, dano = 24, velocidade = 11, ouro = 180, armadura = 0.1,
+		entrada = 4, -- sobe do chão e ruge antes de lutar (imune nesse tempo)
+		ataques = {
+			{ tipo = "invocar", recarga = 18, inicial = 9, preparo = 1.1, invocado = "esqueleto", quantidade = 3, maxVivos = 10 },
+			{ tipo = "fissura", alcance = 48, minimo = 10, preparo = 1, recarga = 8, inicial = 3, comprimento = 44, largura = 5, passos = 10, entre = 0.07, mult = 1.2 },
+			{ tipo = "salto", alcance = 42, minimo = 14, preparo = 0.7, voo = 0.9, recarga = 11, inicial = 10, raio = 10, mult = 1.5 },
+			{ tipo = "investida", alcance = 34, minimo = 12, preparo = 0.95, recarga = 12, inicial = 15, distancia = 32, largura = 7, mult = 1.3 },
+			{ tipo = "golpe", alcance = 12, arco = 360, preparo = 1.1, recarga = 10, inicial = 7, acertos = 3, entreAcertos = 0.4, mult = 0.8 },
+			-- Corte Devastador: a lâmina fica presa no chão e ele fica vulnerável
+			{ tipo = "golpe", alcance = 14, arco = 100, preparo = 1.15, recarga = 7, inicial = 4, mult = 1.6, preso = 1.6 },
+			{ tipo = "golpe", alcance = 12, arco = 150, preparo = 0.8, recarga = 2.6, acertos = 3, entreAcertos = 0.5, mult = 0.7 },
+		},
+		fase2 = {
+			anuncio = "Skullbane desperta as almas do calabouço! A lâmina arde em verde!",
+			cor = Color3.fromRGB(90, 255, 120),
+			velocidade = 1.25,
+			recarga = 0.72,
+			ataques = {
+				{ tipo = "invocar", recarga = 26, inicial = 2, preparo = 1, invocado = "guardiao", quantidade = 1, maxVivos = 12 },
+				{ tipo = "fissura", alcance = 50, minimo = 6, preparo = 0.9, recarga = 9, inicial = 4, comprimento = 46, largura = 5, passos = 11, entre = 0.06, quantidade = 3, abertura = 32, mult = 1.1 },
+				{ tipo = "anel", recarga = 12, inicial = 7, preparo = 0.8, aneis = 3, largura = 4, entre = 0.7, mult = 1.2, efeito = "alma" },
+				{ tipo = "espiral", recarga = 13, inicial = 10, preparo = 0.9, projetil = "alma", quantidade = 12, ondas = 5, intervalo = 0.3, giro = 0.22, velocidade = 30, mult = 0.7 },
+				{ tipo = "area", recarga = 11, inicial = 14, preparo = 0.8, quantidade = 6, raio = 6, atraso = 1.3, mult = 1.2, visual = "alma" },
+			},
+		},
+	},
 	reiEsqueleto = {
 		nome = "Rei Esqueleto", titulo = "Senhor do Calabouço", chefe = true, pesado = true,
 		raiz = V(4.5, 5, 3), quadril = 4, raio = 3.2, alturaBarra = 11,
@@ -385,8 +419,13 @@ function Inimigos.criar(run, tipo: string, posicao: Vector3, mult, elite: string
 		lado = if math.random() < 0.5 then -1 else 1,
 		trocaLadoEm = agora + 2,
 	}
+	-- entrada de chefe: sobe do chão e ruge, sem atacar nem levar dano
+	if def.entrada then
+		inimigo.ocupadoAte = agora + def.entrada
+		inimigo.invulneravelAte = agora + def.entrada
+	end
 	for _, ataque in ataques do
-		inimigo.prontoEm[ataque] = agora + (ataque.inicial or math.random() * (ataque.recarga or 1) * 0.5)
+		inimigo.prontoEm[ataque] = agora + (def.entrada or 0) + (ataque.inicial or math.random() * (ataque.recarga or 1) * 0.5)
 	end
 	run.inimigos[inimigo] = true
 	return inimigo
@@ -474,7 +513,9 @@ local function acertarJogadores(run, inimigo, centro: Vector3, direcao: Vector3?
 end
 
 local function corDoEfeito(efeito: string?): Color3
-	if efeito == "queimar" then
+	if efeito == "alma" then
+		return Color3.fromRGB(90, 255, 120)
+	elseif efeito == "queimar" then
 		return Color3.fromRGB(255, 120, 40)
 	elseif efeito == "lento" then
 		return Color3.fromRGB(130, 210, 255)
@@ -529,6 +570,24 @@ local function ataqueGolpe(run, inimigo, ataque, alvoPos: Vector3, agora: number
 			if i < acertos then
 				task.wait(entre)
 			end
+		end
+		if ataque.preso and inimigo.vivo then
+			-- a lâmina fica presa no chão: ele demora para soltar e leva mais dano nesse tempo
+			local fim = os.clock() + ataque.preso
+			inimigo.ocupadoAte = math.max(inimigo.ocupadoAte, fim)
+			inimigo.vulneravelAte = fim
+			definirAcao(inimigo, "preso")
+			Vfx.partida(run, "dano", {
+				pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra * 0.7, 0),
+				valor = "VULNERÁVEL!",
+				cor = Color3.fromRGB(255, 225, 90),
+			})
+			task.delay(ataque.preso, function()
+				if inimigo.vivo then
+					definirAcao(inimigo, "")
+				end
+			end)
+			return
 		end
 		task.delay(0.3, function()
 			if inimigo.vivo then
@@ -845,6 +904,70 @@ local function ataqueTeleporte(run, inimigo, ataque, agora: number): boolean
 	return true
 end
 
+-- Fissura de Almas: a lâmina bate no chão e uma linha de explosões corre até o alvo (uma ou
+-- várias em leque). Cada jogador leva no máximo um acerto por fissura.
+local function ataqueFissura(run, inimigo, ataque, alvoPos: Vector3, agora: number): boolean
+	local preparo = ataque.preparo * inimigo.recargaMult
+	local quantidade = ataque.quantidade or 1
+	local abertura = math.rad(ataque.abertura or 30)
+	local comprimento = ataque.comprimento
+	local largura = ataque.largura or 5
+	local passos = ataque.passos or 10
+	local entre = ataque.entre or 0.07
+	local centro = noChao(run, inimigo.raiz.Position)
+	local frente = unidade(alvoPos - inimigo.raiz.Position, inimigo.raiz.CFrame.LookVector)
+	local direcoes = {}
+	for i = 1, quantidade do
+		local angulo = (i - (quantidade + 1) / 2) * abertura
+		table.insert(direcoes, CFrame.Angles(0, angulo, 0):VectorToWorldSpace(frente))
+	end
+
+	parar(inimigo)
+	olharPara(inimigo, alvoPos)
+	definirAcao(inimigo, "preparar")
+	inimigo.ocupadoAte = agora + preparo + passos * entre + 0.5
+	for _, direcao in direcoes do
+		Vfx.partida(run, "telegrafo", {
+			forma = "linha",
+			pos = centro + direcao * inimigo.raio,
+			dir = direcao,
+			comprimento = comprimento,
+			largura = largura,
+			duracao = preparo + passos * entre * 0.5,
+			chefe = true,
+		})
+	end
+
+	task.delay(preparo, function()
+		if not podeContinuar(run, inimigo) then
+			return
+		end
+		definirAcao(inimigo, "golpe")
+		Vfx.partida(run, "golpeInimigo", { pos = inimigo.raiz.Position, dir = frente, alcance = inimigo.raio + 4, arco = 90, cor = corDoEfeito("alma"), tipo = inimigo.tipo })
+		local atingidos = {}
+		for passo = 1, passos do
+			local distancia = inimigo.raio + passo * (comprimento / passos)
+			for _, direcao in direcoes do
+				local ponto = limitarNaSala(run, centro + direcao * distancia, 1)
+				Vfx.partida(run, "fissura", { pos = ponto, raio = largura / 2 + 0.5, cor = corDoEfeito("alma"), forte = passo == passos })
+				for _, info in jogadoresAtingiveis(run) do
+					if not atingidos[info.estado] and planar(info.raiz.Position - ponto).Magnitude <= largura / 2 + 1.2 then
+						atingidos[info.estado] = true
+						local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+						opcoes.origem = ponto
+						Combate.danoAoJogador(run, info.estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
+					end
+				end
+			end
+			task.wait(entre)
+		end
+		if inimigo.vivo then
+			definirAcao(inimigo, "")
+		end
+	end)
+	return true
+end
+
 ------------------------------------------------------------------------
 -- Ataques da 2ª fase dos chefes: espiral de projéteis e anéis de perigo
 ------------------------------------------------------------------------
@@ -1075,6 +1198,8 @@ local function executarAtaque(run, inimigo, ataque, alvo, alvoPos: Vector3, agor
 		return ataqueArea(run, inimigo, ataque, agora)
 	elseif tipo == "teleporte" then
 		return ataqueTeleporte(run, inimigo, ataque, agora)
+	elseif tipo == "fissura" then
+		return ataqueFissura(run, inimigo, ataque, alvoPos, agora)
 	elseif tipo == "espiral" then
 		return ataqueEspiral(run, inimigo, ataque, agora)
 	elseif tipo == "anel" then

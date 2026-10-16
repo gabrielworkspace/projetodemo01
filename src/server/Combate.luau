@@ -392,6 +392,11 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		})
 		return
 	end
+	-- chefe com a lâmina presa no chão (Corte Devastador do Skullbane): leva mais dano
+	if os.clock() < (inimigo.vulneravelAte or 0) then
+		dano = math.floor(dano * 1.35 + 0.5)
+		opcoes.cor = opcoes.cor or Color3.fromRGB(255, 225, 90)
+	end
 	-- escudo de runas (Guardião Rúnico): absorve o dano antes da vida
 	if (inimigo.escudo or 0) > 0 then
 		local absorvido = math.min(inimigo.escudo, dano)

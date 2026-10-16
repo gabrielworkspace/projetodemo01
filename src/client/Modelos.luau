@@ -265,6 +265,64 @@ function Modelos.reiEsqueleto()
 	return m
 end
 
+--[[ Skullbane (primeiro chefe): modelo 3D feito fora do Roblox (ReplicatedStorage >
+	ModelosChefes > Skullbane, vindo de chefes/Skullbane.rbxmx). É uma peça só, sem esqueleto:
+	ele se mexe inteiro (inclina, torce, agacha, gira) e o resto vem dos efeitos: aura verde em
+	volta do corpo, chamas espectrais nos olhos, na coroa, nos chifres e na lâmina, névoa nos pés
+	e um círculo de runas no chão. Se o modelo não estiver no jogo, usa o Rei Esqueleto.
+
+	Medidas tiradas do modelo (em studs, a partir do chão, frente para -Z, com 17 de altura).
+	Se ele aparecer de costas, troque "giro" de 180 para 0. ]]
+local VERDE_ALMA = C(90, 255, 120)
+
+function Modelos.skullbane()
+	local pasta = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
+	if not (pasta and pasta:FindFirstChild("Skullbane")) then
+		warn("[Modelos] ReplicatedStorage > ModelosChefes > Skullbane não encontrado; usando o Rei Esqueleto.")
+		return Modelos.reiEsqueleto()
+	end
+	return {
+		estilo = "senhor",
+		escala = 1,
+		escalaEfeitos = 2.8, -- efeitos de entrada, rugido e morte do tamanho dele
+		ritmo = 0.6, -- passos pesados
+		subida = 2.8, -- sobe do chão devagar na entrada
+		profundidade = 18,
+		altura = 17,
+		alturaCabeca = 9.5, -- estrelas do atordoamento (a partir do quadril)
+		cor = VERDE_ALMA,
+		cinematica = true,
+		ossos = { corpo = osso("raiz", V(0, 6, 0)) }, -- gira pelo quadril
+		pecas = {},
+		malhas = {
+			-- centroX: o corpo fica 13,35% da largura para o lado (a lâmina do braço alonga a peça)
+			{ nome = "Skullbane", osso = "corpo", altura = 17, centroX = 0.1335, giro = 180 },
+		},
+		luzes = {
+			{ osso = "corpo", pos = V(0, 11, -3), cor = VERDE_ALMA, alcance = 28, brilho = 2.2 },
+			{ osso = "corpo", pos = V(7.6, 3.2, -1.5), cor = VERDE_ALMA, alcance = 14, brilho = 1.6 },
+		},
+		efeitos = {},
+		prefabs = {
+			{ osso = "corpo", pos = V(0.39, 13.2, -1.75), nome = "ChamaEspectral", escala = 0.5 }, -- olhos
+			{ osso = "corpo", pos = V(-0.45, 13.2, -1.75), nome = "ChamaEspectral", escala = 0.5 },
+			{ osso = "corpo", pos = V(0, 15.6, -0.6), nome = "ChamaEspectral", escala = 1.1 }, -- coroa
+			{ osso = "corpo", pos = V(3.9, 14.7, 0), nome = "ChamaEspectral", escala = 0.6 }, -- chifres
+			{ osso = "corpo", pos = V(-3.8, 14, 0), nome = "ChamaEspectral", escala = 0.6 },
+			{ osso = "corpo", pos = V(0, 10.6, -2.8), nome = "ChamaEspectral", escala = 0.55 }, -- gema do peito
+			{ osso = "corpo", pos = V(6.6, 5.6, -0.2), nome = "ChamaEspectral", escala = 0.7 }, -- lâmina
+			{ osso = "corpo", pos = V(7.6, 3.1, -1.4), nome = "ChamaEspectral", escala = 0.7 },
+			{ osso = "corpo", pos = V(8.8, 0.9, -2.6), nome = "ChamaEspectral", escala = 0.6 },
+			{ osso = "corpo", pos = V(0, 0.3, 0), nome = "NevoaRei", escala = 3 },
+		},
+		-- aura verde em volta do corpo (caixa onde nascem as chamas) e lâmina (rastro nos golpes)
+		aura = { cor = VERDE_ALMA, centro = V(0, 8.5, -0.3), tamanho = V(9, 15, 5) },
+		lamina = { base = V(6.6, 5.6, -0.2), ponta = V(8.9, 0.8, -2.7) },
+		entrada = { tumulo = "TumuloRei", rugido = "RugidoRei" },
+		furia = { rugido = "RugidoRei" },
+	}
+end
+
 ------------------------------------------------------------------------
 -- Gosmas e fungos
 ------------------------------------------------------------------------

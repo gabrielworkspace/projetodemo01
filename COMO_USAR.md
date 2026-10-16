@@ -70,11 +70,29 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
   - **Acólito** (manto verde): fica atrás do grupo e **cura** os aliados com um feixe verde.
   - **Guardião** (armadura de pedra e escudo de runas): dá **escudos azuis** aos aliados. O escudo absorve o dano antes da vida e aparece como uma bolha e uma barra azul.
   - **Porta-Estandarte** (estandarte e corneta): dá um **grito de guerra**. Os aliados ficam com uma aura vermelha e andam e atacam mais rápido por alguns segundos.
-- **Temas e chefes:** Calabouço (Rei Esqueleto), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas).
+- **Temas e chefes:** Calabouço (Skullbane), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas). O Rei Esqueleto continua no jogo: para voltar a ele, troque `chefe = "skullbane"` por `chefe = "reiEsqueleto"` no Calabouço, em `src/shared/Config.luau`.
+- **Skullbane, o Senhor da Guerra Caído** (1º chefe, modelo 3D próprio):
+  - **Entrada:** a câmera desce para o chão na frente dele enquanto ele sobe de uma tumba verde e ruge. Ele fica imune até terminar de subir.
+  - **Aura:** está sempre envolto por uma aura verde: chamas e brasas em volta do corpo, contorno brilhante, chamas espectrais nos olhos, na coroa, nos chifres e na lâmina, névoa nos pés e um círculo de runas girando no chão.
+  - **Fissura de Almas:** bate a lâmina no chão e uma linha de explosões verdes corre até o alvo. Saia da faixa marcada!
+  - **Corte Devastador:** golpe pesado de cima. Se você desviar, a lâmina **fica presa no chão** por 1,6s: ele fica **VULNERÁVEL** e leva 35% a mais de dano (números amarelos).
+  - Ele também tem um giro com três cortes, uma sequência de três golpes, um salto esmagador, uma investida e invoca esqueletos.
+  - **2ª fase:** a aura dobra. Ele solta três fissuras em leque, anéis verdes, uma espiral de almas e uma chuva de almas, e chama um Guardião Rúnico.
+  - **Morte:** ele cai de joelhos, as almas escapam pelas rachaduras e ele explode numa coluna de luz verde.
 - **Segunda fase dos chefes:** com metade da vida, o chefe para e se **transforma** (cerca de 3 segundos, sem levar dano). A sala muda de cor, sobem pilares de luz e a energia é sugada para ele. No fim, ele solta uma onda que empurra todo mundo para longe: saia de perto! Na 2ª fase, ele fica mais rápido e ganha ataques novos:
   - **Espiral:** ondas de projéteis girando em todas as direções.
   - **Anéis de perigo:** anéis no chão que explodem. Fique dentro ou fora da faixa marcada.
   - Ele também chama inimigos de apoio para ajudar.
+
+## Chefes com modelo 3D (feito por IA, Blender etc.)
+
+O Skullbane veio de um arquivo `.glb`. Para colocar outro modelo do mesmo jeito:
+
+1. Exporte em **.glb**. Use a origem no fundo (pés no chão) e, se der, menos de 20 mil triângulos.
+2. No Studio, use **File > Import 3D** e depois **Save to File...** no modelo importado. Salve o `.rbxmx` na pasta `chefes/` do projeto, com o nome do chefe.
+3. Ele vai para **ReplicatedStorage > ModelosChefes**. Em `src/client/Modelos.luau`, use `malhas = { { nome = "NomeDoArquivo", osso = "corpo", altura = 17, giro = 180 } }` (veja `Modelos.skullbane`). Se ele aparecer de costas, troque `giro` para 0.
+
+O `.glb` original fica guardado em `chefes/` (o jogo não usa esse arquivo, ele serve só de backup).
 
 ## Efeitos visuais
 
@@ -164,6 +182,7 @@ py ferramentas/ver_poses.py --luau CAMINHO/luau.exe --acao ataque3 --tempos 0.09
 | `src/client/Poses.luau` | Poses e golpes de cada classe (quadros-chave das animações) |
 | `src/client/Vfx.luau` | Efeitos visuais (cortes, tornado, círculo mágico, barreira do escudo...) |
 | `vfx/` | Efeitos prontos do plugin (`.rbxmx`), veja "Efeitos do plugin" |
+| `chefes/Skullbane.rbxmx` | Modelo 3D do Skullbane (vai para ReplicatedStorage > ModelosChefes); `Skullbane.glb` é o original |
 | `modelos/EspadaCavaleiro.rbxmx` | Espada do Cavaleiro (vai para ServerStorage > ModelosArmas; o cabo fica no -Z) |
 | `pacotes/` | Pacotes baixados guardados sem scripts (insira no Studio com Insert from File) |
 | `src/server/Masmorra.luau` | Construção e decoração das salas |
