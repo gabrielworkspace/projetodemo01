@@ -17,6 +17,7 @@ local Hud = require(modulos.Hud)
 local Menus = require(modulos.Menus)
 local Atalhos = require(modulos.Atalhos)
 local Sons = require(modulos.Sons)
+local TexturasGeradas = require(modulos.TexturasGeradas)
 
 local jogador = Players.LocalPlayer
 local Remotos = ReplicatedStorage:WaitForChild("Remotos")
@@ -43,6 +44,7 @@ acompanharCamera()
 
 Ambiente.iniciar()
 Sons.iniciar()
+TexturasGeradas.iniciar()
 Animacoes.iniciar()
 VisualInimigos.iniciar()
 Hud.iniciar()

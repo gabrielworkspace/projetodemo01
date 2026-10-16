@@ -66,6 +66,14 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 - **Elites:** inimigos com ★ e um poder (Blindado, Veloz, Gélido, Explosivo, Gigante). Dão 3x mais ouro.
 - **Temas e chefes:** Calabouço (Rei Esqueleto), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas). Os chefes têm uma segunda fase com metade da vida.
 
+## Efeitos visuais
+
+Os efeitos usam partículas com texturas: as que já vêm com o Roblox (fogo, fumaça, explosão, onda de choque, implosão, vórtice) e **texturas desenhadas pelo próprio jogo** quando ele abre (lua de corte, estrela de crítico, onda de choque, círculo mágico com runas, raio, chama, fumaça, faísca em rastro). Para as texturas próprias funcionarem no jogo publicado, ligue **Game Settings > Security > Allow Mesh / Image APIs**. Sem isso, o jogo usa só as texturas do Roblox (nada quebra; aparece um aviso no Output).
+
+**Usar efeitos feitos no VFX Studio (ou da Creator Store):** crie a pasta `EfeitosCustom` dentro de **ReplicatedStorage** e coloque o efeito lá com um destes nomes: `Impacto`, `Critico`, `Corte`, `Explosao`, `Vazio`, `Esquiva`, `Defesa`, `CargaCheia`, `Morte`, `Sangue`, `Redemoinho`, `Julgamento`, `Meteoro`, `Raio`, `PassoSombrio`, `Supremo`. O efeito pode ser um Attachment, uma Part, um Model ou uma pasta com ParticleEmitters. Quando aquele momento acontece no jogo, o efeito é colocado no lugar e cada ParticleEmitter solta a quantidade do atributo **EmitCount** (padrão 20; o atributo **EmitDelay** atrasa); Beams e Trails ficam ligados pelo atributo **Duracao** (padrão 0,5s). Sem efeito com aquele nome, o jogo usa o efeito padrão.
+
+**Animações dos personagens:** são feitas por código (não precisam de arquivos de animação). O arquivo do jogo já vem com **StarterPlayer > AvatarJointUpgrade = Disabled**; se você mudar isso, as animações continuam funcionando (o código aceita os dois tipos de junta). Se alguma vez o boneco não se mexer, veja a janela Output: o jogo avisa quando não encontra as juntas do personagem.
+
 ## Efeitos sonoros
 
 O jogo tem 38 efeitos sonoros (cortes, flechas, magias, escudo, impactos, explosões, moedas, interface...). Eles foram **criados do zero por síntese** pelo script `ferramentas/gerar_sons.py` e ficam todos juntos em um arquivo só: `sons/MasmorraSons.ogg`. O Roblox não deixa colocar áudio dentro do arquivo `.rbxlx`, então é preciso enviar esse arquivo **uma vez**:
@@ -152,7 +160,9 @@ py ferramentas/ver_poses.py --luau CAMINHO/luau.exe --acao ataque3 --tempos 0.09
 | `src/server/Lobby.luau` | Acampamento, altares, portal, mercador |
 | `src/client/Modelos.luau` | **Aparência dos inimigos** (peças, cores, armas) |
 | `src/client/VisualInimigos.luau` | Animações dos inimigos |
-| `src/client/Vfx.luau` | Efeitos visuais |
+| `src/client/Vfx.luau` | Efeitos visuais (cada golpe, magia e habilidade) |
+| `src/client/VfxKit.luau` | Receitas de partículas e efeitos próprios (EfeitosCustom) |
+| `src/client/TexturasGeradas.luau` | Desenho das texturas de efeito |
 | `src/client/Hud.luau` e `Menus.luau` | Interface |
 | `src/client/UI.luau` | Cores, fontes e estilo dos painéis e botões |
 

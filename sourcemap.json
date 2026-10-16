@@ -800,6 +800,13 @@
                   ]
                 },
                 {
+                  "name": "TexturasGeradas",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/TexturasGeradas.luau"
+                  ]
+                },
+                {
                   "name": "UI",
                   "className": "ModuleScript",
                   "filePaths": [
@@ -811,6 +818,13 @@
                   "className": "ModuleScript",
                   "filePaths": [
                     "src/client/Vfx.luau"
+                  ]
+                },
+                {
+                  "name": "VfxKit",
+                  "className": "ModuleScript",
+                  "filePaths": [
+                    "src/client/VfxKit.luau"
                   ]
                 },
                 {
