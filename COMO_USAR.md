@@ -64,6 +64,7 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 - **Caído e reviver:** quem perde toda a vida cai. Um aliado precisa ficar perto por 3 segundos para levantar quem caiu. Sem ajuda em 15 segundos, a pessoa só volta quando a sala for limpa.
 - **Ameaça:** os inimigos atacam quem causa mais dano. O Cavaleiro chama o dobro de atenção, então ele funciona como o tanque do grupo.
 - **Elites:** inimigos com ★ e um poder (Blindado, Veloz, Gélido, Explosivo, Gigante). Dão 3x mais ouro.
+- **Cadência dos ataques:** depois de cada golpe é preciso esperar ele terminar para atacar de novo (clicar sem parar não adianta). Um clique feito pouco antes da hora fica guardado e sai no momento certo. A **barrinha embaixo do seu personagem** (e a sombra no quadradinho do Ataque) mostra quando o próximo ataque fica pronto; ela pisca quando libera. Mago e Arqueiro são os mais lentos. Os tempos ficam em `cadencia` dentro de `ataque` em Classes.luau.
 - **Peso dos golpes:** os personagens se preparam antes de cada ataque (erguem a espada, puxam a flecha, juntam a magia) e andam mais devagar enquanto atacam. O golpe só acerta no fim da preparação. Para deixar tudo mais rápido ou mais lento, mude `Config.PREPARO_GOLPE` (1 = sem atraso extra; padrão 1,7). A velocidade ao atacar é `Config.VELOCIDADE_ATACANDO`. O ajuste de cada classe fica em `preparo` dentro de `ataque` em Classes.luau.
 - **Salas maiores:** as salas de combate são bem mais largas (105 a 140 studs), com mais pilares, poças de lava e enfeites. A sala do chefe tem 150x150. As ondas têm mais inimigos e mais inimigos vivos ao mesmo tempo.
 - **Inimigos de apoio** (a partir da 2ª sala de cada andar). Vale matar esses primeiro:
@@ -71,21 +72,20 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
   - **Guardião** (armadura de pedra e escudo de runas): dá **escudos azuis** aos aliados. O escudo absorve o dano antes da vida e aparece como uma bolha e uma barra azul.
   - **Porta-Estandarte** (estandarte e corneta): dá um **grito de guerra**. Os aliados ficam com uma aura vermelha e andam e atacam mais rápido por alguns segundos.
 - **Temas e chefes:** Calabouço (Skullbane), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas). O Rei Esqueleto continua no jogo: para voltar a ele, troque `chefe = "skullbane"` por `chefe = "reiEsqueleto"` no Calabouço, em `src/shared/Config.luau`.
-- **Skullbane, o Senhor da Guerra Caído** (1º chefe, modelo 3D próprio). Todos os efeitos dele vêm do pacote de VFX (pasta `vfx/`); os que eram de outra cor são tingidos de verde pelo jogo:
-  - **Despertar:** a tumba racha duas vezes (TumuloRei) e ele sobe curvado, de cabeça baixa. Os olhos acendem (close da câmera) e as chamas espectrais se acendem uma a uma: coroa, chifres, lâmina. Então ele ruge (RugidoRei + onda SaltoRei) e a aura acende. A câmera faz quatro tomadas (de baixo, close no rosto, afasta no rugido, volta para você) e ele fica imune até acabar.
-  - **Aura:** energia verde subindo em volta do corpo (CargaAura), anel de energia no chão (LevitacaoMago), névoa nos pés (NevoaRei) e chamas nos olhos, coroa, chifres e lâmina. O corpo mantém as cores do modelo: as luzes ficam baixas e fracas para não pintar ele de verde.
-  - **Movimento:** passos pesados, com o corpo descendo a cada pé, poeira e tremor. Ele vira e anda com suavidade, sem trancos. Entre um ataque e outro, anda e **rodeia você encarando**.
-  - **Carregando o golpe:** abaixa, ergue a lâmina torcendo para trás e treme de força. Um anel de energia gira na lâmina e a aura cresce; ao soltar, a lâmina brilha.
-  - **Fissura de Almas:** bate a lâmina no chão e uma linha de estouros verdes (ImpactoFlecha) corre até o alvo, terminando numa pancada (GolpeRei). Saia da faixa marcada!
-  - **Corte Devastador:** golpe pesado de cima, com meia-lua verde e pancada no chão. Se você desviar, a lâmina **fica presa no chão** por 1,6s. Ele dá puxões para soltar, saem faíscas da ponta e ele fica **VULNERÁVEL**: leva 35% a mais de dano (números amarelos).
-  - **Giro:** prepara torcendo o corpo e gira quase três voltas, com uma tempestade de cortes verde (Redemoinho) e o anel do Rei no chão.
-  - **Salto:** agacha juntando escuridão, sai com uma lufada no chão, deixa rastro no ar e cai com a pancada do Rei.
-  - **Investida:** rastro verde na corrida e explosão no fim.
-  - **2ª fase:** ele ruge, a tumba racha, um redemoinho verde sobe dos pés e a energia junta em volta dele. No fim, um impacto de luz e uma onda de choque. A aura fica dobrada. Ataques novos:
-    - três fissuras em leque e anéis que explodem em verde;
-    - espiral de almas (orbes verdes);
-    - chuva de almas: portais verdes no céu e raios que caem;
-    - ele também chama um Guardião Rúnico.
+- **Skullbane, o Senhor da Guerra Caído** (1º chefe, modelo 3D próprio, inspirado nos chefes de Elden Ring). Todos os efeitos dele vêm do pacote de VFX (pasta `vfx/`); os que eram de outra cor são tingidos de verde pelo jogo.
+  - **O braço mexe de verdade:** o braço com a lâmina gira pelo ombro e pelo cotovelo (o jogo deforma a malha do modelo com EditableMesh). Para isso, ligue **Game Settings > Security > Allow Mesh / Image APIs** (a mesma opção das texturas). Sem ela, o braço fica parado e ele luta só com o corpo, e aparece um aviso no Output.
+  - **Despertar:** a tumba racha e ele sobe curvado. Os olhos acendem (close da câmera), as chamas acendem uma a uma e ele ruge com a lâmina erguida. Fica imune até acabar.
+  - **Aura:** discreta na 1ª fase (energia verde fraca em volta, anel no chão, névoa e chamas). Na 2ª fase fica evidente e **torcida**: um tornado verde gira em volta dele.
+  - **Moveset sem padrão:** ele sorteia os golpes (quase nunca repete o mesmo) e às vezes **encadeia combos** de surpresa. Alguns golpes ele segura por um tempo diferente a cada vez, para você errar o tempo da esquiva.
+  - **Ficar perto é perigoso:** quem fica colado nele leva Varridas, Giro e a **Explosão de Almas** (ele crava a lâmina e as almas explodem em volta).
+  - **Ir para longe também:** ele usa o **Puxão das Almas** (aponta a lâmina, um redemoinho verde se forma e puxa todo mundo para perto dele, já emendando um golpe). Andar para trás resiste um pouco; a **esquiva escapa** do puxão. De longe ele também lança **Lâminas de Alma**, a Fissura, a investida e o salto.
+  - **Golpes de espada:**
+    - **Corte Descendente:** ergue a lâmina acima da cabeça e desce. Às vezes ela fica presa no chão e ele fica **VULNERÁVEL** (+35% de dano).
+    - **Varrida:** varre na altura da cintura e pode voltar pelo outro lado.
+    - **Estocada:** recua a lâmina e fura em linha, longe.
+    - **Giro:** três voltas com a lâmina esticada.
+  - **Salto Esmagador:** cai com a lâmina e **quebra o chão**: pedaços voam, o ar distorce, a câmera afunda e mais **dois anéis de tremor** se espalham do ponto da queda.
+  - **2ª fase:** mais combos, fissuras em leque, anéis verdes, espiral e chuva de almas, um puxão mais forte e um Guardião Rúnico.
   - **Morte:** cai de joelhos com almas estourando pelo corpo e um raio verde desce do céu sobre ele.
 - **Segunda fase dos chefes:** com metade da vida, o chefe para e se **transforma** (cerca de 3 segundos, sem levar dano). A sala muda de cor, sobem pilares de luz e a energia é sugada para ele. No fim, ele solta uma onda que empurra todo mundo para longe: saia de perto! Na 2ª fase, ele fica mais rápido e ganha ataques novos:
   - **Espiral:** ondas de projéteis girando em todas as direções.

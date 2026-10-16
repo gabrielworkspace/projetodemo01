@@ -103,6 +103,9 @@ local manipuladores = {
 		end
 	end,
 	lobby = voltarAoLobby,
+	puxar = function(dados)
+		Controles.puxar(dados)
+	end,
 	fila = Hud.fila,
 	inicioPartida = function(dados)
 		Estado.modo = "partida"

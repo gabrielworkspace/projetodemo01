@@ -310,24 +310,40 @@ function Modelos.skullbane()
 		ossos = {
 			corpo = osso("raiz", V(0, 6, 0)), -- gira pelo quadril
 			chao = osso("raiz", V(0, 0, 0)), -- não se mexe (névoa e anel no chão)
+			lamina = osso("corpo", V(0, 6, 0)), -- acompanha o braço (as chamas e o brilho da lâmina)
 		},
 		pecas = {},
 		malhas = {
 			-- centroX: o corpo fica 13,35% da largura para o lado (a lâmina do braço alonga a peça)
-			{ nome = "Skullbane", osso = "corpo", altura = 17, centroX = 0.1335, giro = 180 },
+			{
+				nome = "Skullbane",
+				osso = "corpo",
+				altura = 17,
+				centroX = 0.1335,
+				giro = 180,
+				-- braço da lâmina que se mexe (BracoMalha). Medidas no espaço do .glb (frente +Z,
+				-- braço no lado -X), conferidas com renderizações do modelo:
+				-- ombro, cotovelo, pulso, começo, meio e ponta da lâmina
+				braco = {
+					caixa = { min = V(-0.8597, -0.9505, -0.3527), max = V(0.8642, 0.9477, 0.3725) },
+					cadeia = { V(-0.22, 0.27, -0.02), V(-0.37, 0.02, -0.05), V(-0.47, -0.22, -0.01), V(-0.55, -0.4, 0.05), V(-0.66, -0.62, 0.15), V(-0.79, -0.88, 0.33) },
+					raios = { 0.17, 0.22, 0.24, 0.24, 0.24 },
+					regras = { pulsoY = -0.22, laminaX = -0.43, capaX = -0.4, corpoX = -0.14 },
+				},
+			},
 		},
 		-- luzes fracas e baixas: iluminam a aura e o chão sem pintar o corpo de verde
 		luzes = {
 			{ osso = "chao", pos = V(0, 1.5, 0), cor = VERDE_ALMA, alcance = 16, brilho = 0.8 },
-			{ osso = "corpo", pos = V(8.8, 0.9, -2.6), cor = VERDE_ALMA, alcance = 8, brilho = 0.6 },
+			{ osso = "lamina", pos = V(8.8, 0.9, -2.6), cor = VERDE_ALMA, alcance = 8, brilho = 0.6 },
 		},
 		efeitos = {},
 		ancoras = {
 			centro = { osso = "corpo", pos = V(0, 8.5, -0.2) },
 			rosto = { osso = "corpo", pos = V(0, 13.2, -2) },
 			peito = { osso = "corpo", pos = V(0, 10.6, -2.8) },
-			lamina = { osso = "corpo", pos = V(7.6, 3.1, -1.4) },
-			ponta = { osso = "corpo", pos = V(8.8, 0.9, -2.6) },
+			lamina = { osso = "lamina", pos = V(7.6, 3.1, -1.4) },
+			ponta = { osso = "lamina", pos = V(8.8, 0.9, -2.6) },
 			frente = { osso = "corpo", pos = V(0, 4, -6) },
 			chao = { osso = "chao", pos = V(0, 0.3, 0) },
 		},
@@ -340,15 +356,16 @@ function Modelos.skullbane()
 			{ osso = "corpo", pos = V(0, 15.6, -0.6), nome = "ChamaEspectral", escala = 1, atraso = subida }, -- coroa
 			{ osso = "corpo", pos = V(3.9, 14.7, 0), nome = "ChamaEspectral", escala = 0.55, atraso = subida + 0.2 }, -- chifres
 			{ osso = "corpo", pos = V(-3.8, 14, 0), nome = "ChamaEspectral", escala = 0.55, atraso = subida + 0.2 },
-			{ osso = "corpo", pos = V(6.6, 5.6, -0.2), nome = "ChamaEspectral", escala = 0.6, atraso = rugido }, -- lâmina
-			{ osso = "corpo", pos = V(7.6, 3.1, -1.4), nome = "ChamaEspectral", escala = 0.6, atraso = rugido },
-			{ osso = "corpo", pos = V(8.8, 0.9, -2.6), nome = "ChamaEspectral", escala = 0.5, atraso = rugido },
-			-- aura verde em volta do corpo e anel de energia no chão
-			{ osso = "corpo", pos = V(0, 8.5, 0), nome = "CargaAura", escala = 3.1, cor = VERDE_ALMA, inteiro = true, atraso = rugido },
-			{ osso = "chao", pos = V(0, 0.4, 0), nome = "LevitacaoMago", escala = 3.4, cor = VERDE_ALMA, atraso = rugido },
-			-- 2ª fase: uma segunda aura, maior, e o anel dobra
-			{ osso = "corpo", pos = V(0, 9, 0), nome = "CargaAura", escala = 4, cor = VERDE_ALMA, inteiro = true, soFase2 = true },
-			{ osso = "chao", pos = V(0, 0.5, 0), nome = "LevitacaoMago", escala = 4.6, cor = VERDE_ALMA, soFase2 = true },
+			{ osso = "lamina", pos = V(6.6, 5.6, -0.2), nome = "ChamaEspectral", escala = 0.6, atraso = rugido }, -- lâmina
+			{ osso = "lamina", pos = V(7.6, 3.1, -1.4), nome = "ChamaEspectral", escala = 0.6, atraso = rugido },
+			{ osso = "lamina", pos = V(8.8, 0.9, -2.6), nome = "ChamaEspectral", escala = 0.5, atraso = rugido },
+			-- aura verde discreta em volta do corpo (só para mostrar o poder) e anel no chão
+			{ osso = "corpo", pos = V(0, 8, 0), nome = "CargaAura", escala = 2, cor = VERDE_ALMA, inteiro = true, taxa = 0.4, atraso = rugido },
+			{ osso = "chao", pos = V(0, 0.4, 0), nome = "LevitacaoMago", escala = 2.4, cor = VERDE_ALMA, taxa = 0.6, atraso = rugido },
+			-- 2ª fase: a aura fica evidente e torcida (um tornado verde gira em volta dele)
+			{ osso = "corpo", pos = V(0, 9, 0), nome = "CargaAura", escala = 3, cor = VERDE_ALMA, inteiro = true, taxa = 0.7, soFase2 = true },
+			{ osso = "chao", pos = V(0, 0.3, 0), nome = "Tornado", escala = 1.1, cor = VERDE_ALMA, inteiro = true, taxa = 0.6, soFase2 = true },
+			{ osso = "chao", pos = V(0, 0.5, 0), nome = "LevitacaoMago", escala = 3.6, cor = VERDE_ALMA, soFase2 = true },
 		},
 		-- efeitos de cada ação (veja trocarEfeitosDeAcao em VisualInimigos.luau)
 		efeitosAcao = {
@@ -360,6 +377,13 @@ function Modelos.skullbane()
 				},
 				fim = { verde("CargaCheiaArqueiro", "lamina", 1.8, { fixo = true }) },
 			},
+			prepararVarrida = { inicio = { verde("CargaCavaleiro", "lamina", 2, { enquanto = true, inteiro = true }) } },
+			prepararEstocada = {
+				inicio = { verde("CargaCavaleiro", "lamina", 2, { enquanto = true, inteiro = true }) },
+				fim = { verde("CargaCheiaArqueiro", "ponta", 1.6, { fixo = true }) },
+			},
+			prepararNova = { inicio = { verde("CargaAura", "centro", 2.6, { enquanto = true, inteiro = true }) } },
+			prepararPuxao = { inicio = { verde("CargaCavaleiro", "ponta", 2.4, { enquanto = true, inteiro = true }) } },
 			prepararGiro = {
 				inicio = { verde("CargaCavaleiro", "centro", 3.2, { enquanto = true, inteiro = true }) },
 			},

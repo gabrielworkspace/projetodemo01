@@ -9,6 +9,7 @@ local Vfx = require(servidor.Vfx)
 local Projeteis = require(servidor.Projeteis)
 local Combate = require(servidor.Combate)
 local Masmorra = require(servidor.Masmorra)
+local Remotos = require(servidor.Remotos)
 
 local Inimigos = {}
 
@@ -178,30 +179,52 @@ Inimigos.TIPOS = {
 	skullbane = {
 		nome = "Skullbane", titulo = "O Senhor da Guerra Caído", chefe = true, pesado = true,
 		raiz = V(5, 6, 4), quadril = 5, raio = 4, alturaBarra = 11,
-		vida = 1500, dano = 24, velocidade = 11, ouro = 180, armadura = 0.1,
+		vida = 1600, dano = 24, velocidade = 12, ouro = 180, armadura = 0.1,
 		entrada = 5.4, -- desperta (sobe do chão, ruge, câmera) antes de lutar; imune nesse tempo
-		pausa = { 0.9, 1.9 }, -- entre um ataque e outro ele anda e rodeia o alvo
+		pausa = { 0.5, 1.3 }, -- entre um ataque e outro ele anda e rodeia o alvo
+		-- inspirado nos chefes de Elden Ring: escolhe os golpes ao acaso (nunca o mesmo padrão),
+		-- encadeia combos de surpresa, segura alguns golpes por um tempo diferente a cada vez
+		-- (para errar o tempo da esquiva), pune quem fica perto e puxa quem foge para longe.
+		-- peso = chance de escolher; pesoPerto (alvo a até 10 studs) e pesoLonge (a 22 ou mais)
+		-- trocam o peso conforme a distância; seguir = { {golpe, chance} } logo depois deste.
+		aleatorio = true,
 		ataques = {
-			{ tipo = "invocar", recarga = 18, inicial = 9, preparo = 1.1, invocado = "esqueleto", quantidade = 3, maxVivos = 10 },
-			{ tipo = "fissura", alcance = 48, minimo = 10, preparo = 1, recarga = 8, inicial = 3, comprimento = 44, largura = 5, passos = 10, entre = 0.07, mult = 1.2 },
-			{ tipo = "salto", alcance = 42, minimo = 14, preparo = 0.7, voo = 0.9, recarga = 11, inicial = 10, raio = 10, mult = 1.5 },
-			{ tipo = "investida", alcance = 34, minimo = 12, preparo = 0.95, recarga = 12, inicial = 15, distancia = 32, largura = 7, mult = 1.3 },
-			{ tipo = "golpe", alcance = 12, arco = 360, preparo = 1.1, recarga = 10, inicial = 7, acertos = 3, entreAcertos = 0.4, mult = 0.8 },
-			-- Corte Devastador: a lâmina fica presa no chão e ele fica vulnerável
-			{ tipo = "golpe", alcance = 14, arco = 100, preparo = 1.15, recarga = 7, inicial = 4, mult = 1.6, preso = 1.6 },
-			{ tipo = "golpe", alcance = 12, arco = 150, preparo = 0.8, recarga = 2.6, acertos = 3, entreAcertos = 0.5, mult = 0.7 },
+			-- Corte Descendente: ergue a lâmina acima da cabeça e desce com tudo; às vezes a
+			-- lâmina fica presa no chão (janela para bater com +35% de dano)
+			{ nome = "descendente", tipo = "golpe", alcance = 15, arco = 70, preparo = 1, atrasoVariavel = { 0.8, 1.7 }, recarga = 5, inicial = 3, mult = 1.6, preso = 1.4, presoChance = 0.5, peso = 3, pesoPerto = 2.5, seguir = { { "varrida", 0.35 } } },
+			-- Varrida: a lâmina varre de lado na altura da cintura; pode voltar pelo outro lado
+			{ nome = "varrida", tipo = "golpe", anim = "Varrida", alcance = 13, arco = 170, preparo = 0.7, recarga = 3.5, inicial = 2, mult = 1, peso = 3, pesoPerto = 3, seguir = { { "varridaVolta", 0.55 }, { "descendente", 0.25 } } },
+			{ nome = "varridaVolta", tipo = "golpe", anim = "Varrida", volta = true, alcance = 13, arco = 170, preparo = 0.45, recarga = 0, mult = 1.1, peso = 0, seguir = { { "estocada", 0.3 } } },
+			-- Estocada: recua a lâmina e avança furando em linha (longe)
+			{ nome = "estocada", tipo = "golpe", anim = "Estocada", alcance = 21, minimo = 5, arco = 35, preparo = 0.65, atrasoVariavel = { 0.9, 1.6 }, recarga = 6, inicial = 5, mult = 1.4, peso = 2, pesoLonge = 1.5 },
+			-- Giro: três voltas com a lâmina esticada
+			{ nome = "giro", tipo = "golpe", alcance = 12, arco = 360, preparo = 1, acertos = 3, entreAcertos = 0.4, recarga = 9, inicial = 8, mult = 0.8, peso = 1.2, pesoPerto = 3 },
+			-- Explosão de Almas: crava a lâmina no chão e as almas explodem em volta (quem
+			-- fica colado nele é punido)
+			{ nome = "explosao", tipo = "golpe", anim = "Nova", alcance = 11, arco = 360, preparo = 0.55, recarga = 7, inicial = 6, mult = 1.1, peso = 0.2, pesoPerto = 4 },
+			-- Salto Esmagador: cai rachando o chão e o tremor se espalha em dois anéis
+			{ nome = "salto", tipo = "salto", alcance = 48, minimo = 13, preparo = 0.75, voo = 0.95, recarga = 10, inicial = 9, raio = 11, mult = 1.5, tremor = true, peso = 2, pesoLonge = 3, seguir = { { "varrida", 0.4 } } },
+			-- Puxão das Almas: abre a mão e puxa todo mundo de longe para perto dele
+			{ nome = "puxao", tipo = "puxar", alcance = 60, minimo = 16, preparo = 1.1, duracao = 1.2, raio = 48, forca = 34, recarga = 14, inicial = 12, peso = 1.5, pesoLonge = 4, seguir = { { "giro", 0.55 }, { "explosao", 0.45 } } },
+			-- Lâminas de Alma: varre o ar e três cortes de alma voam até o alvo
+			{ nome = "laminas", tipo = "disparo", anim = "Varrida", projetil = "alma", alcance = 50, minimo = 14, preparo = 0.8, recarga = 7, inicial = 6, quantidade = 3, espalhamento = 16, velocidade = 48, mult = 0.9, peso = 1.5, pesoLonge = 2.5 },
+			{ nome = "fissura", tipo = "fissura", alcance = 48, minimo = 10, preparo = 1, recarga = 8, inicial = 4, comprimento = 44, largura = 5, passos = 10, entre = 0.07, mult = 1.2, peso = 1.5, pesoLonge = 2.5 },
+			{ nome = "investida", tipo = "investida", alcance = 34, minimo = 12, preparo = 0.95, recarga = 12, inicial = 15, distancia = 32, largura = 7, mult = 1.3, peso = 1, pesoLonge = 2, seguir = { { "descendente", 0.5 } } },
+			{ nome = "invocar", tipo = "invocar", recarga = 18, inicial = 10, preparo = 1.1, invocado = "esqueleto", quantidade = 3, maxVivos = 10, peso = 0.6 },
 		},
 		fase2 = {
 			anuncio = "Skullbane desperta as almas do calabouço! A lâmina arde em verde!",
 			cor = Color3.fromRGB(90, 255, 120),
 			velocidade = 1.25,
 			recarga = 0.72,
+			combos = 1.4, -- encadeia mais golpes na 2ª fase
 			ataques = {
-				{ tipo = "invocar", recarga = 26, inicial = 2, preparo = 1, invocado = "guardiao", quantidade = 1, maxVivos = 12 },
-				{ tipo = "fissura", alcance = 50, minimo = 6, preparo = 0.9, recarga = 9, inicial = 4, comprimento = 46, largura = 5, passos = 11, entre = 0.06, quantidade = 3, abertura = 32, mult = 1.1 },
-				{ tipo = "anel", recarga = 12, inicial = 7, preparo = 0.8, aneis = 3, largura = 4, entre = 0.7, mult = 1.2, efeito = "alma" },
-				{ tipo = "espiral", recarga = 13, inicial = 10, preparo = 0.9, projetil = "alma", quantidade = 12, ondas = 5, intervalo = 0.3, giro = 0.22, velocidade = 30, mult = 0.7 },
-				{ tipo = "area", recarga = 11, inicial = 14, preparo = 0.8, quantidade = 6, raio = 6, atraso = 1.3, mult = 1.2, visual = "alma" },
+				{ nome = "guardiao", tipo = "invocar", recarga = 26, inicial = 2, preparo = 1, invocado = "guardiao", quantidade = 1, maxVivos = 12, peso = 0.8 },
+				{ nome = "fissuraTripla", tipo = "fissura", alcance = 50, minimo = 6, preparo = 0.9, recarga = 9, inicial = 4, comprimento = 46, largura = 5, passos = 11, entre = 0.06, quantidade = 3, abertura = 32, mult = 1.1, peso = 2, pesoLonge = 3 },
+				{ nome = "aneis", tipo = "anel", recarga = 12, inicial = 7, preparo = 0.8, aneis = 3, largura = 4, entre = 0.7, mult = 1.2, efeito = "alma", peso = 1.5, pesoPerto = 2.5 },
+				{ nome = "espiral", tipo = "espiral", recarga = 13, inicial = 10, preparo = 0.9, projetil = "alma", quantidade = 12, ondas = 5, intervalo = 0.3, giro = 0.22, velocidade = 30, mult = 0.7, peso = 1.2 },
+				{ nome = "chuva", tipo = "area", recarga = 11, inicial = 14, preparo = 0.8, quantidade = 6, raio = 6, atraso = 1.3, mult = 1.2, visual = "alma", peso = 1.2, pesoLonge = 2.5 },
+				{ nome = "puxaoForte", tipo = "puxar", alcance = 70, minimo = 12, preparo = 0.9, duracao = 1.4, raio = 60, forca = 42, recarga = 12, inicial = 6, peso = 1.5, pesoLonge = 4, seguir = { { "aneis", 0.5 }, { "giro", 0.5 } } },
 			},
 		},
 	},
@@ -544,6 +567,14 @@ local function ataqueGolpe(run, inimigo, ataque, alvoPos: Vector3, agora: number
 	local alcance = ataque.alcance * inimigo.escala
 	local arco = ataque.arco or 100
 	local preparo = ataque.preparo * inimigo.recargaMult
+	if ataque.atrasoVariavel then
+		-- segura o golpe por um tempo diferente a cada vez (não dá para decorar o ritmo)
+		local faixa = ataque.atrasoVariavel
+		preparo *= faixa[1] + math.random() * (faixa[2] - faixa[1])
+	end
+	-- "anim" troca o nome da ação (prepararVarrida, golpeVarrida...) para o visual do chefe
+	local nomePreparo = if ataque.anim then "preparar" .. ataque.anim elseif arco >= 360 then "prepararGiro" else "preparar"
+	local nomeGolpe = if ataque.anim then "golpe" .. ataque.anim elseif arco >= 360 then "giro" else "golpe"
 	local acertos = ataque.acertos or 1
 	local entre = ataque.entreAcertos or 0.3
 	local direcao = unidade(alvoPos - inimigo.raiz.Position, inimigo.raiz.CFrame.LookVector)
@@ -551,7 +582,7 @@ local function ataqueGolpe(run, inimigo, ataque, alvoPos: Vector3, agora: number
 
 	parar(inimigo)
 	olharPara(inimigo, alvoPos)
-	definirAcao(inimigo, if giro then "prepararGiro" else "preparar")
+	definirAcao(inimigo, nomePreparo)
 	inimigo.ocupadoAte = agora + preparo + (acertos - 1) * entre + 0.4
 	Vfx.partida(run, "telegrafo", {
 		forma = if giro then "circulo" else "cone",
@@ -568,15 +599,15 @@ local function ataqueGolpe(run, inimigo, ataque, alvoPos: Vector3, agora: number
 			if not podeContinuar(run, inimigo) then
 				return
 			end
-			definirAcao(inimigo, if giro then "giro" else "golpe")
+			definirAcao(inimigo, nomeGolpe)
 			local centro = inimigo.raiz.Position
-			Vfx.partida(run, "golpeInimigo", { pos = centro, dir = direcao, alcance = alcance, arco = arco, cor = corDoEfeito(ataque.efeito), tipo = inimigo.tipo })
+			Vfx.partida(run, "golpeInimigo", { pos = centro, dir = direcao, alcance = alcance, arco = arco, cor = corDoEfeito(ataque.efeito), tipo = inimigo.tipo, anim = ataque.anim, volta = ataque.volta or i % 2 == 0 })
 			acertarJogadores(run, inimigo, centro, direcao, alcance, arco, ataque.mult or 1, ataque.efeito)
 			if i < acertos then
 				task.wait(entre)
 			end
 		end
-		if ataque.preso and inimigo.vivo then
+		if ataque.preso and inimigo.vivo and math.random() < (ataque.presoChance or 1) then
 			-- a lâmina fica presa no chão: ele demora para soltar e leva mais dano nesse tempo
 			local fim = os.clock() + ataque.preso
 			inimigo.ocupadoAte = math.max(inimigo.ocupadoAte, fim)
@@ -606,7 +637,7 @@ end
 local function ataqueDisparo(run, inimigo, ataque, alvo, agora: number): boolean
 	local preparo = ataque.preparo * inimigo.recargaMult
 	parar(inimigo)
-	definirAcao(inimigo, "conjurar")
+	definirAcao(inimigo, if ataque.anim then "preparar" .. ataque.anim else "conjurar")
 	inimigo.ocupadoAte = agora + preparo + 0.35
 	task.delay(preparo, function()
 		if not podeContinuar(run, inimigo) then
@@ -616,7 +647,7 @@ local function ataqueDisparo(run, inimigo, ataque, alvo, agora: number): boolean
 		local origem = inimigo.raiz.Position + Vector3.new(0, 0.8, 0)
 		local destino = if raizAlvo and alvo.vivo then raizAlvo.Position else origem + inimigo.raiz.CFrame.LookVector * 10
 		olharPara(inimigo, destino)
-		definirAcao(inimigo, "disparo")
+		definirAcao(inimigo, if ataque.anim then "golpe" .. ataque.anim else "disparo")
 		local direcao = unidade(destino - origem, inimigo.raiz.CFrame.LookVector)
 		local quantidade = ataque.quantidade or 1
 		local abertura = ataque.espalhamento or 10
@@ -767,9 +798,28 @@ local function ataqueSalto(run, inimigo, ataque, alvoPos: Vector3, agora: number
 			end
 			local olhar = unidade(destino - inimigo.raiz.Position, inimigo.raiz.CFrame.LookVector)
 			inimigo.modelo:PivotTo(CFrame.lookAt(chegada, chegada + olhar))
-			Vfx.partida(run, "impacto", { pos = destino, raio = raio, cor = corDoEfeito(ataque.efeito), forte = inimigo.chefe, tipo = inimigo.tipo })
+			Vfx.partida(run, "impacto", { pos = destino, raio = raio, cor = corDoEfeito(ataque.efeito), forte = inimigo.chefe, tipo = inimigo.tipo, quebrar = ataque.tremor })
 			acertarJogadores(run, inimigo, destino, nil, raio, 360, ataque.mult or 1, ataque.efeito)
 			definirAcao(inimigo, "")
+			if ataque.tremor then
+				-- o chão continua rachando: dois anéis de tremor saem do ponto da queda
+				for i, extra in { 7, 15 } do
+					local anel = raio + extra
+					local atraso = 0.25 + 0.3 * i
+					Vfx.partida(run, "anelPerigo", { pos = destino, raio = anel, largura = 2.5, duracao = atraso, cor = corDoEfeito("alma"), tipo = inimigo.tipo })
+					task.delay(atraso, function()
+						if not run.ativa then
+							return
+						end
+						Vfx.partida(run, "anelExplode", { pos = destino, raio = anel, largura = 2.5, cor = corDoEfeito("alma"), tipo = inimigo.tipo })
+						for _, info in jogadoresAtingiveis(run) do
+							if math.abs(planar(info.raiz.Position - destino).Magnitude - anel) <= 2.5 then
+								Combate.danoAoJogador(run, info.estado, inimigo.dano * 0.6, inimigo, { origem = destino })
+							end
+						end
+					end)
+				end
+			end
 		end)
 	end)
 	return true
@@ -907,6 +957,39 @@ local function ataqueTeleporte(run, inimigo, ataque, agora: number): boolean
 		inimigo.modelo:PivotTo(CFrame.new(chegada) * inimigo.raiz.CFrame.Rotation)
 		Vfx.partida(run, "teleporte", { pos = chegada })
 		definirAcao(inimigo, "")
+	end)
+	return true
+end
+
+-- Puxão das Almas: estende a mão, um redemoinho se forma e todos que estão longe (dentro do
+-- raio) são puxados para perto dele por um tempo. Andar para trás resiste um pouco; a esquiva
+-- escapa. O movimento do personagem é feito no computador do jogador ("puxar").
+local function ataquePuxar(run, inimigo, ataque, agora: number): boolean
+	local preparo = ataque.preparo * inimigo.recargaMult
+	local raio = ataque.raio
+	parar(inimigo)
+	definirAcao(inimigo, "prepararPuxao")
+	inimigo.ocupadoAte = agora + preparo + ataque.duracao + 0.2
+	local centro = noChao(run, inimigo.raiz.Position)
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raio, duracao = preparo, chefe = true })
+	Vfx.partida(run, "puxaoPreparo", { modelo = inimigo.modelo, pos = centro, duracao = preparo, tipo = inimigo.tipo })
+	task.delay(preparo, function()
+		if not podeContinuar(run, inimigo) then
+			return
+		end
+		definirAcao(inimigo, "puxao")
+		local agoraCentro = noChao(run, inimigo.raiz.Position)
+		Vfx.partida(run, "puxao", { modelo = inimigo.modelo, pos = agoraCentro, raio = raio, duracao = ataque.duracao, tipo = inimigo.tipo })
+		for _, info in jogadoresAtingiveis(run) do
+			if planar(info.raiz.Position - agoraCentro).Magnitude <= raio then
+				Remotos.enviar(info.estado.player, "puxar", { centro = agoraCentro, duracao = ataque.duracao, forca = ataque.forca })
+			end
+		end
+		task.delay(ataque.duracao, function()
+			if inimigo.vivo then
+				definirAcao(inimigo, "")
+			end
+		end)
 	end)
 	return true
 end
@@ -1205,6 +1288,8 @@ local function executarAtaque(run, inimigo, ataque, alvo, alvoPos: Vector3, agor
 		return ataqueArea(run, inimigo, ataque, agora)
 	elseif tipo == "teleporte" then
 		return ataqueTeleporte(run, inimigo, ataque, agora)
+	elseif tipo == "puxar" then
+		return ataquePuxar(run, inimigo, ataque, agora)
 	elseif tipo == "fissura" then
 		return ataqueFissura(run, inimigo, ataque, alvoPos, agora)
 	elseif tipo == "espiral" then
@@ -1327,6 +1412,24 @@ local function entrarNaFase2(run, inimigo)
 	end)
 end
 
+-- Golpe que vem logo depois deste num combo (ou nil): cada opção de "seguir" tem uma chance
+local function sortearSeguinte(inimigo, ataque)
+	if not ataque.seguir then
+		return nil
+	end
+	local mult = if inimigo.fase2 then inimigo.def.fase2.combos or 1 else 1
+	for _, opcao in ataque.seguir do
+		if math.random() < opcao[2] * mult then
+			for _, outro in inimigo.ataques do
+				if outro.nome == opcao[1] then
+					return outro
+				end
+			end
+		end
+	end
+	return nil
+end
+
 local function decidir(run, inimigo, agora: number)
 	local def = inimigo.def
 
@@ -1371,8 +1474,65 @@ local function decidir(run, inimigo, agora: number)
 	end
 	local alvoPos = info.raiz.Position
 
+	-- combo encadeado: o próximo golpe sai logo que o anterior termina (sem pausa nem recarga)
+	if inimigo.encadear then
+		local proximo = inimigo.encadear
+		inimigo.encadear = nil
+		if distancia <= (proximo.alcance or 999) * inimigo.escala * 1.4 then
+			olharPara(inimigo, alvoPos)
+			if executarAtaque(run, inimigo, proximo, info.estado, alvoPos, agora) then
+				inimigo.ultimoAtaque = proximo
+				inimigo.encadear = sortearSeguinte(inimigo, proximo)
+				return
+			end
+		end
+	end
+
 	-- chefes com "pausa": depois de cada ataque andam um pouco antes do próximo
 	local podeAtacar = agora >= (inimigo.ataqueLivreEm or 0)
+	if def.aleatorio then
+		-- sorteia entre os golpes prontos e no alcance, com peso pela distância
+		if podeAtacar then
+			local candidatos, total = {}, 0
+			for _, ataque in inimigo.ataques do
+				if agora >= (inimigo.prontoEm[ataque] or 0) and distancia <= (ataque.alcance or 999) * inimigo.escala and distancia >= (ataque.minimo or 0) then
+					local peso = ataque.peso or 1
+					if distancia <= 10 and ataque.pesoPerto then
+						peso = ataque.pesoPerto
+					elseif distancia >= 22 and ataque.pesoLonge then
+						peso = ataque.pesoLonge
+					end
+					if ataque == inimigo.ultimoAtaque then
+						peso *= 0.25 -- quase nunca repete o mesmo golpe
+					end
+					if peso > 0 then
+						total += peso
+						table.insert(candidatos, { ataque, peso })
+					end
+				end
+			end
+			local sorteio = math.random() * total
+			for _, item in candidatos do
+				sorteio -= item[2]
+				if sorteio <= 0 then
+					local ataque = item[1]
+					if executarAtaque(run, inimigo, ataque, info.estado, alvoPos, agora) then
+						inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult
+						inimigo.ultimoAtaque = ataque
+						inimigo.encadear = sortearSeguinte(inimigo, ataque)
+						if def.pausa and not inimigo.encadear then
+							local pausa = def.pausa[1] + math.random() * (def.pausa[2] - def.pausa[1])
+							inimigo.ataqueLivreEm = inimigo.ocupadoAte + pausa * (if inimigo.fase2 then 0.7 else 1)
+						end
+						return
+					end
+					inimigo.prontoEm[ataque] = agora + 2
+					break
+				end
+			end
+		end
+		podeAtacar = false -- o resto é só movimento
+	end
 	for _, ataque in inimigo.ataques do
 		if podeAtacar and agora >= (inimigo.prontoEm[ataque] or 0) and distancia <= (ataque.alcance or 999) * inimigo.escala and distancia >= (ataque.minimo or 0) then
 			if executarAtaque(run, inimigo, ataque, info.estado, alvoPos, agora) then

@@ -93,6 +93,7 @@ function Combate.calcularStats(estado)
 		velocidade = classe.velocidade * (1 + e("velocidadePct")) * (0.92 ^ e("gigante")),
 		-- intervalo entre golpes: o da classe + o tempo a mais de preparação
 		intervalo = classe.intervalo / (1 + e("ataqueVelPct")) + Classes.atrasoDoPreparo(classe, 1),
+		velAtaque = 1 + e("ataqueVelPct"), -- divide a cadência dos golpes (Classes.cadencia)
 		alcance = classe.alcance * (1 + e("alcancePct")) * (1 + 0.2 * e("gigante")),
 		critico = math.min((classe.critico or 0) + e("critico"), 0.75),
 		multCritico = 3 + e("multCritico"),
@@ -156,6 +157,7 @@ function Combate.enviarStats(estado)
 	Remotos.enviar(estado.player, "stats", {
 		classe = classe.id,
 		intervalo = stats.intervalo,
+		velAtaque = stats.velAtaque,
 		recarga = stats.recarga,
 		recargaEsquiva = stats.recargaEsquiva,
 		alcance = stats.alcance,
@@ -975,11 +977,12 @@ function Combate.atacar(run, estado, direcao: any)
 	local stats = estado.stats
 	local classe = Classes.obter(estado.classe)
 	local agora = os.clock()
-	local espera = stats.intervalo * (if estado.ultimoFoiFinal then 1.35 else 1)
-	if agora - estado.ultimoAtaque < espera * 0.8 then
+	-- cadência: o golpe anterior precisa terminar (com folga para o atraso da internet)
+	local espera = Classes.cadencia(classe, if estado.ultimoFoiFinal then 3 else estado.combo, stats.velAtaque)
+	if agora - estado.ultimoAtaque < espera * 0.82 then
 		return
 	end
-	if agora - estado.ultimoAtaque > stats.intervalo * 2.6 + 0.3 then
+	if agora - estado.ultimoAtaque > espera + 0.9 then
 		estado.combo = 0
 	end
 	local custos = classe.custos

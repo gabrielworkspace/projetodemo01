@@ -903,6 +903,77 @@ local function recarga(fim: number, total: number, sombra: Frame, segundos: Text
 	end
 end
 
+-- Barrinha do ataque, embaixo do próprio personagem: enche enquanto o golpe termina (cadência)
+-- e pisca quando o próximo ataque fica pronto
+local barraAtaque = criar("BillboardGui", {
+	Name = "BarraDoAtaque",
+	ResetOnSpawn = false,
+	Size = UDim2.fromOffset(62, 7),
+	StudsOffset = Vector3.new(0, -3.3, 0),
+	AlwaysOnTop = true,
+	LightInfluence = 0,
+	Enabled = false,
+	Parent = jogador:WaitForChild("PlayerGui"), -- (BillboardGui dentro de ScreenGui não aparece)
+})
+local fundoAtaque = criar("Frame", {
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = Color3.fromRGB(16, 14, 22),
+	BackgroundTransparency = 0.3,
+	BorderSizePixel = 0,
+	Parent = barraAtaque,
+})
+UI.redondo(fundoAtaque)
+UI.borda(fundoAtaque, cores.preto, 1.5)
+local cheioAtaque = criar("Frame", {
+	Size = UDim2.fromScale(0, 1),
+	BackgroundColor3 = cores.ouroClaro,
+	BorderSizePixel = 0,
+	Parent = fundoAtaque,
+})
+UI.redondo(cheioAtaque)
+local ataqueEstavaPronto = true
+
+local function atualizarBarraAtaque(corClasse: Color3)
+	local personagem = jogador.Character
+	local raiz = personagem and personagem:FindFirstChild("HumanoidRootPart")
+	local agora = os.clock()
+	local restante = Estado.ataqueFim - agora
+	local pronto = restante <= 0
+	if not raiz or Estado.caido or Estado.morto then
+		barraAtaque.Enabled = false
+		return
+	end
+	barraAtaque.Adornee = raiz
+	if not pronto then
+		ataqueEstavaPronto = false
+		barraAtaque.Enabled = true
+		local fracao = 1 - math.clamp(restante / math.max(Estado.ataqueTotal, 0.01), 0, 1)
+		cheioAtaque.Size = UDim2.fromScale(fracao, 1)
+		cheioAtaque.BackgroundColor3 = corClasse:Lerp(cores.branco, 0.15)
+		cheioAtaque.BackgroundTransparency = 0
+		fundoAtaque.BackgroundTransparency = 0.3
+	else
+		-- pronto: pisca branco e some em 0,25s
+		if not ataqueEstavaPronto then
+			ataqueEstavaPronto = true
+			slots.ataque.aro.Color = cores.branco
+			task.delay(0.15, function()
+				slots.ataque.aro.Color = cores.bronze
+			end)
+		end
+		local desde = -restante
+		if desde < 0.25 then
+			barraAtaque.Enabled = true
+			cheioAtaque.Size = UDim2.fromScale(1, 1)
+			cheioAtaque.BackgroundColor3 = cores.branco
+			cheioAtaque.BackgroundTransparency = desde / 0.25
+			fundoAtaque.BackgroundTransparency = 0.3 + 0.7 * desde / 0.25
+		else
+			barraAtaque.Enabled = false
+		end
+	end
+end
+
 local placasCaidos = {} -- [Model] = { placa, barra }
 
 -- Placa sobre aliados caídos, com o progresso de reviver
@@ -1070,6 +1141,13 @@ function Hud.iniciar()
 		recarga(Estado.esquivaFim, Estado.esquivaTotal, slots.esquiva.sombra, slots.esquiva.segundos, false)
 		recarga(Estado.habilidadeFim, Estado.habilidadeTotal, toque.habilidade.sombra, toque.habilidade.segundos, true)
 		recarga(Estado.esquivaFim, Estado.esquivaTotal, toque.esquiva.sombra, toque.esquiva.segundos, true)
+		-- ataque: sombra no quadradinho e no botão de toque, sem números (é rápido)
+		recarga(Estado.ataqueFim, Estado.ataqueTotal, slots.ataque.sombra, slots.ataque.segundos, false)
+		recarga(Estado.ataqueFim, Estado.ataqueTotal, toque.ataque.sombra, toque.ataque.segundos, true)
+		slots.ataque.segundos.Text = ""
+		toque.ataque.segundos.Text = ""
+		local classeBarra = Estado.stats and Classes.obter(Estado.stats.classe)
+		atualizarBarraAtaque(if classeBarra then classeBarra.cor else cores.ouroClaro)
 
 		for userId, info in quadrosAliados do
 			local outro = Players:GetPlayerByUserId(userId)

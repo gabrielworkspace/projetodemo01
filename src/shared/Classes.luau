@@ -46,6 +46,9 @@ Classes.dados = {
 			combo = { 1, 1.1, 1.9 }, -- o terceiro golpe é o finalizador: um giro que acerta em volta
 			impacto = { 0.13, 0.13, 0.24 }, -- quando a lâmina chega no alvo em cada golpe (segundos)
 			preparo = 1.8, -- golpes pesados: preparação 80% mais longa (veja Config.PREPARO_GOLPE)
+			-- cadência: segundos até poder atacar de novo depois de cada golpe (o golpe inteiro:
+			-- preparação, impacto e a volta para a guarda). Clicar antes não faz nada.
+			cadencia = { 0.66, 0.66, 1.05 },
 			nome = "Combo de Espada",
 			icone = "⚔️",
 		},
@@ -96,6 +99,7 @@ Classes.dados = {
 			combo = { 1, 1, 1.7 },
 			impacto = { 0.15, 0.15, 0.28 },
 			preparo = 1.5,
+			cadencia = { 0.95, 0.95, 1.4 }, -- conjurar leva tempo: cada magia tem o seu momento
 			nome = "Dardo, Gelo e Fogo",
 			icone = "✨",
 		},
@@ -142,6 +146,7 @@ Classes.dados = {
 			combo = { 1, 1, 2 },
 			impacto = { 0.26, 0.26, 0.34 },
 			preparo = 1.25, -- já tem o ciclo de pegar a flecha na aljava
+			cadencia = { 0.95, 0.95, 1.3 }, -- pegar, encaixar, puxar, mirar, soltar e acompanhar
 			nome = "Flechada",
 			icone = "🎯",
 		},
@@ -189,6 +194,7 @@ Classes.dados = {
 			combo = { 1, 1, 2.4 },
 			impacto = { 0.09, 0.09, 0.2 },
 			preparo = 1.6,
+			cadencia = { 0.42, 0.42, 0.78 },
 			costas = 0.5, -- +50% de dano acertando o inimigo pelas costas
 			nome = "Dança das Adagas",
 			icone = "🗡️",
@@ -229,6 +235,14 @@ end
 function Classes.atrasoDoPreparo(classe, combo: number): number
 	local base = classe.ataque.impactoBase
 	return if base then (base[combo] or 0) * ((classe.ataque.preparoFator or 1) - 1) else 0
+end
+
+-- Segundos até o próximo ataque depois do golpe "combo" (0 = depois do golpe carregado, que
+-- conta como golpe final). velocidade = 1 + bônus de velocidade de ataque das cartas.
+function Classes.cadencia(classe, combo: number, velocidade: number?): number
+	local lista = classe.ataque.cadencia or { 0.5, 0.5, 0.7 }
+	local valor = lista[if combo >= 1 and combo <= 3 then combo else 3]
+	return valor / math.max(velocidade or 1, 0.1)
 end
 
 function Classes.obter(id: string?)

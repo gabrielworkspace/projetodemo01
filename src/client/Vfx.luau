@@ -319,6 +319,7 @@ end
 	                      branco, cinza e preto continuam iguais)
 	  inteiro = true   -> a escala também afasta os pontos de emissão e aumenta a aceleração
 	                      (o efeito inteiro fica maior, não só as partículas)
+	  taxa = número    -> multiplica a quantidade de partículas (0,5 = metade, mais discreto)
 	Devolve a função que para o efeito, ou nil se ele não existe. ]]
 local function tingir(original: Color3, alvo: Color3): Color3
 	local _, s0, v0 = original:ToHSV()
@@ -352,6 +353,18 @@ function Vfx.prefab(nome: string, onde: any, duracao: number?, escala: number?, 
 	table.insert(todos, copia)
 	local cor = opcoes and opcoes.cor
 	local inteiro = opcoes and opcoes.inteiro and escala and escala ~= 1
+	local taxa = opcoes and opcoes.taxa
+	if taxa then
+		for _, objeto in todos do
+			if objeto:IsA("ParticleEmitter") then
+				objeto.Rate *= taxa
+				local quantidade = objeto:GetAttribute("EmitCount")
+				if type(quantidade) == "number" then
+					objeto:SetAttribute("EmitCount", math.max(1, math.floor(quantidade * taxa + 0.5)))
+				end
+			end
+		end
+	end
 	if cor or inteiro then
 		for _, objeto in todos do
 			if cor then
@@ -813,6 +826,37 @@ end
 
 function Vfx.golpeInimigo(dados)
 	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	if efeitos and efeitos.cor and dados.anim then
+		-- golpes de espada do Skullbane (todos com efeitos do pacote tingidos de verde)
+		local cor = efeitos.cor
+		local chao = chaoAbaixo(dados.pos)
+		local dir = dados.dir
+		if dados.anim == "Varrida" then
+			-- meia-lua deitada na altura da cintura, varrendo para um lado ou para o outro
+			local altura = chao + Vector3.new(0, 5, 0) + dir * dados.alcance * 0.35
+			local espelho = if dados.volta then CFrame.Angles(0, 0, math.pi) else CFrame.identity
+			Vfx.prefab("CorteCavaleiro", CFrame.lookAt(altura, altura + dir) * espelho, nil, dados.alcance / 3.5, { cor = cor })
+			Vfx.prefab("CorteGiratorio", CFrame.lookAt(altura, altura + dir), nil, dados.alcance / 5, { cor = cor, taxa = 0.5 })
+			Sons.tocar("espadaPesada", { pos = altura, tom = 0.7, volume = 1.2 })
+			Vfx.tremerEm(altura, 1, 0.15)
+		elseif dados.anim == "Estocada" then
+			-- rajada para a frente ao longo da lâmina e o estouro na ponta
+			local altura = chao + Vector3.new(0, 4.5, 0)
+			local ponta = altura + dir * dados.alcance
+			Vfx.prefab("DisparoForte", CFrame.lookAt(altura + dir * 4, ponta), nil, dados.alcance / 7, { cor = cor })
+			Vfx.prefab("ImpactoFlecha", CFrame.new(ponta), nil, 2.2, { inteiro = true })
+			Sons.tocar("investida", { pos = altura, tom = 0.6, volume = 1.2 })
+			Vfx.tremerEm(ponta, 1.2, 0.15)
+		elseif dados.anim == "Nova" then
+			-- crava a lâmina e as almas explodem em volta dele
+			Vfx.prefab(efeitos.golpe, CFrame.new(chao + Vector3.new(0, 0.2, 0)), nil, 0.6)
+			Vfx.prefab(efeitos.salto, CFrame.new(chao + Vector3.new(0, 0.2, 0)), nil, dados.alcance / 14)
+			Vfx.prefab(efeitos.giro, CFrame.new(chao + Vector3.new(0, 1, 0)), nil, dados.alcance)
+			Sons.tocar("explosao", { pos = chao, tom = 0.8, volume = 1.1, alcance = 220 })
+			Vfx.tremerEm(chao, 2.4, 0.3)
+		end
+		return
+	end
 	if efeitos then
 		if dados.arco >= 360 and Vfx.temPrefab(efeitos.giro) then
 			-- giro com o espadão: anel de cortes em volta, rente ao chão
@@ -1530,6 +1574,9 @@ function Vfx.impacto(dados)
 		Vfx.prefab(efeitos.salto, CFrame.new(pos + Vector3.new(0, 0.2, 0)), nil, raio / 18 * (efeitos.escala or 1))
 		Sons.tocar("pouso", { pos = pos, tom = 0.5, volume = 1.5 })
 		Vfx.tremerEm(pos, 2.8, 0.4)
+		if dados.quebrar then
+			Vfx.chaoQuebrado(pos, raio, efeitos)
+		end
 		return
 	end
 	local poeira = disco(pos + Vector3.new(0, 0.2, 0), 2, Color3.fromRGB(200, 180, 160), 0.35)
@@ -3688,6 +3735,103 @@ end
 -- Fissura de Almas (Skullbane): cada ponto da linha racha o chão e explode em fogo verde,
 -- com lascas de pedra subindo
 ------------------------------------------------------------------------
+
+-- Chão quebrado (queda do Skullbane): a tumba racha, pedaços do chão voam, uma onda que
+-- distorce o ar se espalha e a câmera "afunda" com o impacto
+function Vfx.chaoQuebrado(pos: Vector3, raio: number, efeitos)
+	Vfx.prefab(efeitos.invocacao, CFrame.new(pos), nil, raio / 4)
+	Vfx.prefab(efeitos.golpe, CFrame.new(pos + Vector3.new(0, 0.2, 0)), nil, raio / 18)
+	-- pedaços do chão (física de verdade: caem e quicam)
+	for i = 1, 14 do
+		local angulo = i / 14 * math.pi * 2 + math.random() * 0.4
+		local distancia = raio * (0.3 + math.random() * 0.6)
+		local tamanho = Vector3.new(1 + math.random() * 2, 0.6 + math.random(), 1 + math.random() * 2)
+		local pedra = Instance.new("Part")
+		pedra.Size = tamanho
+		pedra.Material = Enum.Material.Slate
+		pedra.Color = Color3.fromRGB(78, 74, 80):Lerp(Color3.fromRGB(40, 38, 44), math.random())
+		pedra.CFrame = CFrame.new(pos + Vector3.new(math.cos(angulo) * distancia, 0.8, math.sin(angulo) * distancia)) * CFrame.Angles(math.random() * 3, math.random() * 3, math.random() * 3)
+		pedra.CanCollide = true
+		pedra.CanQuery = false
+		pedra.CanTouch = false
+		pedra.CollisionGroup = "Default"
+		pedra.Parent = pasta
+		pedra.AssemblyLinearVelocity = Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (8 + math.random() * 14) + Vector3.new(0, 26 + math.random() * 22, 0)
+		pedra.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 16
+		task.delay(1.6 + math.random() * 0.8, function()
+			if pedra.Parent then
+				TweenService:Create(pedra, TweenInfo.new(0.6), { Transparency = 1, Size = tamanho * 0.3 }):Play()
+			end
+		end)
+		Debris:AddItem(pedra, 3.2)
+	end
+	-- onda de distorção: uma bolha de "campo de força" que cresce rente ao chão
+	local onda = Instance.new("Part")
+	onda.Shape = Enum.PartType.Ball
+	onda.Material = Enum.Material.ForceField
+	onda.Color = Color3.fromRGB(150, 255, 170)
+	onda.Anchored = true
+	onda.CanCollide = false
+	onda.CanQuery = false
+	onda.CanTouch = false
+	onda.CastShadow = false
+	onda.Size = Vector3.one * 4
+	onda.CFrame = CFrame.new(pos)
+	onda.Parent = pasta
+	TweenService:Create(onda, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(raio * 5, raio * 1.2, raio * 5), Transparency = 1 }):Play()
+	Debris:AddItem(onda, 0.6)
+	-- câmera: o campo de visão abre e volta, e a tela borra um instante
+	local raizMinha = raizDoJogador(jogador)
+	if raizMinha and (raizMinha.Position - pos).Magnitude < 90 then
+		local camera = workspace.CurrentCamera
+		local fov = camera.FieldOfView
+		camera.FieldOfView = fov + 9
+		TweenService:Create(camera, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { FieldOfView = fov }):Play()
+		local borrao = Instance.new("BlurEffect")
+		borrao.Size = 10
+		borrao.Parent = camera
+		TweenService:Create(borrao, TweenInfo.new(0.4), { Size = 0 }):Play()
+		Debris:AddItem(borrao, 0.45)
+	end
+end
+
+-- Puxão das Almas: a energia se junta em volta dele (aviso) e depois um redemoinho verde puxa
+function Vfx.puxaoPreparo(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	local cor = efeitos and efeitos.cor or Color3.fromRGB(90, 255, 120)
+	Vfx.prefab("LancamentoTornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), dados.duracao, 1.2, { cor = cor })
+	if raiz then
+		Vfx.prefab("CargaAssassino", function()
+			return if raiz.Parent then CFrame.new(raiz.Position) else nil
+		end, dados.duracao, 3, { cor = cor, inteiro = true })
+		Sons.tocar("carregar", { pos = raiz.Position, tom = 0.5, volume = 1.4, alcance = 200 })
+	end
+end
+
+function Vfx.puxao(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	local cor = efeitos and efeitos.cor or Color3.fromRGB(90, 255, 120)
+	-- redemoinho enorme no chão e cortes girando em volta dele enquanto puxa
+	Vfx.prefab("Redemoinho", CFrame.new(dados.pos + Vector3.new(0, 1, 0)), dados.duracao, dados.raio / 9, { cor = cor })
+	Vfx.prefab("Tornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), dados.duracao, 1.6, { cor = cor, inteiro = true })
+	if raiz then
+		Vfx.prefab(efeitos and efeitos.furia or "RugidoRei", CFrame.new(raiz.Position), nil, 0.6)
+		Sons.tocar("vento", { pos = raiz.Position, tom = 0.6, volume = 1.4, alcance = 250, duracao = dados.duracao })
+	end
+	-- quem está sendo puxado deixa um rastro verde
+	for _, player in Players:GetPlayers() do
+		local outra = raizDoJogador(player)
+		if outra and (outra.Position - dados.pos).Magnitude <= dados.raio then
+			local inicio = os.clock()
+			Vfx.prefab("RastroSombra", function()
+				return if outra.Parent and os.clock() - inicio < dados.duracao then CFrame.lookAt(outra.Position, dados.pos) else nil
+			end, 0, 0.5, { cor = cor })
+		end
+	end
+	Vfx.tremer(1.2, dados.duracao)
+end
 
 -- Portal verde no céu sobre cada ponto da chuva de almas (aviso; o raio cai no fim)
 function Vfx.portalAlma(dados)

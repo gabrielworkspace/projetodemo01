@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
+local BracoMalha = require(script.Parent.BracoMalha)
 local Modelos = require(script.Parent.Modelos)
 local Sons = require(script.Parent.Sons)
 local UI = require(script.Parent.UI)
@@ -417,6 +418,7 @@ local function criarVisual(modelo: Model)
 	-- Modelos 3D prontos (ReplicatedStorage > ModelosChefes): a peça é copiada, ganha o tamanho
 	-- pedido e fica com os pés no chão. Um Highlight faz o contorno brilhante e o piscar de dano.
 	local destaque = nil
+	local malhaComBraco = nil
 	local pastaModelos = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
 	for _, definicao in rig.malhas or {} do
 		local origem = pastaModelos and pastaModelos:FindFirstChild(definicao.nome)
@@ -438,6 +440,17 @@ local function criarVisual(modelo: Model)
 			malha.Massless = true
 			local cf = CFrame.new((definicao.centroX or 0) * tamanho.X, tamanho.Y / 2, 0) * CFrame.Angles(0, math.rad(definicao.giro or 0), 0)
 			adicionar(malha, definicao.osso, cf, { modelo3d = true })
+			if definicao.braco and not malhaComBraco then
+				-- o braço é ligado depois (a malha editável demora um pouco para carregar)
+				local caixa = definicao.braco.caixa
+				malhaComBraco = {
+					parte = malha,
+					def = definicao.braco,
+					cf = cf,
+					k = tamanho.Y / (caixa.max.Y - caixa.min.Y),
+					centro = (caixa.min + caixa.max) / 2,
+				}
+			end
 			if not destaque then
 				-- invisível: só aparece no piscar branco ao levar dano (o corpo mantém as cores)
 				destaque = Instance.new("Highlight")
@@ -517,6 +530,8 @@ local function criarVisual(modelo: Model)
 		conexoes = {},
 		escalaFx = escala * (rig.escalaEfeitos or 1),
 		destaque = destaque,
+		malhaComBraco = malhaComBraco,
+		bracoAtual = { 0, 0, 0, 0 },
 		ancoras = ancoras,
 		efeitosAtivos = {},
 	}
@@ -524,13 +539,37 @@ local function criarVisual(modelo: Model)
 	if not v.chefe then
 		criarBarra(v)
 	end
+	if malhaComBraco then
+		task.spawn(function()
+			local braco = BracoMalha.criar(malhaComBraco.parte, malhaComBraco.def)
+			if not braco or not malhaComBraco.parte.Parent then
+				return
+			end
+			-- troca a peça parada pela que tem o braço mexendo, no mesmo lugar
+			local nova = braco.parte
+			nova.CFrame = malhaComBraco.parte.CFrame
+			nova.Parent = visual
+			for _, peca in pecas do
+				if peca.parte == malhaComBraco.parte then
+					peca.parte = nova
+				end
+			end
+			if v.destaque then
+				v.destaque.Adornee = nova
+				v.destaque.Parent = nova
+			end
+			malhaComBraco.parte:Destroy()
+			malhaComBraco.parte = nova
+			v.braco = braco
+		end)
+	end
 
 	v.prontos = {}
 	for _, item in ancorasProntas do
 		local definicao = item.def
 		item.comecar = function()
 			if item.ancora.Parent and not item.parar then
-				item.parar = tocarPronto(item.ancora, definicao.nome, definicao.escala * escala, { cor = definicao.cor, inteiro = definicao.inteiro })
+				item.parar = tocarPronto(item.ancora, definicao.nome, definicao.escala * escala, { cor = definicao.cor, inteiro = definicao.inteiro, taxa = definicao.taxa })
 			end
 		end
 		if definicao.soFase2 then
@@ -622,6 +661,9 @@ local function atualizarAcao(v)
 	trocarEfeitosDeAcao(v, anterior, v.acao)
 	if v.acao == "golpe" then
 		v.golpes = (v.golpes or 0) + 1 -- golpes seguidos alternam o lado
+	end
+	if v.acao == "golpeVarrida" then
+		v.varridas = (v.varridas or 0) + 1 -- a próxima varrida volta pelo outro lado
 	end
 end
 
@@ -1067,7 +1109,8 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 	local e = v.escala
 	local f = v.fase
 	-- andar pesado: o corpo desce a cada passo, o peso vai de um lado para o outro e os ombros
-	-- torcem junto; parado, respira devagar e balança um pouco
+	-- torcem junto; parado, respira devagar e balança um pouco. O braço da lâmina balança
+	-- ao contrário da perna, como um passo de verdade.
 	local respiro = math.sin(t * 1.25)
 	local c = {
 		rx = -0.03 - 0.11 * andar + respiro * 0.018,
@@ -1076,33 +1119,41 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 		oy = ((math.abs(math.cos(f)) - 0.65) * 0.7 * andar + respiro * 0.12) * e,
 		oz = -0.25 * andar * e,
 	}
+	-- braço: { levanta, abre, gira, cotovelo }
+	local b = { 0.12 + respiro * 0.03 + math.sin(f) * 0.22 * andar, 0.05, 0, 0.15 + 0.08 * andar }
 	local acao, at = v.acao, v.acaoT
 	local lado = if (v.golpes or 0) % 2 == 0 then -1 else 1
+	local function braco(alvo, k: number?, rapido: boolean?)
+		k = k or 1
+		b = { b[1] + (alvo[1] - b[1]) * k, b[2] + (alvo[2] - b[2]) * k, b[3] + (alvo[3] - b[3]) * k, b[4] + (alvo[4] - b[4]) * k, rapido = rapido }
+	end
 
 	if acao == "preparar" then
-		-- antecipação: abaixa um instante, depois ergue a lâmina torcendo para trás, tremendo
-		-- cada vez mais de força
+		-- Corte Descendente: abaixa um instante, ergue a lâmina acima da cabeça torcendo para
+		-- trás e treme de força enquanto segura
 		local k = suaveEntre(0.12, 0.75, at)
 		c.rx = -0.12 + 0.42 * k
-		c.ry = -0.65 * k
+		c.ry = -0.4 * k
 		c.rz = math.sin(t * 45) * 0.018 * k
 		c.oy = (-0.6 + 1.2 * k) * e
 		c.oz = 0.4 * k * e
+		braco({ 2.75 + math.sin(t * 40) * 0.02 * k, 0.25, 0.1, 0.65 }, k)
 	elseif acao == "golpe" then
 		if at < 0.3 then
-			-- desce com tudo e passa do ponto
+			-- desce com tudo e passa do ponto: a lâmina bate no chão à frente
 			c.rx = -0.5
-			c.ry = 0.45 * lado
+			c.ry = 0.25 * lado
 			c.oz = -2 * e
 			c.oy = -1.1 * e
 			c.rapido = true
+			braco({ 0.5, 0.05, 0, 0.05 }, 1, true)
 		else
-			-- recupera devagar, ainda curvado
 			local k = suaveEntre(0.3, 1, at)
 			c.rx = -0.5 + 0.35 * k
-			c.ry = 0.45 * lado * (1 - k)
+			c.ry = 0.25 * lado * (1 - k)
 			c.oz = -2 * e * (1 - k)
 			c.oy = -1.1 * e * (1 - k)
+			braco({ 0.55, 0.05, 0, 0.05 }, 1 - k)
 		end
 	elseif acao == "preso" then
 		-- a lâmina cravada no chão: curvado, dando puxões para soltar
@@ -1112,12 +1163,63 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 		c.oz = (-1.6 + puxao * 0.4) * e
 		c.oy = (-1.3 + puxao * 0.3) * e
 		c.rz = math.sin(t * 13) * 0.02
+		braco({ 0.5 + puxao * 0.14, 0.05, math.sin(t * 13) * 0.04, 0.05 + puxao * 0.2 })
+	elseif acao == "prepararVarrida" then
+		-- Varrida: a lâmina vai para o lado de fora e para trás (ou cruzada na frente, na volta)
+		local k = suaveEntre(0, 0.45, at)
+		local volta = (v.varridas or 0) % 2 == 1
+		c.ry = (if volta then 0.45 else -0.6) * k
+		c.oy = -0.5 * k * e
+		c.rx = -0.08 * k
+		braco(if volta then { 1.3, -0.25, 1, 0.25 } else { 0.8, 1.15, -0.75, 0.35 }, k)
+	elseif acao == "golpeVarrida" then
+		-- varre na altura da cintura, o tronco desenrola junto
+		local volta = (v.varridas or 0) % 2 == 0 -- (já contou esta varrida)
+		local k = suaveEntre(0, 0.14, at) * (1 - suaveEntre(0.45, 1, at))
+		c.ry = (if volta then -0.55 else 0.55) * k
+		c.oy = -0.6 * k * e
+		c.oz = -0.8 * k * e
+		c.rx = -0.18 * k
+		c.rapido = at < 0.2
+		braco(if volta then { 0.8, 1.15, -0.75, 0.2 } else { 1.3, -0.25, 1, 0.1 }, math.max(k, 0.0001), at < 0.2)
+	elseif acao == "prepararEstocada" then
+		-- recua a lâmina com o cotovelo dobrado, o corpo vai para trás como uma mola
+		local k = suaveEntre(0, 0.5, at)
+		c.ry = -0.35 * k
+		c.rx = 0.08 * k
+		c.oz = 0.8 * k * e
+		c.oy = -0.4 * k * e
+		c.rz = math.sin(t * 38) * 0.012 * k
+		braco({ 1.05, 0.15, -0.25, 1.6 }, k)
+	elseif acao == "golpeEstocada" then
+		local k = 1 - suaveEntre(0.35, 1, at)
+		c.rx = -0.35 * k
+		c.ry = 0.1 * k
+		c.oz = -2.6 * k * e
+		c.oy = -0.4 * k * e
+		c.rapido = at < 0.2
+		braco({ 1.55, 0.05, 0.05, 0 }, k, at < 0.2)
+	elseif acao == "prepararNova" then
+		-- Explosão de Almas: ergue a lâmina com a ponta para baixo para cravar no chão
+		local k = suaveEntre(0, 0.4, at)
+		c.rx = 0.15 * k
+		c.oy = 0.5 * k * e
+		c.rz = math.sin(t * 40) * 0.015 * k
+		braco({ 2.3, 0.45, 0.2, 0.9 }, k)
+	elseif acao == "golpeNova" then
+		local k = 1 - suaveEntre(0.35, 1, at)
+		c.rx = -0.45 * k
+		c.oy = -1.8 * k * e
+		c.oz = -0.8 * k * e
+		c.rapido = at < 0.2
+		braco({ 0.3, 0.1, 0.2, 0 }, k, at < 0.2)
 	elseif acao == "prepararGiro" then
 		local k = suaveEntre(0, 0.7, at)
 		c.ry = -1.1 * k
 		c.oy = -0.7 * k * e
 		c.rx = -0.12 * k
 		c.rz = math.sin(t * 40) * 0.012 * k
+		braco({ 1.45, 1.25, -0.3, 0.1 }, k)
 	elseif acao == "giro" then
 		v.giroAcum = (v.giroAcum or 0) + (v.dt or 0) * 16
 		c.ry = v.giroAcum
@@ -1125,38 +1227,60 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 		c.oy = -0.45 * e
 		c.rx = -0.14
 		c.rz = 0.05
+		braco({ 1.45, 1.25, 0, 0.05 })
 	elseif acao == "conjurar" then
-		-- peito para cima e treme: rugido, invocação, transformação
+		-- peito para cima e a lâmina erguida para o céu: rugido, invocação, transformação
 		local k = suaveEntre(0, 0.5, at)
 		c.rx = 0.25 * k
 		c.oy = 0.8 * k * e
 		c.ry = math.sin(t * 2) * 0.05
 		c.rz = math.sin(t * 32) * 0.015 * k
+		braco({ 2.5, 0.5, 0.15, 0.2 }, k)
+	elseif acao == "prepararPuxao" then
+		-- aponta a lâmina para quem está longe; a energia junta
+		local k = suaveEntre(0, 0.5, at)
+		c.rx = 0.1 * k
+		c.ry = -0.15 * k
+		c.rz = math.sin(t * 36) * 0.015 * k
+		braco({ 1.6, 0.15, 0.35, 0 }, k)
+	elseif acao == "puxao" then
+		-- puxa com força para trás, trazendo todo mundo
+		local k = suaveEntre(0, 0.2, at)
+		c.rx = 0.18 * k
+		c.ry = -0.4 * k
+		c.oz = 0.6 * k * e
+		c.oy = -0.5 * k * e
+		braco({ 1, 0.3, -0.5, 1.3 }, k, true)
 	elseif acao == "disparo" then
 		c.rx = -0.2
 		c.oz = -0.8 * e
 		c.rapido = true
+		braco({ 1.3, -0.25, 0.9, 0.1 }, 1, true)
 	elseif acao == "prepararSalto" then
 		local k = suaveEntre(0, 0.6, at)
 		c.oy = -1.9 * k * e
 		c.rx = -0.32 * k
 		c.rz = math.sin(t * 30) * 0.015 * k
+		braco({ -0.35, 0.35, 0, 0.3 }, k)
 	elseif acao == "salto" then
-		-- estica para cima no impulso e se encolhe para cair com a lâmina
+		-- estica para cima com a lâmina acima da cabeça e se encolhe para cair com ela
 		local k = suaveEntre(0.15, 0.6, at)
 		c.rx = 0.22 - 0.6 * k
 		c.oy = 0.5 * e
+		braco({ 2.8, 0.2, 0, 0.5 })
 	elseif acao == "prepararInvestida" then
 		local k = suaveEntre(0, 0.6, at)
 		c.rx = -0.38 * k
 		c.ry = -0.28 * k
 		c.oy = -0.9 * k * e
 		c.rz = math.sin(t * 24) * 0.02 * k
+		braco({ 0.55, 0.55, -0.55, 0.3 }, k)
 	elseif acao == "investida" then
 		c.rx = -0.48
 		c.rz = math.sin(t * 22) * 0.06
 		c.oy = (math.abs(math.sin(t * 22)) * 0.5 - 0.3) * e
 		c.oz = -0.8 * e
+		braco({ 1.05, 0.25, -0.15, 0.1 })
 	end
 	-- fim do giro: volta para o ângulo equivalente mais perto (sem "desgirar")
 	if acao ~= "giro" and v.giroAcum then
@@ -1164,15 +1288,17 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 		o.ry = math.atan2(math.sin(o.ry), math.cos(o.ry))
 		v.giroAcum = nil
 	end
-	-- pouso do salto: amortece
+	-- pouso do salto: amortece e a lâmina bate no chão
 	local desdePouso = t - (v.pouso or -10)
 	if desdePouso < 0.5 then
 		local k = 1 - desdePouso / 0.5
 		c.oy = (c.oy or 0) - 1.6 * k * e
 		c.rx = (c.rx or 0) - 0.25 * k
+		braco({ 0.55, 0.05, 0, 0.05 }, k, true)
 	end
 
-	-- despertar (entrada): sobe curvado de cabeça baixa, endireita tremendo e ruge
+	-- despertar (entrada): sobe curvado de cabeça baixa, endireita tremendo e ruge com a
+	-- lâmina erguida para o lado
 	local idade = t - v.nascimento
 	local subida = v.rig.subida or 2
 	if v.rig.cinematica and idade < subida + 2 then
@@ -1182,6 +1308,7 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 			c.ry = 0
 			c.rz = math.sin(t * 9) * 0.03 * (1 - s)
 			c.oz = 0
+			b = { 0, 0.1, 0, 0.2 }
 		elseif idade < subida + 0.6 then
 			local s = (idade - subida) / 0.6
 			c.rx = -0.15 + 0.15 * s
@@ -1192,15 +1319,18 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 			c.oy = 1 * s * e
 			c.ry = math.sin(t * 22) * 0.035 * s
 			c.rz = math.sin(t * 27) * 0.03 * s
+			braco({ 1.9, 0.9, -0.2, 0.5 }, s)
 		end
 	end
 	if v.atordoado then
 		c.rx = -0.3
 		c.rz = math.sin(t * 3) * 0.07
 		c.oy = -0.7 * e
+		b = { 0.05, 0.1, 0, 0.1 }
 	end
 	c.rx += v.impacto * 0.06
 	alvos.corpo = c
+	alvos.braco = b
 end
 
 local POSES = {
@@ -1241,7 +1371,7 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 	local andar = math.clamp(v.velocidade / 12, 0, 1)
 	v.fase += dt * (2 + v.velocidade * 0.6) * (v.rig.ritmo or 1)
 	v.acaoT = agora - v.acaoInicio
-	if (v.acao == "golpe" or v.acao == "disparo" or v.acao == "giro") and v.acaoT > 1.2 then
+	if (string.sub(v.acao, 1, 5) == "golpe" or v.acao == "disparo" or v.acao == "giro") and v.acaoT > 1.2 then
 		v.acao = ""
 	end
 	v.atordoado = v.estrelas ~= nil
@@ -1298,6 +1428,7 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 	local alvos = {}
 	local pose = POSES[v.rig.estilo] or poseBipede
 	pose(v, agora, andar, alvos)
+	v.alvoBraco = (alvos :: any).braco
 
 	for _, nome in v.ordem do
 		local o = v.ossos[nome]
@@ -1316,6 +1447,39 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 		o.oz += ((alvo.oz or 0) - o.oz) * k
 		local paiCF = if o.pai == "raiz" then base else v.ossos[o.pai].mundo
 		o.mundo = paiCF * o.relativo * CFrame.new(o.ox, o.oy, o.oz) * CFrame.Angles(o.rx, o.ry, o.rz)
+	end
+
+	-- Braço do modelo 3D: a pose vai suave até o alvo (rápida nos golpes) e a malha é deformada
+	-- no máximo 30 vezes por segundo; a lâmina (âncoras de efeitos) acompanha o braço
+	local alvoBraco = v.alvoBraco
+	if alvoBraco and v.malhaComBraco then
+		local atual = v.bracoAtual
+		local k = math.min(1, dt * (if alvoBraco.rapido then 22 else 8))
+		atual[1] += ((alvoBraco[1] or 0) - atual[1]) * k
+		atual[2] += ((alvoBraco[2] or 0) - atual[2]) * k
+		atual[3] += ((alvoBraco[3] or 0) - atual[3]) * k
+		atual[4] += ((alvoBraco[4] or 0) - atual[4]) * k
+		if v.braco then
+			local ultimo = v.bracoAplicado
+			local mudou = not ultimo
+				or math.abs(ultimo[1] - atual[1]) + math.abs(ultimo[2] - atual[2]) + math.abs(ultimo[3] - atual[3]) + math.abs(ultimo[4] - atual[4]) > 0.004
+			if mudou and agora >= (v.proximoBraco or 0) then
+				v.proximoBraco = agora + 1 / 30
+				v.braco.aplicar(atual[1], atual[2], atual[3], atual[4])
+				v.bracoAplicado = { atual[1], atual[2], atual[3], atual[4] }
+			end
+			local aplicado = v.bracoAplicado
+			local lamina = v.ossos.lamina
+			if aplicado and lamina then
+				local info = v.malhaComBraco
+				local cg = BracoMalha.transformacao(info.def, aplicado[1], aplicado[2], aplicado[3], aplicado[4])
+				local rot = cg.Rotation
+				local d = (rot:VectorToWorldSpace(info.centro) + cg.Position - info.centro) * info.k
+				local cRig = info.cf * CFrame.new(d) * rot * info.cf:Inverse()
+				local corpo = v.ossos.corpo
+				lamina.mundo = corpo.mundo * corpo.repouso:Inverse() * cRig * lamina.repouso
+			end
+		end
 	end
 
 	-- Piscar branco ao levar dano

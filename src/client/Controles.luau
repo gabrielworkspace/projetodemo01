@@ -34,6 +34,8 @@ local defendendo = false
 local ultimoAtaque = 0
 local comboLocal = 0
 local ultimoFoiFinal = false
+local ataquePendente = false -- clique feito pouco antes de liberar: sai assim que puder
+local BUFFER_ATAQUE = 0.3
 local mirandoAte = 0
 local esquivandoAte = 0
 local direcaoAtual = Vector3.new(0, 0, -1)
@@ -150,21 +152,31 @@ local function tentarAtacar()
 	local agora = os.clock()
 	local stats = Estado.stats
 	local naPartida = Estado.modo == "partida" and stats ~= nil
-	local intervalo = if naPartida then stats.intervalo else 0.5
-	local espera = intervalo * (if ultimoFoiFinal then 1.35 else 1)
+	local classeAtual = Classes.obter(if naPartida then stats.classe else Estado.perfil.classe)
+	local velocidade = if naPartida then stats.velAtaque or 1 else 1
+	-- cadência: o golpe anterior precisa terminar. Um clique pouco antes fica guardado e sai
+	-- na hora certa (não dá para atacar mais rápido clicando sem parar)
+	local espera = Classes.cadencia(classeAtual, if ultimoFoiFinal then 3 else comboLocal, velocidade)
 	if agora - ultimoAtaque < espera then
+		if espera - (agora - ultimoAtaque) <= BUFFER_ATAQUE then
+			ataquePendente = true
+		end
 		return
 	end
-	if agora - ultimoAtaque > intervalo * 2.6 + 0.3 then
+	ataquePendente = false
+	if agora - ultimoAtaque > espera + 0.9 then
 		comboLocal = 0
 	end
 	if not temMana(if comboLocal % 3 + 1 == 3 then "final" else "ataque") then
-		ultimoAtaque = agora - intervalo * 0.5 -- não fica repetindo o aviso a cada quadro
+		ultimoAtaque = agora - espera * 0.5 -- não fica repetindo o aviso a cada quadro
 		return
 	end
 	comboLocal = comboLocal % 3 + 1
 	ultimoFoiFinal = comboLocal == 3
 	ultimoAtaque = agora
+	Estado.ataqueTotal = Classes.cadencia(classeAtual, comboLocal, velocidade)
+	Estado.ataqueFim = agora + Estado.ataqueTotal
+	Estado.avisar("ataque")
 
 	local direcao = direcaoDaMira()
 	mirar(direcao)
@@ -253,6 +265,13 @@ local function soltarCarga()
 	comboLocal = 0
 	ultimoAtaque = os.clock()
 	ultimoFoiFinal = true
+	ataquePendente = false
+	do
+		local stats = Estado.stats
+		local classeAtual = Classes.obter(if stats then stats.classe else Estado.perfil.classe)
+		Estado.ataqueTotal = Classes.cadencia(classeAtual, 3, if stats then stats.velAtaque or 1 else 1)
+		Estado.ataqueFim = ultimoAtaque + Estado.ataqueTotal
+	end
 	if jogador.Character then
 		Animacoes.tocar(jogador.Character, "soltar", { fracao = fracao })
 	end
@@ -390,6 +409,42 @@ local function esquivar()
 	Acao:FireServer("esquiva", direcao)
 end
 
+-- Puxão das Almas (chefe): o personagem é arrastado até o centro por um tempo. Andar para
+-- longe resiste um pouco; esquivar escapa do puxão na hora.
+function Controles.puxar(dados)
+	local raiz, humanoid = personagem()
+	if not raiz or not humanoid or Estado.caido or Estado.morto then
+		return
+	end
+	local centro: Vector3 = dados.centro
+	local forca: number = dados.forca or 30
+	local fim = os.clock() + (dados.duracao or 1)
+	local anexo = Instance.new("Attachment")
+	anexo.Parent = raiz
+	local puxao = Instance.new("LinearVelocity")
+	puxao.Attachment0 = anexo
+	puxao.MaxForce = 6e5
+	puxao.RelativeTo = Enum.ActuatorRelativeTo.World
+	puxao.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
+	puxao.PrimaryTangentAxis = Vector3.xAxis
+	puxao.SecondaryTangentAxis = Vector3.zAxis
+	puxao.Parent = raiz
+	local conexao
+	conexao = RunService.Heartbeat:Connect(function()
+		local agora = os.clock()
+		local paraCentro = planar(centro - raiz.Position)
+		if agora >= fim or not raiz.Parent or agora < esquivandoAte or paraCentro.Magnitude < 6 or Estado.caido then
+			conexao:Disconnect()
+			puxao:Destroy()
+			anexo:Destroy()
+			return
+		end
+		local resistencia = planar(humanoid.MoveDirection) * humanoid.WalkSpeed * 0.55
+		local velocidade = paraCentro.Unit * forca + resistencia
+		puxao.PlaneVelocity = Vector2.new(velocidade.X, velocidade.Z)
+	end)
+end
+
 Controles.atacar = tentarAtacar
 Controles.habilidade = usarHabilidade
 Controles.supremo = usarSupremo
@@ -478,6 +533,11 @@ function Controles.iniciar()
 
 	RunService.Heartbeat:Connect(function()
 		local agora = os.clock()
+		-- clique guardado durante a cadência: ataca assim que liberar
+		if ataquePendente and agora >= Estado.ataqueFim and not carregando then
+			ataquePendente = false
+			tentarAtacar()
+		end
 		if defendendo then
 			-- o escudo acompanha a mira (protege o lado para onde você aponta)
 			if not podeLutar() or minhaClasse() ~= "cavaleiro" then
