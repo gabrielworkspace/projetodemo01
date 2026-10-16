@@ -71,13 +71,6 @@
               ]
             },
             {
-              "name": "Reliquias",
-              "className": "ModuleScript",
-              "filePaths": [
-                "src/shared/Reliquias.luau"
-              ]
-            },
-            {
               "name": "Teclas",
               "className": "ModuleScript",
               "filePaths": [
@@ -844,13 +837,6 @@
           "name": "Server",
           "className": "Folder",
           "children": [
-            {
-              "name": "Armadilhas",
-              "className": "ModuleScript",
-              "filePaths": [
-                "src/server/Armadilhas.luau"
-              ]
-            },
             {
               "name": "Armas",
               "className": "ModuleScript",

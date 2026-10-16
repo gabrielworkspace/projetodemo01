@@ -4394,23 +4394,6 @@ end
 -- Entrada
 ------------------------------------------------------------------------
 
--- Armadilhas da sala de exploração (server/Armadilhas.luau): espinhos e jatos de fogo
-function Vfx.armadilha(dados)
-	local pos: Vector3 = dados.pos
-	if dados.tipo == "espinhosAviso" then
-		poeiraNoChao(pos + Vector3.new(0, 0.3, 0), 3, 6)
-	elseif dados.tipo == "espinhos" then
-		Vfx.prefab("ImpactoCorte", CFrame.new(pos + Vector3.new(0, 1.2, 0)), nil, 1.4, { cor = Color3.fromRGB(230, 235, 250) })
-		poeiraNoChao(pos + Vector3.new(0, 0.3, 0), 4, 12)
-		Vfx.tremerEm(pos, 0.5, 0.15)
-	elseif dados.tipo == "fogoAviso" then
-		poeiraNoChao(pos + Vector3.new(0, 0.3, 0), 2.5, 5)
-	elseif dados.tipo == "fogo" then
-		Vfx.prefab("ExplosaoChamas", CFrame.new(pos + Vector3.new(0, 0.5, 0)), nil, 1.1, { inteiro = true })
-		Vfx.tremerEm(pos, 0.7, 0.2)
-	end
-end
-
 function Vfx.receber(dados)
 	local funcao = Vfx.extras[dados.t] or (Vfx :: any)[dados.t]
 	if type(funcao) == "function" then

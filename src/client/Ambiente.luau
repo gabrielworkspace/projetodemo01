@@ -117,7 +117,7 @@ function Ambiente.masmorra(tema)
 	masmorraAtiva = true
 	musicaDoLobby(false)
 	Lighting.ClockTime = 0
-	Lighting.Brightness = tema.brilho or 0.6
+	Lighting.Brightness = 0.6
 	Lighting.ColorShift_Top = Color3.new(0, 0, 0) -- (o tom quente é só do acampamento)
 	Lighting.Ambient = tema.ambiente:Lerp(tema.luz, 0.15)
 	Lighting.OutdoorAmbient = tema.ambiente:Lerp(Color3.new(0, 0, 0), 0.1)
@@ -125,7 +125,7 @@ function Ambiente.masmorra(tema)
 	Lighting.EnvironmentSpecularScale = 0.7
 	Lighting.ExposureCompensation = 0
 	Lighting.ShadowSoftness = 0.25
-	atmosfera.Density = tema.densidade or 0.4
+	atmosfera.Density = 0.4
 	atmosfera.Offset = 0
 	atmosfera.Color = tema.nevoa:Lerp(Color3.new(1, 1, 1), 0.15)
 	atmosfera.Decay = tema.nevoa

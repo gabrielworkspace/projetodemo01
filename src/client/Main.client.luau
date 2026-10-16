@@ -117,7 +117,6 @@ local manipuladores = {
 		Estado.morto = false
 		Menus.fecharLobby()
 		Hud.modo("partida")
-		Hud.reliquias({})
 		Estado.avisar("ouro")
 		Estado.avisar("cartas")
 	end,
@@ -177,7 +176,6 @@ local manipuladores = {
 		Menus.cartaEscolhida()
 	end,
 	elevador = Menus.elevador,
-	reliquia = Hud.reliquia,
 	caiu = function()
 		Estado.caido = true
 		Controles.pararAtaque()

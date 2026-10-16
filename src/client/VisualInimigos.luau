@@ -30,7 +30,6 @@ local CORES_ELITE = {
 	["Gélido"] = Color3.fromRGB(120, 210, 255),
 	Explosivo = Color3.fromRGB(255, 120, 40),
 	Gigante = Color3.fromRGB(255, 80, 80),
-	Carcereiro = Color3.fromRGB(110, 255, 160),
 }
 local ZERO = {}
 
