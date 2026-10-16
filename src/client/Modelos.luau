@@ -329,6 +329,8 @@ function Modelos.skullbane()
 					cadeia = { V(-0.22, 0.27, -0.02), V(-0.37, 0.02, -0.05), V(-0.47, -0.22, -0.01), V(-0.55, -0.4, 0.05), V(-0.66, -0.62, 0.15), V(-0.79, -0.88, 0.33) },
 					raios = { 0.17, 0.22, 0.24, 0.24, 0.24 },
 					regras = { pulsoY = -0.22, laminaX = -0.43, capaX = -0.4, corpoX = -0.14 },
+					-- pontos mais à esquerda e mais à direita (altura e profundidade de 0 a 1)
+					referencia = { minX = Vector2.new(0.09, 0.867), maxX = Vector2.new(0.415, 0.42) },
 				},
 			},
 		},
@@ -387,10 +389,7 @@ function Modelos.skullbane()
 			prepararGiro = {
 				inicio = { verde("CargaCavaleiro", "centro", 3.2, { enquanto = true, inteiro = true }) },
 			},
-			-- giro: tempestade de cortes verde em volta dele
-			giro = {
-				inicio = { verde("Redemoinho", "chao", 1.7, { duracao = 1.2, inteiro = true }) },
-			},
+			-- giro: o anel de cortes vem de cada acerto (GiroRei + CorteGiratorio no golpe)
 			-- lâmina presa: faíscas e cortes saindo da ponta enquanto ele puxa
 			preso = {
 				inicio = { { nome = "GolpeRei", ancora = "ponta", escala = 0.35, fixo = true } },
@@ -423,6 +422,84 @@ function Modelos.skullbane()
 		passo = { nome = "SaltoArqueiro", ancora = "chao", escala = 1.6, cor = POEIRA_PASSO, fixo = true, inteiro = true },
 		entrada = { tumulo = "TumuloRei", rugido = "RugidoRei" },
 		furia = { rugido = "RugidoRei" },
+	}
+end
+
+--[[ Ceifador Esmeralda (lacaio que o Skullbane invoca): modelo 3D (ReplicatedStorage >
+	ModelosChefes > EmeraldBoneReaver), esqueleto com espada serrilhada verde na mão direita.
+	O braço da espada se mexe como o do chefe (BracoMalha); a espada dele fica em pé na guarda.
+	Sai do chão rachando a terra quando é chamado. ]]
+function Modelos.ceifadorEsmeralda()
+	local pasta = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
+	if not (pasta and pasta:FindFirstChild("EmeraldBoneReaver")) then
+		warn("[Modelos] ReplicatedStorage > ModelosChefes > EmeraldBoneReaver não encontrado; usando o esqueleto.")
+		return Modelos.esqueleto()
+	end
+	local function verde(nome: string, ancora: string, escala: number, extra)
+		local e = { nome = nome, ancora = ancora, escala = escala, cor = VERDE_ALMA }
+		for chave, valor in extra or {} do
+			e[chave] = valor
+		end
+		return e
+	end
+	return {
+		estilo = "ceifador",
+		escala = 1,
+		escalaEfeitos = 1.3,
+		ritmo = 1.1,
+		subida = 1.5, -- sai do chão
+		profundidade = 9,
+		altura = 8,
+		alturaCabeca = 4.6,
+		cor = VERDE_ALMA,
+		corAura = VERDE_ALMA,
+		suave = true,
+		giroSuave = 8,
+		rigidez = 12,
+		ossos = {
+			corpo = osso("raiz", V(0, 3, 0)),
+			chao = osso("raiz", V(0, 0, 0)),
+			lamina = osso("corpo", V(0, 3, 0)),
+		},
+		pecas = {},
+		malhas = {
+			{
+				nome = "EmeraldBoneReaver",
+				osso = "corpo",
+				altura = 8,
+				centroX = 0.0757,
+				giro = 180,
+				-- medidas do .glb (frente +Z, espada no lado -X, apontando para cima)
+				braco = {
+					caixa = { min = V(-0.8404, -0.951, -0.5993), max = V(0.8451, 0.9464, 0.5946) },
+					cadeia = { V(-0.22, 0.27, -0.24), V(-0.36, 0.02, -0.22), V(-0.43, -0.12, -0.12), V(-0.55, 0.1, 0.1), V(-0.68, 0.38, 0.32), V(-0.8, 0.6, 0.53) },
+					raios = { 0.15, 0.2, 0.22, 0.2, 0.2 },
+					regras = { pulsoY = 10, laminaX = -0.47, capaX = 10, corpoX = -0.12, pernasY = -0.36 },
+					referencia = { minX = Vector2.new(0.847, 0.998), maxX = Vector2.new(0.29, 0.645) },
+				},
+			},
+		},
+		luzes = { { osso = "lamina", pos = V(3.4, 5.6, -1.4), cor = VERDE_ALMA, alcance = 7, brilho = 0.6 } },
+		efeitos = {},
+		ancoras = {
+			centro = { osso = "corpo", pos = V(0, 4, 0) },
+			lamina = { osso = "lamina", pos = V(3.4, 5.6, -1.4) },
+			ponta = { osso = "lamina", pos = V(3.9, 6.5, -2.2) },
+			frente = { osso = "corpo", pos = V(0, 2, -3) },
+			chao = { osso = "chao", pos = V(0, 0.2, 0) },
+		},
+		prefabs = {
+			{ osso = "corpo", pos = V(0, 6, -1.3), nome = "ChamaEspectral", escala = 0.28, atraso = 1.3 }, -- olhos
+			{ osso = "lamina", pos = V(3.4, 5.6, -1.4), nome = "ChamaEspectral", escala = 0.32, atraso = 1.5 },
+			{ osso = "lamina", pos = V(3.9, 6.5, -2.2), nome = "ChamaEspectral", escala = 0.28, atraso = 1.5 },
+			{ osso = "chao", pos = V(0, 0.3, 0), nome = "NevoaRei", escala = 1.2, taxa = 0.5, atraso = 1.5 },
+		},
+		efeitosAcao = {
+			preparar = { inicio = { verde("CargaCavaleiro", "lamina", 0.9, { enquanto = true, inteiro = true }) } },
+			prepararVarrida = { inicio = { verde("CargaCavaleiro", "lamina", 0.9, { enquanto = true, inteiro = true }) } },
+			investida = { inicio = { verde("RastroSombra", "centro", 1.3, { enquanto = true }) } },
+		},
+		entrada = { tumulo = "TumuloRei", rugido = "RugidoRei" },
 	}
 end
 

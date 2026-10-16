@@ -42,9 +42,15 @@ local function pesos(def, p: Vector3): (number, number)
 		end
 		acumulado += comprimento
 	end
-	local w = (1 - suave(rMelhor - 0.02, rMelhor, melhor)) * suave(0.03, 0.12, sMelhor)
-	local wE = suave(inicioCotovelo - 0.03, inicioCotovelo + 0.03, sMelhor)
+	-- transições largas: na malha do Roblox (com triângulos maiores que os do .glb) um
+	-- triângulo nunca fica com um canto girando e outro parado
+	local w = (1 - suave(rMelhor - 0.05, rMelhor, melhor)) * suave(0.02, 0.18, sMelhor)
+	local wE = suave(inicioCotovelo - 0.08, inicioCotovelo + 0.08, sMelhor)
 	local regras = def.regras
+	-- pernas nunca mexem (nem um espinho do pé que fique do lado da arma)
+	if regras.pernasY and p.Y < regras.pernasY then
+		return 0, 0
+	end
 	-- lâmina e manopla: tudo à esquerda da capa abaixo do pulso vai inteiro com o braço
 	if p.Y < regras.pulsoY and p.X < regras.laminaX then
 		return 1, 1
@@ -77,7 +83,7 @@ end
 function BracoMalha.criar(original: MeshPart, def)
 	local ok, resultado = pcall(function()
 		local conteudo = Content.fromUri(original.MeshId)
-		local malha = AssetService:CreateEditableMeshAsync(conteudo, { FixedSize = true })
+		local malha = AssetService:CreateEditableMeshAsync(conteudo, { FixedSize = false })
 		local vertices = malha:GetVertices()
 		if #vertices == 0 then
 			error("malha sem vértices")
@@ -100,10 +106,17 @@ function BracoMalha.criar(original: MeshPart, def)
 			end
 		end
 		local extensao = maximo - minimo
-		-- espelhado? A ponta da lâmina é o ponto mais à esquerda (-X) e fica embaixo e na frente
-		local espelhoX = posicoes[menorX].Y > posicoes[maiorX].Y
-		local ponta = posicoes[if espelhoX then maiorX else menorX]
-		local espelhoZ = (ponta.Z - minimo.Z) / math.max(extensao.Z, 1e-4) < 0.5
+		-- espelhado? Compara os pontos mais à esquerda e mais à direita com os mesmos pontos
+		-- medidos no .glb (altura e profundidade de 0 a 1 dentro da caixa)
+		local function relativo(p: Vector3): Vector2
+			local u = (p - minimo) / extensao
+			return Vector2.new(u.Y, u.Z)
+		end
+		local a, b = relativo(posicoes[menorX]), relativo(posicoes[maiorX])
+		local refMin, refMax = def.referencia.minX, def.referencia.maxX
+		local espelhoX = math.abs(a.X - refMin.X) + math.abs(b.X - refMax.X) > math.abs(a.X - refMax.X) + math.abs(b.X - refMin.X)
+		local ponta = if espelhoX then b else a -- o ponto que no .glb é o mais à esquerda
+		local espelhoZ = math.abs(ponta.Y - refMin.Y) > math.abs((1 - ponta.Y) - refMin.Y)
 		local gMin, gMax = def.caixa.min, def.caixa.max
 		local gExt = gMax - gMin
 		local function paraGlb(p: Vector3): Vector3
@@ -151,6 +164,37 @@ function BracoMalha.criar(original: MeshPart, def)
 		end
 		if #braco == 0 then
 			error("nenhum vértice no braço (o modelo é outro?)")
+		end
+
+		-- Triângulos que ligam a parte que gira à parte parada (a malha da IA é uma casca só:
+		-- a lâmina pode estar "colada" na coxa ou na capa) esticariam em fios compridos com a
+		-- textura da lâmina. Eles são apagados; se forem muitos, o braço fica parado.
+		local pesoDe = {}
+		for _, v in braco do
+			pesoDe[v[1]] = v
+		end
+		local remover, facesDoBraco = {}, 0
+		for _, face in malha:GetFaces() do
+			local menorW, maiorW, menorE, maiorE = 1, 0, 1, 0
+			for _, id in malha:GetFaceVertices(face) do
+				local v = pesoDe[id]
+				local w = if v then v[3] else 0
+				local we = if v then v[3] * v[4] else 0
+				menorW, maiorW = math.min(menorW, w), math.max(maiorW, w)
+				menorE, maiorE = math.min(menorE, we), math.max(maiorE, we)
+			end
+			if maiorW > 0.001 then
+				facesDoBraco += 1
+				if maiorW - menorW > 0.45 or maiorE - menorE > 0.6 then
+					table.insert(remover, face)
+				end
+			end
+		end
+		if facesDoBraco == 0 or #remover / facesDoBraco > 0.15 then
+			error(string.format("%d de %d triângulos do braço esticariam (a malha não combina com as medidas)", #remover, facesDoBraco))
+		end
+		for _, face in remover do
+			malha:RemoveFace(face)
 		end
 
 		local parte = AssetService:CreateMeshPartAsync(Content.fromObject(malha))

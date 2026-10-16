@@ -348,6 +348,33 @@ local function desacelerar(inimigo, fator: number, duracao: number)
 	inimigo.modelo:SetAttribute("Lento", true)
 end
 
+--[[ Postura dos chefes (como em Lies of P): parries, esquivas perfeitas e golpes enchem a
+	barra. Cheia, o chefe fica GROGUE: ajoelha brilhando, não ataca e leva mais dano; o primeiro
+	golpe vira um GOLPE FATAL (dano triplo). A barra esvazia sozinha (Inimigos.decidir). ]]
+function Combate.ferirPostura(run, inimigo, valor: number)
+	local maximo = inimigo.def.posturaMax
+	local agora = os.clock()
+	if not maximo or not inimigo.vivo or agora < (inimigo.grogueAte or 0) or agora < (inimigo.invulneravelAte or 0) then
+		return
+	end
+	inimigo.postura = math.min(maximo, (inimigo.postura or 0) + valor)
+	inimigo.posturaTocadaEm = agora
+	inimigo.modelo:SetAttribute("Postura", inimigo.postura / maximo)
+	if inimigo.postura >= maximo then
+		local duracao = inimigo.def.grogue or 4
+		inimigo.grogueAte = agora + duracao
+		inimigo.atordoadoAte = math.max(inimigo.atordoadoAte or 0, inimigo.grogueAte)
+		inimigo.fatalPronto = true
+		inimigo.modelo:SetAttribute("Grogue", true)
+		Vfx.partida(run, "grogue", { modelo = inimigo.modelo, pos = inimigo.raiz.Position })
+		Vfx.partida(run, "dano", {
+			pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra, 0),
+			valor = "GROGUE!",
+			cor = Color3.fromRGB(255, 245, 220),
+		})
+	end
+end
+
 function Combate.atordoar(inimigo, duracao: number)
 	if inimigo.chefe then
 		duracao *= 0.35
@@ -403,6 +430,28 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 			cor = Color3.fromRGB(200, 200, 210),
 		})
 		return
+	end
+	-- chefe grogue (postura quebrada): leva mais dano, e o primeiro golpe é um GOLPE FATAL
+	if os.clock() < (inimigo.grogueAte or 0) and not opcoes.dot then
+		if inimigo.fatalPronto and estado then
+			inimigo.fatalPronto = false
+			dano = math.floor(dano * 3 + 0.5)
+			opcoes.cor = Color3.fromRGB(255, 70, 60)
+			opcoes.critico = true
+			Vfx.partida(run, "golpeFatal", { modelo = inimigo.modelo, pos = inimigo.raiz.Position, jogador = estado.player })
+			Vfx.partida(run, "dano", {
+				pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra + 2, 0),
+				valor = "GOLPE FATAL!",
+				cor = Color3.fromRGB(255, 90, 70),
+			})
+			-- ele se levanta logo depois do golpe fatal
+			inimigo.grogueAte = os.clock() + 0.9
+			inimigo.atordoadoAte = inimigo.grogueAte
+		else
+			dano = math.floor(dano * 1.4 + 0.5)
+		end
+	elseif estado and inimigo.def.posturaMax and not opcoes.dot then
+		Combate.ferirPostura(run, inimigo, dano * 0.06)
 	end
 	-- chefe com a lâmina presa no chão (Corte Devastador do Skullbane): leva mais dano
 	if os.clock() < (inimigo.vulneravelAte or 0) then
@@ -614,6 +663,15 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 	opcoes = opcoes or {}
 	local agora = os.clock()
 	if agora < (estado.invulneravelAte or 0) then
+		-- esquiva perfeita: desviou bem na hora do golpe de um chefe (uma vez por esquiva)
+		if fonte and fonte.chefe and estado.esquivaEm and agora - estado.esquivaEm <= 0.3 and not estado.esquivaContada then
+			estado.esquivaContada = true
+			Combate.ferirPostura(run, fonte, 12)
+			local raizEsquiva = raizDe(estado)
+			if raizEsquiva then
+				Vfx.partida(run, "dano", { pos = raizEsquiva.Position + Vector3.new(0, 4, 0), valor = "ESQUIVA PERFEITA!", cor = Color3.fromRGB(150, 230, 255) })
+			end
+		end
 		return
 	end
 
@@ -652,6 +710,7 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 				if perfeita then
 					if fonte and fonte.vivo then
 						Combate.atordoar(fonte, 1.2)
+						Combate.ferirPostura(run, fonte, 35) -- parry: enche muito a postura do chefe
 					end
 					Combate.adicionarCarga(estado, 6)
 					return
@@ -1690,6 +1749,8 @@ function Combate.esquiva(run, estado, direcao: any)
 	estado.esquivaProntaEm = agora + estado.stats.recargaEsquiva
 	local dash = Classes.obter(estado.classe).esquiva
 	local duracaoDash = if dash then dash.duracao else Config.ESQUIVA_DURACAO
+	estado.esquivaEm = agora
+	estado.esquivaContada = false
 	estado.invulneravelAte = math.max(estado.invulneravelAte or 0, agora + math.max(Config.ESQUIVA_INVULNERAVEL, duracaoDash + 0.05))
 	animar(run, estado, "esquiva", nil, estado.player)
 	if estado.stats.contraAtaque then

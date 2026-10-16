@@ -374,7 +374,7 @@ local function salaDeCombate(run, tipo: string): boolean
 		local chefe = Inimigos.TIPOS[sala.tema.chefe]
 		run:enviarTodos("introChefe", { nome = chefe.nome, titulo = chefe.titulo or "" })
 		task.wait(2)
-		run:invocar(sala.tema.chefe, sala.origem + Vector3.new(0, 0, sala.comprimento / 6), nil)
+		run:invocar(sala.tema.chefe, sala.origem, nil) -- no centro da sala, de frente para a entrada
 		terminouDeInvocar = true
 	else
 		-- salas maiores: mais inimigos, chegando em ondas

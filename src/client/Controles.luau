@@ -430,7 +430,7 @@ function Controles.puxar(dados)
 	anexo.Parent = raiz
 	local puxao = Instance.new("LinearVelocity")
 	puxao.Attachment0 = anexo
-	puxao.MaxForce = 6e5
+	puxao.MaxForce = math.huge
 	puxao.RelativeTo = Enum.ActuatorRelativeTo.World
 	puxao.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
 	puxao.PrimaryTangentAxis = Vector3.xAxis

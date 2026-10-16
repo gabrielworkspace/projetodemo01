@@ -598,7 +598,7 @@
           "className": "Folder",
           "children": [
             {
-              "name": "Meshy_AI_Emerald_Bone_Reaver_1016022833_texture",
+              "name": "EmeraldBoneReaver",
               "className": "Model",
               "filePaths": [
                 "chefes/EmeraldBoneReaver.rbxmx"

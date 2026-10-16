@@ -90,6 +90,9 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
     - **Estocada:** recua a lâmina e fura em linha, longe.
     - **Giro:** três voltas com a lâmina esticada.
   - **Salto Esmagador:** cai com a lâmina e **quebra o chão**: pedaços voam, o ar distorce, a câmera afunda e mais **dois anéis de tremor** se espalham do ponto da queda.
+  - **Postura e parry (como em Lies of P):** embaixo da vida dele há uma barra de **Postura** que cresce do meio para os lados. Ela enche com **parry** (defesa perfeita do Cavaleiro: uns 3 derrubam), com **esquiva perfeita** (esquivar logo antes do golpe acertar, aparece "ESQUIVA PERFEITA!") e um pouco com cada golpe. Ela esvazia sozinha se você parar de pressionar. Cheia, ele fica **GROGUE**: cai de joelhos com a espada fincada, brilhando em branco, por 4s, levando +40% de dano. O primeiro golpe nesse tempo é um **GOLPE FATAL** (dano triplo) e ele se levanta logo depois.
+  - **Ceifadores Esmeralda:** ele ergue a lâmina e chama: a tela treme cada vez mais, a terra racha e dois esqueletos com espada saem do chão (três na 2ª fase, num "exército"). Eles também mexem o braço da espada (corte de cima, varrida e investida).
+  - **Avisos:** a área vermelha some na hora se o golpe dele for cancelado (parry, grogue ou morte). O aviso **verde** é o do Puxão: não dá dano, só puxa.
   - **2ª fase:** mais combos, fissuras em leque, anéis verdes, espiral e chuva de almas, um puxão mais forte e um Guardião Rúnico.
   - **Morte:** cai de joelhos com almas estourando pelo corpo e um raio verde desce do céu sobre ele.
 - **Segunda fase dos chefes:** com metade da vida, o chefe para e se **transforma** (cerca de 3 segundos, sem levar dano). A sala muda de cor, sobem pilares de luz e a energia é sugada para ele. No fim, ele solta uma onda que empurra todo mundo para longe: saia de perto! Na 2ª fase, ele fica mais rápido e ganha ataques novos:
@@ -195,6 +198,7 @@ py ferramentas/ver_poses.py --luau CAMINHO/luau.exe --acao ataque3 --tempos 0.09
 | `src/client/Poses.luau` | Poses e golpes de cada classe (quadros-chave das animações) |
 | `src/client/Vfx.luau` | Efeitos visuais (cortes, tornado, círculo mágico, barreira do escudo...) |
 | `vfx/` | Efeitos prontos do plugin (`.rbxmx`), veja "Efeitos do plugin" |
+| `chefes/EmeraldBoneReaver.rbxmx` | Modelo 3D do Ceifador Esmeralda (lacaio do Skullbane) |
 | `chefes/Skullbane.rbxmx` | Modelo 3D do Skullbane (vai para ReplicatedStorage > ModelosChefes); `Skullbane.glb` é o original |
 | `modelos/EspadaCavaleiro.rbxmx` | Espada do Cavaleiro (vai para ServerStorage > ModelosArmas; o cabo fica no -Z) |
 | `pacotes/` | Pacotes baixados guardados sem scripts (insira no Studio com Insert from File) |

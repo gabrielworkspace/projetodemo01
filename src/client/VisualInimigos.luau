@@ -216,14 +216,13 @@ local function cinematicaDeEntrada(v)
 	local altura = (v.rig.altura or 8) * v.escala
 	local chao = v.raiz.Position - Vector3.new(0, v.alturaRaiz, 0)
 	local frente = v.raiz.CFrame.LookVector
-	local lado = v.raiz.CFrame.RightVector
 	local rosto = chao + Vector3.new(0, altura * 0.78, 0) + frente * altura * 0.1
 	local peito = chao + Vector3.new(0, altura * 0.6, 0)
 	local tomadas = {
 		-- { até (s), posição da câmera, para onde olha }
-		{ subida - 0.35, chao + frente * altura * 2 + lado * altura * 0.55 + Vector3.new(0, 2, 0), peito },
-		{ subida + 0.6, rosto + frente * altura * 0.6 + lado * altura * 0.12 - Vector3.new(0, altura * 0.04, 0), rosto },
-		{ subida + 1.9, chao + frente * altura * 1.5 - lado * altura * 0.35 + Vector3.new(0, altura * 0.25, 0), peito },
+		{ subida - 0.35, chao + frente * altura * 2 + Vector3.new(0, 2, 0), peito },
+		{ subida + 0.6, rosto + frente * altura * 0.6 - Vector3.new(0, altura * 0.04, 0), rosto },
+		{ subida + 1.9, chao + frente * altura * 1.6 + Vector3.new(0, altura * 0.25, 0), peito },
 	}
 	local volta = 0.7
 	local original = camera.CFrame
@@ -768,8 +767,28 @@ local function atualizarEstados(v)
 		gotas:Destroy()
 	end
 
+	-- grogue (postura quebrada): ajoelha e brilha em branco; o golpe que preparava some
+	local grogue = modelo:GetAttribute("Grogue") == true
+	if grogue ~= (v.grogue == true) then
+		v.grogue = grogue
+		if grogue then
+			Vfx.cancelarAvisos(modelo)
+			for _, parar in v.efeitosAtivos or {} do
+				parar()
+			end
+			v.efeitosAtivos = {}
+		end
+		if v.destaque then
+			v.destaque.OutlineColor = BRANCO
+			v.destaque.OutlineTransparency = if grogue then 0.2 else 1
+			v.destaque.FillColor = BRANCO
+			v.destaque.FillTransparency = 1
+		end
+	end
+
 	local atordoado = modelo:GetAttribute("Atordoado") == true
 	if atordoado and not v.estrelas then
+		Vfx.cancelarAvisos(modelo) -- o golpe que ele preparava não vai sair
 		v.estrelas = {}
 		for _ = 1, 3 do
 			local estrela = Instance.new("Part")
@@ -1328,12 +1347,98 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 		c.oy = -0.7 * e
 		b = { 0.05, 0.1, 0, 0.1 }
 	end
+	if v.grogue then
+		-- de joelhos, curvado sobre a espada fincada no chão, respirando pesado
+		local ofego = math.sin(t * 2.4)
+		c.rx = -0.5 + ofego * 0.04
+		c.ry = 0.1
+		c.rz = math.sin(t * 1.3) * 0.04
+		c.oy = (-2.4 + ofego * 0.12) * e
+		c.oz = -0.8 * e
+		c.direto = nil
+		b = { 0.45, 0.25, 0.1, 0.1 }
+	end
 	c.rx += v.impacto * 0.06
 	alvos.corpo = c
 	alvos.braco = b
 end
 
+-- Ceifador Esmeralda (lacaio do Skullbane): passos ágeis de esqueleto, tronco curvado para a
+-- frente e a espada em pé na guarda; ergue a espada atrás da cabeça e corta para a frente,
+-- ou varre de lado. Sai do chão encolhido e se endireita.
+local function poseCeifador(v, t: number, andar: number, alvos)
+	local e = v.escala
+	local f = v.fase
+	local tremor = math.sin(t * 11 + v.nascimento) * 0.012 -- ossos que nunca param
+	local c = {
+		rx = -0.12 - 0.14 * andar + tremor,
+		ry = math.sin(f) * 0.12 * andar,
+		rz = math.sin(f) * 0.08 * andar + math.sin(t * 1.7) * 0.02,
+		oy = ((math.abs(math.cos(f)) - 0.6) * 0.5 * andar + math.sin(t * 2.1) * 0.05) * e,
+	}
+	local b = { 0.1 + math.sin(f) * 0.25 * andar, 0.05, 0, 0.1 }
+	local acao, at = v.acao, v.acaoT
+	local function braco(alvo, k: number?, rapido: boolean?)
+		k = k or 1
+		b = { b[1] + (alvo[1] - b[1]) * k, b[2] + (alvo[2] - b[2]) * k, b[3] + (alvo[3] - b[3]) * k, b[4] + (alvo[4] - b[4]) * k, rapido = rapido }
+	end
+	if acao == "preparar" then
+		local k = suaveEntre(0, 0.45, at)
+		c.rx = 0.18 * k
+		c.ry = -0.3 * k
+		c.oy = 0.2 * k * e
+		braco({ 2.4, 0.2, 0, 0.5 }, k)
+	elseif acao == "golpe" then
+		local k = 1 - suaveEntre(0.3, 0.9, at)
+		c.rx = -0.4 * k
+		c.ry = 0.25 * k
+		c.oz = -1 * k * e
+		c.oy = -0.4 * k * e
+		c.rapido = at < 0.2
+		braco({ 1.5, 0.05, 0.3, 0 }, k, at < 0.2)
+	elseif acao == "prepararVarrida" then
+		local k = suaveEntre(0, 0.4, at)
+		c.ry = -0.5 * k
+		c.oy = -0.3 * k * e
+		braco({ 0.6, 1, -0.7, 0.3 }, k)
+	elseif acao == "golpeVarrida" then
+		local k = suaveEntre(0, 0.12, at) * (1 - suaveEntre(0.4, 0.9, at))
+		c.ry = 0.5 * k
+		c.oy = -0.35 * k * e
+		c.oz = -0.6 * k * e
+		c.rapido = at < 0.2
+		braco({ 1.3, -0.2, 0.9, 0.1 }, math.max(k, 0.0001), at < 0.2)
+	elseif acao == "prepararInvestida" then
+		local k = suaveEntre(0, 0.5, at)
+		c.rx = -0.4 * k
+		c.oy = -0.6 * k * e
+		braco({ 1.2, 0.4, -0.4, 0.2 }, k)
+	elseif acao == "investida" then
+		c.rx = -0.5
+		c.oy = (math.abs(math.sin(t * 24)) * 0.3 - 0.2) * e
+		braco({ 1.5, 0.1, 0, 0 })
+	end
+	-- saindo do chão: encolhido, a cabeça baixa, e se endireita com um tremor
+	local idade = t - v.nascimento
+	local subida = v.rig.subida or 1
+	if idade < subida + 0.4 then
+		local s = math.clamp(idade / subida, 0, 1)
+		c.rx = -0.8 * (1 - s) + math.sin(t * 30) * 0.03 * (1 - s)
+		c.rz = math.sin(t * 17) * 0.05 * (1 - s)
+		braco({ 2.2, 0.3, 0, 0.3 }, 1 - suaveEntre(subida, subida + 0.4, idade))
+	end
+	if v.atordoado then
+		c.rx = -0.4
+		c.rz = math.sin(t * 3) * 0.08
+		b = { 0, 0.1, 0, 0 }
+	end
+	c.rx += v.impacto * 0.2
+	alvos.corpo = c
+	alvos.braco = b
+end
+
 local POSES = {
+	ceifador = poseCeifador,
 	senhor = poseSenhor,
 	rei = poseRei,
 	bipede = poseBipede,
@@ -1495,6 +1600,8 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 			v.flashTransparencia = v.destaque.FillTransparency
 			v.destaque.FillTransparency = 0.45
 		end
+	elseif v.grogue and not v.flashAtivo and v.destaque then
+		v.destaque.FillTransparency = 0.7 + 0.15 * math.sin(agora * 7)
 	elseif v.flashAtivo and agora >= v.flashAte then
 		v.flashAtivo = false
 		for _, peca in v.pecas do
@@ -1542,7 +1649,53 @@ end
 
 -- Morte de chefe com modelo 3D: ele cambaleia e cai de joelhos, as almas estouram pelo corpo
 -- e um raio de luz verde desce do céu sobre ele, que some aos poucos. Só efeitos do pacote.
+-- Lacaio com modelo 3D: desaba para trás, as almas escapam e ele some
+local function morteDeLacaio3D(v)
+	local cor = v.rig.corAura or BRANCO
+	local corpo = v.ossos.corpo
+	local mundo0 = corpo.mundo
+	local inicio = os.clock()
+	for _, parar in v.efeitosAtivos or {} do
+		parar()
+	end
+	local centro = v.ancoraCorpo and v.ancoraCorpo.Position or v.ultimaPos
+	Vfx.prefab("ImpactoFlecha", CFrame.new(centro), nil, 1.6, { inteiro = true })
+	Sons.tocar("inimigoMorre", { pos = centro, tom = 0.7 })
+	task.spawn(function()
+		while true do
+			local s = (os.clock() - inicio) / 0.6
+			if s >= 1 then
+				break
+			end
+			local cf = mundo0 * CFrame.new(0, -s * s * 2.5 * v.escala, s * 0.6 * v.escala) * CFrame.Angles(0.9 * s * s, 0, 0.2 * s)
+			local partes, cframes = {}, {}
+			for _, peca in v.pecas do
+				if peca.parte.Parent then
+					table.insert(partes, peca.parte)
+					table.insert(cframes, cf * peca.local_)
+				end
+			end
+			workspace:BulkMoveTo(partes, cframes, Enum.BulkMoveMode.FireCFrameChanged)
+			task.wait()
+		end
+		Vfx.prefab("TumuloRei", CFrame.new(v.ultimaPos - Vector3.new(0, v.alturaRaiz, 0)), nil, 0.8)
+		Vfx.prefab("ChamaEspectral", CFrame.new(centro), 0.6, 1, { cor = cor })
+		for _, peca in v.pecas do
+			if peca.ancora then
+				peca.parte:Destroy()
+			else
+				TweenService:Create(peca.parte, TweenInfo.new(0.5), { Transparency = 1 }):Play()
+			end
+		end
+		Debris:AddItem(v.visual, 0.6)
+	end)
+end
+
 local function morteDeModelo3D(v)
+	if not v.chefe then
+		morteDeLacaio3D(v)
+		return
+	end
 	local cor = v.rig.corAura or BRANCO
 	local corpo = v.ossos.corpo
 	local inicio = os.clock()
@@ -1709,7 +1862,7 @@ local function adicionar(modelo: Instance)
 		table.insert(v.conexoes, modelo:GetAttributeChangedSignal("Acao"):Connect(function()
 			atualizarAcao(v)
 		end))
-		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando", "Escudo", "Inspirado" } do
+		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando", "Escudo", "Inspirado", "Grogue" } do
 			table.insert(v.conexoes, modelo:GetAttributeChangedSignal(atributo):Connect(function()
 				atualizarEstados(v)
 			end))
@@ -1718,6 +1871,7 @@ local function adicionar(modelo: Instance)
 end
 
 local function remover(modelo: Instance)
+	Vfx.cancelarAvisos(modelo)
 	local v = visuais[modelo]
 	if v then
 		visuais[modelo] = nil

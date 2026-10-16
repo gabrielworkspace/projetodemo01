@@ -819,10 +819,15 @@ end
 function Vfx.invocacao(dados)
 	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
 	if efeitos and Vfx.temPrefab(efeitos.invocacao) then
-		Vfx.prefab(efeitos.invocacao, CFrame.new(dados.pos), nil, 1.2)
+		Vfx.prefab(efeitos.invocacao, CFrame.new(dados.pos), nil, if efeitos.cor then 1.7 else 1.2)
+		if efeitos.cor then
+			Vfx.prefab("GiroRei", CFrame.new(dados.pos + Vector3.new(0, 0.4, 0)), nil, 4)
+			Vfx.tremerEm(dados.pos, 1.4, 0.5)
+		end
 		Sons.tocar("pouso", { pos = dados.pos, tom = 0.55, volume = 0.8 })
 	end
 end
+
 
 function Vfx.golpeInimigo(dados)
 	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
@@ -835,8 +840,7 @@ function Vfx.golpeInimigo(dados)
 			-- meia-lua deitada na altura da cintura, varrendo para um lado ou para o outro
 			local altura = chao + Vector3.new(0, 5, 0) + dir * dados.alcance * 0.35
 			local espelho = if dados.volta then CFrame.Angles(0, 0, math.pi) else CFrame.identity
-			Vfx.prefab("CorteCavaleiro", CFrame.lookAt(altura, altura + dir) * espelho, nil, dados.alcance / 3.5, { cor = cor })
-			Vfx.prefab("CorteGiratorio", CFrame.lookAt(altura, altura + dir), nil, dados.alcance / 5, { cor = cor, taxa = 0.5 })
+			Vfx.prefab("CorteCavaleiro", CFrame.lookAt(altura, altura + dir) * espelho, nil, dados.alcance / 5, { cor = cor })
 			Sons.tocar("espadaPesada", { pos = altura, tom = 0.7, volume = 1.2 })
 			Vfx.tremerEm(altura, 1, 0.15)
 		elseif dados.anim == "Estocada" then
@@ -1733,6 +1737,7 @@ local function telegrafoCirculo(centro: Vector3, raio: number, duracao: number, 
 		end
 		sumir(partes, 0.15)
 	end)
+	return partes
 end
 
 local function telegrafoCone(centro: Vector3, direcao: Vector3, raio: number, arcoGraus: number, duracao: number, cor: Color3)
@@ -1769,6 +1774,7 @@ local function telegrafoCone(centro: Vector3, direcao: Vector3, raio: number, ar
 		end
 		sumir(partes, 0.15)
 	end)
+	return partes
 end
 
 local function telegrafoLinha(inicio: Vector3, direcao: Vector3, comprimento: number, largura: number, duracao: number, cor: Color3)
@@ -1788,17 +1794,60 @@ local function telegrafoLinha(inicio: Vector3, direcao: Vector3, comprimento: nu
 		end
 		sumir(partes, 0.15)
 	end)
+	return partes
 end
 
+-- Avisos de cada inimigo ([modelo] = listas de peças): somem na hora se o golpe não sair
+-- (o inimigo foi atordoado ou morreu), para não ficar uma área vermelha sem nada acontecer
+local avisosPorDono = {}
+
 function Vfx.telegrafo(dados)
-	local cor = if dados.chefe then Color3.fromRGB(255, 40, 60) else Color3.fromRGB(255, 80, 50)
+	-- "puxar" é um aviso diferente (verde): não dá dano, só puxa
+	local cor = if dados.tipoAviso == "puxar" then Color3.fromRGB(90, 255, 140)
+		elseif dados.chefe then Color3.fromRGB(255, 40, 60)
+		else Color3.fromRGB(255, 80, 50)
 	local centro = dados.pos + Vector3.new(0, 0.12, 0)
+	local partes
 	if dados.forma == "cone" then
-		telegrafoCone(centro, dados.dir, dados.raio, dados.arco, dados.duracao, cor)
+		partes = telegrafoCone(centro, dados.dir, dados.raio, dados.arco, dados.duracao, cor)
 	elseif dados.forma == "linha" then
-		telegrafoLinha(centro, dados.dir, dados.comprimento, dados.largura, dados.duracao, cor)
+		partes = telegrafoLinha(centro, dados.dir, dados.comprimento, dados.largura, dados.duracao, cor)
 	else
-		telegrafoCirculo(centro, dados.raio, dados.duracao, cor)
+		partes = telegrafoCirculo(centro, dados.raio, dados.duracao, cor)
+	end
+	local dono = dados.dono
+	if typeof(dono) == "Instance" and partes then
+		local lista = avisosPorDono[dono]
+		if not lista then
+			lista = {}
+			avisosPorDono[dono] = lista
+		end
+		table.insert(lista, partes)
+		task.delay(dados.duracao + 0.3, function()
+			local atual = avisosPorDono[dono]
+			if atual then
+				local i = table.find(atual, partes)
+				if i then
+					table.remove(atual, i)
+				end
+				if #atual == 0 then
+					avisosPorDono[dono] = nil
+				end
+			end
+		end)
+	end
+end
+
+-- Apaga os avisos de um inimigo (atordoado, morto ou golpe cancelado)
+function Vfx.cancelarAvisos(dono: Instance)
+	local lista = avisosPorDono[dono]
+	avisosPorDono[dono] = nil
+	for _, partes in lista or {} do
+		for _, p in partes do
+			if p.Parent then
+				p:Destroy()
+			end
+		end
 	end
 end
 
@@ -3156,7 +3205,9 @@ function Vfx.tornado(dados)
 		Vfx.tremerEm(de, if perfeito then 1.6 else 1.1, 0.25)
 		local substituir = Vfx.temPrefab("Tornado")
 		-- a espada bate no chão: pancada do pacote de VFX no ponto de saída (no lugar da onda feita por código)
-		local lancamento = Vfx.prefab("LancamentoTornado", CFrame.new(de + Vector3.new(0, 0.3, 0)), nil, 0.4) ~= nil
+		local lancamento = Vfx.prefab("LancamentoTornado", CFrame.new(de + Vector3.new(0, 0.3, 0)), nil, 0.55) ~= nil
+		-- corte em volta no lançamento (a espada bate no chão girando)
+		Vfx.prefab(if dados.fogo and Vfx.temPrefab("CorteGiratorioFogo") then "CorteGiratorioFogo" else "CorteGiratorio", CFrame.lookAt(de + Vector3.new(0, 1.5, 0), ate + Vector3.new(0, 1.5, 0)), nil, raio / 4)
 		if not substituir and not lancamento then
 			-- a espada bate no chão: onda e poeira no ponto de saída
 			local onda = disco(de + Vector3.new(0, 0.15, 0), 2, cor:Lerp(BRANCO, 0.4), 0.2)
@@ -3177,9 +3228,14 @@ function Vfx.tornado(dados)
 		-- o tornado do pacote de VFX (azul; de fogo com uma carta de fogo)
 		local nomeTornado = if dados.fogo and Vfx.temPrefab("TornadoChamas") then "TornadoChamas" else "Tornado"
 		substituir = Vfx.temPrefab(nomeTornado)
+		-- funil maior e mais cheio (a escala aumenta o efeito inteiro, não só as partículas)
 		local pararPrefab = Vfx.prefab(nomeTornado, function()
 			return if terminou then nil else CFrame.lookAt(centroAtual, centroAtual + (ate - de) + Vector3.new(0, 0, 0.001))
-		end, dados.duracao + 0.4, raio / 6)
+		end, dados.duracao + 0.4, raio / 5, { inteiro = true, cor = if dados.fogo then nil else cor })
+		-- anel de vento girando no chão embaixo do tornado
+		Vfx.prefab("LevitacaoMago", function()
+			return if terminou then nil else CFrame.new(centroAtual + Vector3.new(0, 0.2, 0))
+		end, dados.duracao + 0.2, raio / 2.2, { cor = cor })
 		if substituir then
 			local inicio = os.clock()
 			local conexao
@@ -3189,6 +3245,9 @@ function Vfx.tornado(dados)
 				if k >= 1 then
 					conexao:Disconnect()
 					terminou = true
+					-- o tornado se desfaz: vento estourando e um último corte
+					Vfx.prefab("LancamentoTornado", CFrame.new(centroAtual + Vector3.new(0, 0.3, 0)), nil, 0.4, { taxa = 0.6 })
+					Vfx.prefab(if dados.fogo and Vfx.temPrefab("ImpactoCorteFogo") then "ImpactoCorteFogo" else "ImpactoCorte", CFrame.new(centroAtual + Vector3.new(0, 2, 0)), nil, 1.4)
 				end
 			end)
 			return
@@ -3306,17 +3365,17 @@ function Vfx.ventoCarga(personagem: Model, cor: Color3, carga: (() -> number)?):
 	local ALTURA_ESPADA = Vector3.new(0, 2.3, 0)
 	local pararPrefab = Vfx.prefab("CargaCavaleiro", function()
 		return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position + ALTURA_ESPADA)
-	end, 0, 1.4)
+	end, 0, 1.2, { taxa = 0.6 })
 	if substituir then
 		-- partículas do pacote de VFX: energia azul subindo em volta do corpo enquanto carrega;
 		-- quando a carga enche, um estouro dourado e um brilho dourado na espada
 		local pararAura = Vfx.prefab("CargaAura", function()
 			return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position)
-		end, 0, 1.3)
+		end, 0, 1.05, { taxa = 0.35 })
 		local pararBrilho: (() -> ())? = nil
 		local luz = Instance.new("PointLight")
 		luz.Color = cor
-		luz.Range = 14
+		luz.Range = 10
 		luz.Brightness = 0
 		luz.Parent = raiz
 		local cheio = false
@@ -3335,14 +3394,14 @@ function Vfx.ventoCarga(personagem: Model, cor: Color3, carga: (() -> number)?):
 				return
 			end
 			local nivel = if carga then carga() else 1
-			luz.Brightness = 0.6 + 2 * nivel
+			luz.Brightness = 0.3 + 0.9 * nivel
 			if nivel >= 1 and not cheio then
 				cheio = true
 				luz.Color = OURO
-				Vfx.prefab("CargaCheia", CFrame.new(raiz.Position + ALTURA_ESPADA), nil, 0.8)
+				Vfx.prefab("CargaCheia", CFrame.new(raiz.Position + ALTURA_ESPADA), nil, 0.6, { taxa = 0.5 })
 				pararBrilho = Vfx.prefab("CargaBrilhoCheia", function()
 					return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position + ALTURA_ESPADA)
-				end, 0, 1.6)
+				end, 0, 1.1, { taxa = 0.4 })
 			end
 		end)
 		return function()
@@ -3813,9 +3872,9 @@ function Vfx.puxao(dados)
 	local raiz = raizDoModelo(dados.modelo)
 	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
 	local cor = efeitos and efeitos.cor or Color3.fromRGB(90, 255, 120)
-	-- redemoinho enorme no chão e cortes girando em volta dele enquanto puxa
-	Vfx.prefab("Redemoinho", CFrame.new(dados.pos + Vector3.new(0, 1, 0)), dados.duracao, dados.raio / 9, { cor = cor })
-	Vfx.prefab("Tornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), dados.duracao, 1.6, { cor = cor, inteiro = true })
+	-- redemoinho verde no chão em volta dele enquanto puxa (sem os cortes gigantes do Redemoinho)
+	Vfx.prefab("Tornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), dados.duracao, 1.3, { cor = cor, inteiro = true, taxa = 0.7 })
+	Vfx.prefab("LancamentoTornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), dados.duracao, 1, { cor = cor })
 	if raiz then
 		Vfx.prefab(efeitos and efeitos.furia or "RugidoRei", CFrame.new(raiz.Position), nil, 0.6)
 		Sons.tocar("vento", { pos = raiz.Position, tom = 0.6, volume = 1.4, alcance = 250, duracao = dados.duracao })
@@ -3831,6 +3890,64 @@ function Vfx.puxao(dados)
 		end
 	end
 	Vfx.tremer(1.2, dados.duracao)
+end
+
+-- Postura quebrada (grogue): estouro de luz branca e dourada no chefe e a tela sacode
+function Vfx.grogue(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local pos = if raiz then raiz.Position else dados.pos
+	Vfx.prefab("DefesaPerfeita", CFrame.new(pos + Vector3.new(0, 2, 0)), nil, 2.2)
+	Vfx.prefab("CargaCheia", CFrame.new(pos + Vector3.new(0, 4, 0)), nil, 1.6, { taxa = 0.6 })
+	Sons.tocar("escudoPerfeito", { pos = pos, tom = 0.7, volume = 1.4, alcance = 260 })
+	Sons.tocar("pouso", { pos = pos, tom = 0.45, volume = 1.3, alcance = 260 })
+	Vfx.tremerEm(pos, 2.4, 0.5)
+end
+
+-- Golpe fatal no chefe grogue: corte crítico enorme, impacto de luz, a câmera afunda e borra
+function Vfx.golpeFatal(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local pos = if raiz then raiz.Position else dados.pos
+	Vfx.prefab("ImpactoCostas", CFrame.new(pos + Vector3.new(0, 2, 0)), nil, 2.6, { inteiro = true })
+	Vfx.prefab("Julgamento", CFrame.new(pos - Vector3.new(0, 6, 0)), nil, 0.7, { cor = Color3.fromRGB(255, 110, 90) })
+	Vfx.prefab("InvestidaFim", CFrame.new(pos), nil, 0.5)
+	Sons.tocar("critico", { pos = pos, tom = 0.6, volume = 1.6, alcance = 260 })
+	Sons.tocar("trovao", { pos = pos, tom = 0.9, volume = 1, alcance = 260 })
+	Vfx.tremerEm(pos, 3.5, 0.5)
+	local minha = raizDoJogador(jogador)
+	if minha and (minha.Position - pos).Magnitude < 80 then
+		local camera = workspace.CurrentCamera
+		local fov = camera.FieldOfView
+		camera.FieldOfView = fov - 8
+		TweenService:Create(camera, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { FieldOfView = fov }):Play()
+		local borrao = Instance.new("BlurEffect")
+		borrao.Size = 14
+		borrao.Parent = camera
+		TweenService:Create(borrao, TweenInfo.new(0.45), { Size = 0 }):Play()
+		Debris:AddItem(borrao, 0.5)
+	end
+end
+
+-- O chefe chama os servos: ergue a arma, ruge, a energia sobe dos pés e a tela treme cada vez
+-- mais até eles saírem do chão
+function Vfx.chamado(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	local cor = efeitos and efeitos.cor or Color3.fromRGB(90, 255, 120)
+	local duracao = dados.duracao or 1.2
+	if raiz then
+		Vfx.prefab(efeitos and efeitos.furia or "RugidoRei", CFrame.new(raiz.Position + Vector3.new(0, 3, 0)), nil, 0.6)
+		Sons.tocar("supremo", { pos = raiz.Position, tom = 0.55, volume = 1.1, alcance = 260 })
+	end
+	Vfx.prefab("LancamentoTornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), duracao, 1.1, { cor = cor })
+	local inicio = os.clock()
+	task.spawn(function()
+		while os.clock() - inicio < duracao do
+			local t = (os.clock() - inicio) / duracao
+			Vfx.tremerEm(dados.pos, 0.8 + 2 * t, 0.3)
+			task.wait(0.15)
+		end
+		Vfx.tremerEm(dados.pos, 3, 0.5)
+	end)
 end
 
 -- Portal verde no céu sobre cada ponto da chuva de almas (aviso; o raio cai no fim)

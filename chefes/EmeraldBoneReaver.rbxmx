@@ -47,7 +47,7 @@ NDA4MWU2NTBm]]></BinaryString>
 				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
 				<bool name="DefinesCapabilities">false</bool>
 				<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
-				<string name="Name">Meshy_AI_Emerald_Bone_Reaver_1016022833_texture</string>
+				<string name="Name">EmeraldBoneReaver</string>
 				<BinaryString name="SerializedOverrides"></BinaryString>
 				<int64 name="SourceAssetId">125496613985662</int64>
 				<SharedString name="Tags">yuZpQdnvvUBOTYh1jqZ2cA==</SharedString>

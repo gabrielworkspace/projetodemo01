@@ -254,7 +254,28 @@ local barraChefe = UI.barra({
 })
 local marcaFase = UI.losango(barraChefe.quadro, UDim2.fromScale(0.5, 0.5), 12, cores.ouro)
 marcaFase.ZIndex = 5
-local tituloChefe = UI.texto({ Position = UDim2.fromOffset(0, 58), Size = UDim2.new(1, 0, 0, 16), FontFace = fontes.cabecalho, Text = "", TextColor3 = cores.textoSuave, Parent = painelChefe })
+-- Postura (como em Lies of P): cresce do meio para os lados; cheia, o chefe fica grogue
+local fundoPostura = criar("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 59),
+	Size = UDim2.fromOffset(620, 6),
+	BackgroundColor3 = Color3.fromRGB(20, 16, 12),
+	BackgroundTransparency = 0.3,
+	BorderSizePixel = 0,
+	Visible = false,
+	Parent = painelChefe,
+})
+UI.cantos(fundoPostura, 3)
+local cheioPostura = criar("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromScale(0, 1),
+	BackgroundColor3 = Color3.fromRGB(255, 190, 80),
+	BorderSizePixel = 0,
+	Parent = fundoPostura,
+})
+UI.cantos(cheioPostura, 3)
+local tituloChefe = UI.texto({ Position = UDim2.fromOffset(0, 68), Size = UDim2.new(1, 0, 0, 16), FontFace = fontes.cabecalho, Text = "", TextColor3 = cores.textoSuave, Parent = painelChefe })
 
 -- Ouro e cartas da partida
 local _, textoOuroPartida = ficha(telaPartida, "💰", UDim2.new(1, -16, 0, 64), 170)
@@ -1060,6 +1081,17 @@ local function atualizarChefe()
 		local vida = chefe:GetAttribute("Vida") or 0
 		local maxima = chefe:GetAttribute("VidaMax") or 1
 		barraChefe.definir(vida / math.max(maxima, 1), formatarNumero(math.max(0, vida)) .. " / " .. formatarNumero(maxima))
+		local postura = chefe:GetAttribute("Postura")
+		local grogue = chefe:GetAttribute("Grogue") == true
+		fundoPostura.Visible = postura ~= nil
+		if grogue then
+			-- grogue: a barra fica cheia e pisca branco
+			cheioPostura.Size = UDim2.fromScale(1, 1)
+			cheioPostura.BackgroundColor3 = Color3.fromRGB(255, 240, 200):Lerp(Color3.new(1, 1, 1), (math.sin(os.clock() * 14) + 1) / 2)
+		elseif postura then
+			cheioPostura.Size = UDim2.fromScale(math.clamp(postura, 0, 1), 1)
+			cheioPostura.BackgroundColor3 = Color3.fromRGB(255, 190, 80):Lerp(Color3.fromRGB(255, 90, 60), math.clamp(postura, 0, 1))
+		end
 	end
 end
 

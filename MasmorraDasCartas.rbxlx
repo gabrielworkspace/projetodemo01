@@ -44865,7 +44865,7 @@ aXREdXJhdGlvbgaamZmZmZm5Pw==</BinaryString>
 NDA4MWU2NTBm</BinaryString>
 				<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
 				<bool name="DefinesCapabilities">false</bool>
-				<string name="Name">Meshy_AI_Emerald_Bone_Reaver_1016022833_texture</string>
+				<string name="Name">EmeraldBoneReaver</string>
 				<BinaryString name="SerializedOverrides" />
 				<int64 name="SourceAssetId">125496613985662</int64>
 				<SharedString name="Tags">yuZpQdnvvUBOTYh1jqZ2cA==</SharedString>
@@ -46499,6 +46499,33 @@ local function desacelerar(inimigo, fator: number, duracao: number)
 	inimigo.modelo:SetAttribute("Lento", true)
 end
 
+--[[ Postura dos chefes (como em Lies of P): parries, esquivas perfeitas e golpes enchem a
+	barra. Cheia, o chefe fica GROGUE: ajoelha brilhando, não ataca e leva mais dano; o primeiro
+	golpe vira um GOLPE FATAL (dano triplo). A barra esvazia sozinha (Inimigos.decidir). ]]
+function Combate.ferirPostura(run, inimigo, valor: number)
+	local maximo = inimigo.def.posturaMax
+	local agora = os.clock()
+	if not maximo or not inimigo.vivo or agora < (inimigo.grogueAte or 0) or agora < (inimigo.invulneravelAte or 0) then
+		return
+	end
+	inimigo.postura = math.min(maximo, (inimigo.postura or 0) + valor)
+	inimigo.posturaTocadaEm = agora
+	inimigo.modelo:SetAttribute("Postura", inimigo.postura / maximo)
+	if inimigo.postura >= maximo then
+		local duracao = inimigo.def.grogue or 4
+		inimigo.grogueAte = agora + duracao
+		inimigo.atordoadoAte = math.max(inimigo.atordoadoAte or 0, inimigo.grogueAte)
+		inimigo.fatalPronto = true
+		inimigo.modelo:SetAttribute("Grogue", true)
+		Vfx.partida(run, "grogue", { modelo = inimigo.modelo, pos = inimigo.raiz.Position })
+		Vfx.partida(run, "dano", {
+			pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra, 0),
+			valor = "GROGUE!",
+			cor = Color3.fromRGB(255, 245, 220),
+		})
+	end
+end
+
 function Combate.atordoar(inimigo, duracao: number)
 	if inimigo.chefe then
 		duracao *= 0.35
@@ -46554,6 +46581,28 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 			cor = Color3.fromRGB(200, 200, 210),
 		})
 		return
+	end
+	-- chefe grogue (postura quebrada): leva mais dano, e o primeiro golpe é um GOLPE FATAL
+	if os.clock() < (inimigo.grogueAte or 0) and not opcoes.dot then
+		if inimigo.fatalPronto and estado then
+			inimigo.fatalPronto = false
+			dano = math.floor(dano * 3 + 0.5)
+			opcoes.cor = Color3.fromRGB(255, 70, 60)
+			opcoes.critico = true
+			Vfx.partida(run, "golpeFatal", { modelo = inimigo.modelo, pos = inimigo.raiz.Position, jogador = estado.player })
+			Vfx.partida(run, "dano", {
+				pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra + 2, 0),
+				valor = "GOLPE FATAL!",
+				cor = Color3.fromRGB(255, 90, 70),
+			})
+			-- ele se levanta logo depois do golpe fatal
+			inimigo.grogueAte = os.clock() + 0.9
+			inimigo.atordoadoAte = inimigo.grogueAte
+		else
+			dano = math.floor(dano * 1.4 + 0.5)
+		end
+	elseif estado and inimigo.def.posturaMax and not opcoes.dot then
+		Combate.ferirPostura(run, inimigo, dano * 0.06)
 	end
 	-- chefe com a lâmina presa no chão (Corte Devastador do Skullbane): leva mais dano
 	if os.clock() < (inimigo.vulneravelAte or 0) then
@@ -46765,6 +46814,15 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 	opcoes = opcoes or {}
 	local agora = os.clock()
 	if agora < (estado.invulneravelAte or 0) then
+		-- esquiva perfeita: desviou bem na hora do golpe de um chefe (uma vez por esquiva)
+		if fonte and fonte.chefe and estado.esquivaEm and agora - estado.esquivaEm <= 0.3 and not estado.esquivaContada then
+			estado.esquivaContada = true
+			Combate.ferirPostura(run, fonte, 12)
+			local raizEsquiva = raizDe(estado)
+			if raizEsquiva then
+				Vfx.partida(run, "dano", { pos = raizEsquiva.Position + Vector3.new(0, 4, 0), valor = "ESQUIVA PERFEITA!", cor = Color3.fromRGB(150, 230, 255) })
+			end
+		end
 		return
 	end
 
@@ -46803,6 +46861,7 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 				if perfeita then
 					if fonte and fonte.vivo then
 						Combate.atordoar(fonte, 1.2)
+						Combate.ferirPostura(run, fonte, 35) -- parry: enche muito a postura do chefe
 					end
 					Combate.adicionarCarga(estado, 6)
 					return
@@ -47841,6 +47900,8 @@ function Combate.esquiva(run, estado, direcao: any)
 	estado.esquivaProntaEm = agora + estado.stats.recargaEsquiva
 	local dash = Classes.obter(estado.classe).esquiva
 	local duracaoDash = if dash then dash.duracao else Config.ESQUIVA_DURACAO
+	estado.esquivaEm = agora
+	estado.esquivaContada = false
 	estado.invulneravelAte = math.max(estado.invulneravelAte or 0, agora + math.max(Config.ESQUIVA_INVULNERAVEL, duracaoDash + 0.05))
 	animar(run, estado, "esquiva", nil, estado.player)
 	if estado.stats.contraAtaque then
@@ -48410,6 +48471,19 @@ Inimigos.TIPOS = {
 		},
 	},
 
+	-- Ceifador Esmeralda: lacaio que o Skullbane chama do chão (não aparece sozinho nas salas)
+	ceifadorEsmeralda = {
+		nome = "Ceifador Esmeralda", raiz = V(2.6, 3.4, 2), quadril = 2.3, raio = 1.8, alturaBarra = 5.6,
+		vida = 130, dano = 15, velocidade = 15, ouro = 14, armadura = 0.1,
+		entrada = 1.6, -- saindo do chão: não ataca nem leva dano
+		aleatorio = true,
+		ataques = {
+			{ nome = "corte", tipo = "golpe", alcance = 8, arco = 80, preparo = 0.75, atrasoVariavel = { 0.85, 1.4 }, recarga = 3.2, mult = 1.3, peso = 2 },
+			{ nome = "varrida", tipo = "golpe", anim = "Varrida", alcance = 8, arco = 150, preparo = 0.6, recarga = 2.4, mult = 1, peso = 3, seguir = { { "corte", 0.3 } } },
+			{ nome = "investida", tipo = "investida", alcance = 22, minimo = 9, preparo = 0.6, recarga = 6, inicial = 3, distancia = 16, largura = 4, mult = 1.1, peso = 2 },
+		},
+	},
+
 	-- Chefes ---------------------------------------------------------------
 	--[[ Skullbane (primeiro chefe): senhor da guerra morto-vivo com a lâmina presa no braço.
 		A luta é feita de golpes pesados e bem avisados: a Fissura de Almas corre pelo chão até o
@@ -48421,6 +48495,8 @@ Inimigos.TIPOS = {
 		raiz = V(5, 6, 4), quadril = 5, raio = 4, alturaBarra = 11,
 		vida = 1600, dano = 24, velocidade = 12, ouro = 180, armadura = 0.1,
 		entrada = 5.4, -- desperta (sobe do chão, ruge, câmera) antes de lutar; imune nesse tempo
+		posturaMax = 100, -- parry tira 35, esquiva perfeita 12, golpes ~6% do dano (Combate.ferirPostura)
+		grogue = 4, -- segundos ajoelhado quando a postura quebra
 		pausa = { 0.5, 1.3 }, -- entre um ataque e outro ele anda e rodeia o alvo
 		-- inspirado nos chefes de Elden Ring: escolhe os golpes ao acaso (nunca o mesmo padrão),
 		-- encadeia combos de surpresa, segura alguns golpes por um tempo diferente a cada vez
@@ -48450,7 +48526,8 @@ Inimigos.TIPOS = {
 			{ nome = "laminas", tipo = "disparo", anim = "Varrida", projetil = "alma", alcance = 50, minimo = 14, preparo = 0.8, recarga = 7, inicial = 6, quantidade = 3, espalhamento = 16, velocidade = 48, mult = 0.9, peso = 1.5, pesoLonge = 2.5 },
 			{ nome = "fissura", tipo = "fissura", alcance = 48, minimo = 10, preparo = 1, recarga = 8, inicial = 4, comprimento = 44, largura = 5, passos = 10, entre = 0.07, mult = 1.2, peso = 1.5, pesoLonge = 2.5 },
 			{ nome = "investida", tipo = "investida", alcance = 34, minimo = 12, preparo = 0.95, recarga = 12, inicial = 15, distancia = 32, largura = 7, mult = 1.3, peso = 1, pesoLonge = 2, seguir = { { "descendente", 0.5 } } },
-			{ nome = "invocar", tipo = "invocar", recarga = 18, inicial = 10, preparo = 1.1, invocado = "esqueleto", quantidade = 3, maxVivos = 10, peso = 0.6 },
+			-- chama Ceifadores Esmeralda do chão (a tela treme)
+			{ nome = "invocar", tipo = "invocar", recarga = 20, inicial = 10, preparo = 1.5, invocado = "ceifadorEsmeralda", quantidade = 2, maxVivos = 8, peso = 0.8, pesoLonge = 1.2 },
 		},
 		fase2 = {
 			anuncio = "Skullbane desperta as almas do calabouço! A lâmina arde em verde!",
@@ -48460,6 +48537,7 @@ Inimigos.TIPOS = {
 			combos = 1.4, -- encadeia mais golpes na 2ª fase
 			ataques = {
 				{ nome = "guardiao", tipo = "invocar", recarga = 26, inicial = 2, preparo = 1, invocado = "guardiao", quantidade = 1, maxVivos = 12, peso = 0.8 },
+				{ nome = "exercito", tipo = "invocar", recarga = 24, inicial = 8, preparo = 1.5, invocado = "ceifadorEsmeralda", quantidade = 3, maxVivos = 10, peso = 1 },
 				{ nome = "fissuraTripla", tipo = "fissura", alcance = 50, minimo = 6, preparo = 0.9, recarga = 9, inicial = 4, comprimento = 46, largura = 5, passos = 11, entre = 0.06, quantidade = 3, abertura = 32, mult = 1.1, peso = 2, pesoLonge = 3 },
 				{ nome = "aneis", tipo = "anel", recarga = 12, inicial = 7, preparo = 0.8, aneis = 3, largura = 4, entre = 0.7, mult = 1.2, efeito = "alma", peso = 1.5, pesoPerto = 2.5 },
 				{ nome = "espiral", tipo = "espiral", recarga = 13, inicial = 10, preparo = 0.9, projetil = "alma", quantidade = 12, ondas = 5, intervalo = 0.3, giro = 0.22, velocidade = 30, mult = 0.7, peso = 1.2 },
@@ -48825,6 +48903,7 @@ local function ataqueGolpe(run, inimigo, ataque, alvoPos: Vector3, agora: number
 	definirAcao(inimigo, nomePreparo)
 	inimigo.ocupadoAte = agora + preparo + (acertos - 1) * entre + 0.4
 	Vfx.partida(run, "telegrafo", {
+		dono = inimigo.modelo,
 		forma = if giro then "circulo" else "cone",
 		pos = noChao(run, inimigo.raiz.Position),
 		dir = direcao,
@@ -48925,7 +49004,7 @@ local function ataqueRajada(run, inimigo, ataque, agora: number): boolean
 	parar(inimigo)
 	definirAcao(inimigo, "conjurar")
 	inimigo.ocupadoAte = agora + preparo + 0.5
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 3, duracao = preparo, chefe = true })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 3, duracao = preparo, chefe = true, dono = inimigo.modelo })
 	task.delay(preparo, function()
 		if not podeContinuar(run, inimigo) then
 			return
@@ -48975,6 +49054,7 @@ local function ataqueInvestida(run, inimigo, ataque, alvoPos: Vector3, agora: nu
 	definirAcao(inimigo, "prepararInvestida")
 	inimigo.ocupadoAte = agora + preparo + 0.7
 	Vfx.partida(run, "telegrafo", {
+		dono = inimigo.modelo,
 		forma = "linha",
 		pos = noChao(run, inimigo.raiz.Position),
 		dir = direcao,
@@ -49023,7 +49103,7 @@ local function ataqueSalto(run, inimigo, ataque, alvoPos: Vector3, agora: number
 	olharPara(inimigo, alvoPos)
 	definirAcao(inimigo, "prepararSalto")
 	inimigo.ocupadoAte = agora + preparo + voo + 0.45
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = destino, raio = raio, duracao = preparo + voo, chefe = inimigo.chefe })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = destino, raio = raio, duracao = preparo + voo, chefe = inimigo.chefe, dono = inimigo.modelo })
 
 	task.delay(preparo, function()
 		if not podeContinuar(run, inimigo) then
@@ -49070,7 +49150,7 @@ local function ataqueExplodir(run, inimigo, ataque, agora: number): boolean
 	parar(inimigo)
 	definirAcao(inimigo, "prepararExplosao")
 	inimigo.ocupadoAte = agora + 99
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = raio, duracao = ataque.preparo })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = raio, duracao = ataque.preparo, dono = inimigo.modelo })
 	task.delay(ataque.preparo, function()
 		if not inimigo.vivo or not run.ativa then
 			return
@@ -49090,6 +49170,10 @@ local function ataqueInvocar(run, inimigo, ataque, agora: number): boolean
 	parar(inimigo)
 	definirAcao(inimigo, "conjurar")
 	inimigo.ocupadoAte = agora + ataque.preparo + 0.4
+	if inimigo.chefe then
+		-- o chefe ergue a arma e chama: a tela treme e a terra começa a rachar
+		Vfx.partida(run, "chamado", { modelo = inimigo.modelo, pos = noChao(run, inimigo.raiz.Position), duracao = ataque.preparo, tipo = inimigo.tipo })
+	end
 	task.delay(ataque.preparo, function()
 		if not podeContinuar(run, inimigo) or not run.sala then
 			return
@@ -49135,7 +49219,7 @@ local function ataqueArea(run, inimigo, ataque, agora: number): boolean
 		local atraso = ataque.atraso or 1.2
 		for i = 1, math.min(#pontos, ataque.quantidade or 3) do
 			local ponto = pontos[i]
-			Vfx.partida(run, "telegrafo", { forma = "circulo", pos = ponto, raio = raio, duracao = atraso, chefe = true })
+			Vfx.partida(run, "telegrafo", { forma = "circulo", pos = ponto, raio = raio, duracao = atraso, chefe = true, dono = inimigo.modelo })
 			if ataque.visual == "meteoro" then
 				Vfx.partida(run, "meteoro", { pos = ponto, duracao = atraso, raio = raio })
 			elseif ataque.visual == "alma" then
@@ -49211,7 +49295,7 @@ local function ataquePuxar(run, inimigo, ataque, agora: number): boolean
 	definirAcao(inimigo, "prepararPuxao")
 	inimigo.ocupadoAte = agora + preparo + ataque.duracao + 0.2
 	local centro = noChao(run, inimigo.raiz.Position)
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raio, duracao = preparo, chefe = true })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raio, duracao = preparo, chefe = true, dono = inimigo.modelo, tipoAviso = "puxar" })
 	Vfx.partida(run, "puxaoPreparo", { modelo = inimigo.modelo, pos = centro, duracao = preparo, tipo = inimigo.tipo })
 	task.delay(preparo, function()
 		if not podeContinuar(run, inimigo) then
@@ -49258,6 +49342,7 @@ local function ataqueFissura(run, inimigo, ataque, alvoPos: Vector3, agora: numb
 	inimigo.ocupadoAte = agora + preparo + passos * entre + 0.5
 	for _, direcao in direcoes do
 		Vfx.partida(run, "telegrafo", {
+			dono = inimigo.modelo,
 			forma = "linha",
 			pos = centro + direcao * inimigo.raio,
 			dir = direcao,
@@ -49310,7 +49395,7 @@ local function ataqueEspiral(run, inimigo, ataque, agora: number): boolean
 	parar(inimigo)
 	definirAcao(inimigo, "conjurar")
 	inimigo.ocupadoAte = agora + preparo + ondas * intervalo + 0.3
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 4, duracao = preparo, chefe = true })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 4, duracao = preparo, chefe = true, dono = inimigo.modelo })
 	task.delay(preparo, function()
 		local giro = math.random() * math.pi
 		for _ = 1, ondas do
@@ -49631,7 +49716,7 @@ local function entrarNaFase2(run, inimigo)
 	local centro = noChao(run, inimigo.raiz.Position)
 	local raioOnda = inimigo.raio + 14
 	Vfx.partida(run, "fase2", { modelo = inimigo.modelo, pos = centro, cor = cor, duracao = TRANSFORMACAO, raio = raioOnda, tipo = inimigo.tipo })
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raioOnda, duracao = TRANSFORMACAO, chefe = true })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raioOnda, duracao = TRANSFORMACAO, chefe = true, dono = inimigo.modelo })
 
 	task.delay(TRANSFORMACAO, function()
 		if not inimigo.vivo or not run.ativa then
@@ -49672,6 +49757,20 @@ end
 
 local function decidir(run, inimigo, agora: number)
 	local def = inimigo.def
+
+	-- postura: esvazia sozinha depois de 3s sem pressão; o grogue acaba e a barra zera
+	if def.posturaMax then
+		if inimigo.grogueAte and agora >= inimigo.grogueAte then
+			inimigo.grogueAte = nil
+			inimigo.fatalPronto = false
+			inimigo.postura = 0
+			inimigo.modelo:SetAttribute("Grogue", false)
+			inimigo.modelo:SetAttribute("Postura", 0)
+		elseif (inimigo.postura or 0) > 0 and not inimigo.grogueAte and agora - (inimigo.posturaTocadaEm or 0) > 3 then
+			inimigo.postura = math.max(0, inimigo.postura - 1.4)
+			inimigo.modelo:SetAttribute("Postura", inimigo.postura / def.posturaMax)
+		end
+	end
 
 	if agora < inimigo.atordoadoAte then
 		parar(inimigo)
@@ -49909,7 +50008,7 @@ function Inimigos.morrer(run, inimigo)
 	-- Elite explosiva: explode logo depois de morrer
 	if inimigo.modificador and inimigo.modificador.explosivo then
 		local raio = 8 * inimigo.escala
-		Vfx.partida(run, "telegrafo", { forma = "circulo", pos = chao, raio = raio, duracao = 1 })
+		Vfx.partida(run, "telegrafo", { forma = "circulo", pos = chao, raio = raio, duracao = 1, dono = inimigo.modelo })
 		task.delay(1, function()
 			if not run.ativa then
 				return
@@ -51844,7 +51943,7 @@ local function salaDeCombate(run, tipo: string): boolean
 		local chefe = Inimigos.TIPOS[sala.tema.chefe]
 		run:enviarTodos("introChefe", { nome = chefe.nome, titulo = chefe.titulo or "" })
 		task.wait(2)
-		run:invocar(sala.tema.chefe, sala.origem + Vector3.new(0, 0, sala.comprimento / 6), nil)
+		run:invocar(sala.tema.chefe, sala.origem, nil) -- no centro da sala, de frente para a entrada
 		terminouDeInvocar = true
 	else
 		-- salas maiores: mais inimigos, chegando em ondas
@@ -54215,9 +54314,15 @@ local function pesos(def, p: Vector3): (number, number)
 		end
 		acumulado += comprimento
 	end
-	local w = (1 - suave(rMelhor - 0.02, rMelhor, melhor)) * suave(0.03, 0.12, sMelhor)
-	local wE = suave(inicioCotovelo - 0.03, inicioCotovelo + 0.03, sMelhor)
+	-- transições largas: na malha do Roblox (com triângulos maiores que os do .glb) um
+	-- triângulo nunca fica com um canto girando e outro parado
+	local w = (1 - suave(rMelhor - 0.05, rMelhor, melhor)) * suave(0.02, 0.18, sMelhor)
+	local wE = suave(inicioCotovelo - 0.08, inicioCotovelo + 0.08, sMelhor)
 	local regras = def.regras
+	-- pernas nunca mexem (nem um espinho do pé que fique do lado da arma)
+	if regras.pernasY and p.Y < regras.pernasY then
+		return 0, 0
+	end
 	-- lâmina e manopla: tudo à esquerda da capa abaixo do pulso vai inteiro com o braço
 	if p.Y < regras.pulsoY and p.X < regras.laminaX then
 		return 1, 1
@@ -54250,7 +54355,7 @@ end
 function BracoMalha.criar(original: MeshPart, def)
 	local ok, resultado = pcall(function()
 		local conteudo = Content.fromUri(original.MeshId)
-		local malha = AssetService:CreateEditableMeshAsync(conteudo, { FixedSize = true })
+		local malha = AssetService:CreateEditableMeshAsync(conteudo, { FixedSize = false })
 		local vertices = malha:GetVertices()
 		if #vertices == 0 then
 			error("malha sem vértices")
@@ -54273,10 +54378,17 @@ function BracoMalha.criar(original: MeshPart, def)
 			end
 		end
 		local extensao = maximo - minimo
-		-- espelhado? A ponta da lâmina é o ponto mais à esquerda (-X) e fica embaixo e na frente
-		local espelhoX = posicoes[menorX].Y > posicoes[maiorX].Y
-		local ponta = posicoes[if espelhoX then maiorX else menorX]
-		local espelhoZ = (ponta.Z - minimo.Z) / math.max(extensao.Z, 1e-4) < 0.5
+		-- espelhado? Compara os pontos mais à esquerda e mais à direita com os mesmos pontos
+		-- medidos no .glb (altura e profundidade de 0 a 1 dentro da caixa)
+		local function relativo(p: Vector3): Vector2
+			local u = (p - minimo) / extensao
+			return Vector2.new(u.Y, u.Z)
+		end
+		local a, b = relativo(posicoes[menorX]), relativo(posicoes[maiorX])
+		local refMin, refMax = def.referencia.minX, def.referencia.maxX
+		local espelhoX = math.abs(a.X - refMin.X) + math.abs(b.X - refMax.X) > math.abs(a.X - refMax.X) + math.abs(b.X - refMin.X)
+		local ponta = if espelhoX then b else a -- o ponto que no .glb é o mais à esquerda
+		local espelhoZ = math.abs(ponta.Y - refMin.Y) > math.abs((1 - ponta.Y) - refMin.Y)
 		local gMin, gMax = def.caixa.min, def.caixa.max
 		local gExt = gMax - gMin
 		local function paraGlb(p: Vector3): Vector3
@@ -54324,6 +54436,37 @@ function BracoMalha.criar(original: MeshPart, def)
 		end
 		if #braco == 0 then
 			error("nenhum vértice no braço (o modelo é outro?)")
+		end
+
+		-- Triângulos que ligam a parte que gira à parte parada (a malha da IA é uma casca só:
+		-- a lâmina pode estar "colada" na coxa ou na capa) esticariam em fios compridos com a
+		-- textura da lâmina. Eles são apagados; se forem muitos, o braço fica parado.
+		local pesoDe = {}
+		for _, v in braco do
+			pesoDe[v[1]] = v
+		end
+		local remover, facesDoBraco = {}, 0
+		for _, face in malha:GetFaces() do
+			local menorW, maiorW, menorE, maiorE = 1, 0, 1, 0
+			for _, id in malha:GetFaceVertices(face) do
+				local v = pesoDe[id]
+				local w = if v then v[3] else 0
+				local we = if v then v[3] * v[4] else 0
+				menorW, maiorW = math.min(menorW, w), math.max(maiorW, w)
+				menorE, maiorE = math.min(menorE, we), math.max(maiorE, we)
+			end
+			if maiorW > 0.001 then
+				facesDoBraco += 1
+				if maiorW - menorW > 0.45 or maiorE - menorE > 0.6 then
+					table.insert(remover, face)
+				end
+			end
+		end
+		if facesDoBraco == 0 or #remover / facesDoBraco > 0.15 then
+			error(string.format("%d de %d triângulos do braço esticariam (a malha não combina com as medidas)", #remover, facesDoBraco))
+		end
+		for _, face in remover do
+			malha:RemoveFace(face)
 		end
 
 		local parte = AssetService:CreateMeshPartAsync(Content.fromObject(malha))
@@ -54809,7 +54952,7 @@ function Controles.puxar(dados)
 	anexo.Parent = raiz
 	local puxao = Instance.new("LinearVelocity")
 	puxao.Attachment0 = anexo
-	puxao.MaxForce = 6e5
+	puxao.MaxForce = math.huge
 	puxao.RelativeTo = Enum.ActuatorRelativeTo.World
 	puxao.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane
 	puxao.PrimaryTangentAxis = Vector3.xAxis
@@ -55338,7 +55481,28 @@ local barraChefe = UI.barra({
 })
 local marcaFase = UI.losango(barraChefe.quadro, UDim2.fromScale(0.5, 0.5), 12, cores.ouro)
 marcaFase.ZIndex = 5
-local tituloChefe = UI.texto({ Position = UDim2.fromOffset(0, 58), Size = UDim2.new(1, 0, 0, 16), FontFace = fontes.cabecalho, Text = "", TextColor3 = cores.textoSuave, Parent = painelChefe })
+-- Postura (como em Lies of P): cresce do meio para os lados; cheia, o chefe fica grogue
+local fundoPostura = criar("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 59),
+	Size = UDim2.fromOffset(620, 6),
+	BackgroundColor3 = Color3.fromRGB(20, 16, 12),
+	BackgroundTransparency = 0.3,
+	BorderSizePixel = 0,
+	Visible = false,
+	Parent = painelChefe,
+})
+UI.cantos(fundoPostura, 3)
+local cheioPostura = criar("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromScale(0, 1),
+	BackgroundColor3 = Color3.fromRGB(255, 190, 80),
+	BorderSizePixel = 0,
+	Parent = fundoPostura,
+})
+UI.cantos(cheioPostura, 3)
+local tituloChefe = UI.texto({ Position = UDim2.fromOffset(0, 68), Size = UDim2.new(1, 0, 0, 16), FontFace = fontes.cabecalho, Text = "", TextColor3 = cores.textoSuave, Parent = painelChefe })
 
 -- Ouro e cartas da partida
 local _, textoOuroPartida = ficha(telaPartida, "💰", UDim2.new(1, -16, 0, 64), 170)
@@ -56144,6 +56308,17 @@ local function atualizarChefe()
 		local vida = chefe:GetAttribute("Vida") or 0
 		local maxima = chefe:GetAttribute("VidaMax") or 1
 		barraChefe.definir(vida / math.max(maxima, 1), formatarNumero(math.max(0, vida)) .. " / " .. formatarNumero(maxima))
+		local postura = chefe:GetAttribute("Postura")
+		local grogue = chefe:GetAttribute("Grogue") == true
+		fundoPostura.Visible = postura ~= nil
+		if grogue then
+			-- grogue: a barra fica cheia e pisca branco
+			cheioPostura.Size = UDim2.fromScale(1, 1)
+			cheioPostura.BackgroundColor3 = Color3.fromRGB(255, 240, 200):Lerp(Color3.new(1, 1, 1), (math.sin(os.clock() * 14) + 1) / 2)
+		elseif postura then
+			cheioPostura.Size = UDim2.fromScale(math.clamp(postura, 0, 1), 1)
+			cheioPostura.BackgroundColor3 = Color3.fromRGB(255, 190, 80):Lerp(Color3.fromRGB(255, 90, 60), math.clamp(postura, 0, 1))
+		end
 	end
 end
 
@@ -57863,6 +58038,8 @@ function Modelos.skullbane()
 					cadeia = { V(-0.22, 0.27, -0.02), V(-0.37, 0.02, -0.05), V(-0.47, -0.22, -0.01), V(-0.55, -0.4, 0.05), V(-0.66, -0.62, 0.15), V(-0.79, -0.88, 0.33) },
 					raios = { 0.17, 0.22, 0.24, 0.24, 0.24 },
 					regras = { pulsoY = -0.22, laminaX = -0.43, capaX = -0.4, corpoX = -0.14 },
+					-- pontos mais à esquerda e mais à direita (altura e profundidade de 0 a 1)
+					referencia = { minX = Vector2.new(0.09, 0.867), maxX = Vector2.new(0.415, 0.42) },
 				},
 			},
 		},
@@ -57921,10 +58098,7 @@ function Modelos.skullbane()
 			prepararGiro = {
 				inicio = { verde("CargaCavaleiro", "centro", 3.2, { enquanto = true, inteiro = true }) },
 			},
-			-- giro: tempestade de cortes verde em volta dele
-			giro = {
-				inicio = { verde("Redemoinho", "chao", 1.7, { duracao = 1.2, inteiro = true }) },
-			},
+			-- giro: o anel de cortes vem de cada acerto (GiroRei + CorteGiratorio no golpe)
 			-- lâmina presa: faíscas e cortes saindo da ponta enquanto ele puxa
 			preso = {
 				inicio = { { nome = "GolpeRei", ancora = "ponta", escala = 0.35, fixo = true } },
@@ -57957,6 +58131,84 @@ function Modelos.skullbane()
 		passo = { nome = "SaltoArqueiro", ancora = "chao", escala = 1.6, cor = POEIRA_PASSO, fixo = true, inteiro = true },
 		entrada = { tumulo = "TumuloRei", rugido = "RugidoRei" },
 		furia = { rugido = "RugidoRei" },
+	}
+end
+
+--[[ Ceifador Esmeralda (lacaio que o Skullbane invoca): modelo 3D (ReplicatedStorage >
+	ModelosChefes > EmeraldBoneReaver), esqueleto com espada serrilhada verde na mão direita.
+	O braço da espada se mexe como o do chefe (BracoMalha); a espada dele fica em pé na guarda.
+	Sai do chão rachando a terra quando é chamado. ]]
+function Modelos.ceifadorEsmeralda()
+	local pasta = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
+	if not (pasta and pasta:FindFirstChild("EmeraldBoneReaver")) then
+		warn("[Modelos] ReplicatedStorage > ModelosChefes > EmeraldBoneReaver não encontrado; usando o esqueleto.")
+		return Modelos.esqueleto()
+	end
+	local function verde(nome: string, ancora: string, escala: number, extra)
+		local e = { nome = nome, ancora = ancora, escala = escala, cor = VERDE_ALMA }
+		for chave, valor in extra or {} do
+			e[chave] = valor
+		end
+		return e
+	end
+	return {
+		estilo = "ceifador",
+		escala = 1,
+		escalaEfeitos = 1.3,
+		ritmo = 1.1,
+		subida = 1.5, -- sai do chão
+		profundidade = 9,
+		altura = 8,
+		alturaCabeca = 4.6,
+		cor = VERDE_ALMA,
+		corAura = VERDE_ALMA,
+		suave = true,
+		giroSuave = 8,
+		rigidez = 12,
+		ossos = {
+			corpo = osso("raiz", V(0, 3, 0)),
+			chao = osso("raiz", V(0, 0, 0)),
+			lamina = osso("corpo", V(0, 3, 0)),
+		},
+		pecas = {},
+		malhas = {
+			{
+				nome = "EmeraldBoneReaver",
+				osso = "corpo",
+				altura = 8,
+				centroX = 0.0757,
+				giro = 180,
+				-- medidas do .glb (frente +Z, espada no lado -X, apontando para cima)
+				braco = {
+					caixa = { min = V(-0.8404, -0.951, -0.5993), max = V(0.8451, 0.9464, 0.5946) },
+					cadeia = { V(-0.22, 0.27, -0.24), V(-0.36, 0.02, -0.22), V(-0.43, -0.12, -0.12), V(-0.55, 0.1, 0.1), V(-0.68, 0.38, 0.32), V(-0.8, 0.6, 0.53) },
+					raios = { 0.15, 0.2, 0.22, 0.2, 0.2 },
+					regras = { pulsoY = 10, laminaX = -0.47, capaX = 10, corpoX = -0.12, pernasY = -0.36 },
+					referencia = { minX = Vector2.new(0.847, 0.998), maxX = Vector2.new(0.29, 0.645) },
+				},
+			},
+		},
+		luzes = { { osso = "lamina", pos = V(3.4, 5.6, -1.4), cor = VERDE_ALMA, alcance = 7, brilho = 0.6 } },
+		efeitos = {},
+		ancoras = {
+			centro = { osso = "corpo", pos = V(0, 4, 0) },
+			lamina = { osso = "lamina", pos = V(3.4, 5.6, -1.4) },
+			ponta = { osso = "lamina", pos = V(3.9, 6.5, -2.2) },
+			frente = { osso = "corpo", pos = V(0, 2, -3) },
+			chao = { osso = "chao", pos = V(0, 0.2, 0) },
+		},
+		prefabs = {
+			{ osso = "corpo", pos = V(0, 6, -1.3), nome = "ChamaEspectral", escala = 0.28, atraso = 1.3 }, -- olhos
+			{ osso = "lamina", pos = V(3.4, 5.6, -1.4), nome = "ChamaEspectral", escala = 0.32, atraso = 1.5 },
+			{ osso = "lamina", pos = V(3.9, 6.5, -2.2), nome = "ChamaEspectral", escala = 0.28, atraso = 1.5 },
+			{ osso = "chao", pos = V(0, 0.3, 0), nome = "NevoaRei", escala = 1.2, taxa = 0.5, atraso = 1.5 },
+		},
+		efeitosAcao = {
+			preparar = { inicio = { verde("CargaCavaleiro", "lamina", 0.9, { enquanto = true, inteiro = true }) } },
+			prepararVarrida = { inicio = { verde("CargaCavaleiro", "lamina", 0.9, { enquanto = true, inteiro = true }) } },
+			investida = { inicio = { verde("RastroSombra", "centro", 1.3, { enquanto = true }) } },
+		},
+		entrada = { tumulo = "TumuloRei", rugido = "RugidoRei" },
 	}
 end
 
@@ -62106,10 +62358,15 @@ end
 function Vfx.invocacao(dados)
 	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
 	if efeitos and Vfx.temPrefab(efeitos.invocacao) then
-		Vfx.prefab(efeitos.invocacao, CFrame.new(dados.pos), nil, 1.2)
+		Vfx.prefab(efeitos.invocacao, CFrame.new(dados.pos), nil, if efeitos.cor then 1.7 else 1.2)
+		if efeitos.cor then
+			Vfx.prefab("GiroRei", CFrame.new(dados.pos + Vector3.new(0, 0.4, 0)), nil, 4)
+			Vfx.tremerEm(dados.pos, 1.4, 0.5)
+		end
 		Sons.tocar("pouso", { pos = dados.pos, tom = 0.55, volume = 0.8 })
 	end
 end
+
 
 function Vfx.golpeInimigo(dados)
 	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
@@ -62122,8 +62379,7 @@ function Vfx.golpeInimigo(dados)
 			-- meia-lua deitada na altura da cintura, varrendo para um lado ou para o outro
 			local altura = chao + Vector3.new(0, 5, 0) + dir * dados.alcance * 0.35
 			local espelho = if dados.volta then CFrame.Angles(0, 0, math.pi) else CFrame.identity
-			Vfx.prefab("CorteCavaleiro", CFrame.lookAt(altura, altura + dir) * espelho, nil, dados.alcance / 3.5, { cor = cor })
-			Vfx.prefab("CorteGiratorio", CFrame.lookAt(altura, altura + dir), nil, dados.alcance / 5, { cor = cor, taxa = 0.5 })
+			Vfx.prefab("CorteCavaleiro", CFrame.lookAt(altura, altura + dir) * espelho, nil, dados.alcance / 5, { cor = cor })
 			Sons.tocar("espadaPesada", { pos = altura, tom = 0.7, volume = 1.2 })
 			Vfx.tremerEm(altura, 1, 0.15)
 		elseif dados.anim == "Estocada" then
@@ -63020,6 +63276,7 @@ local function telegrafoCirculo(centro: Vector3, raio: number, duracao: number, 
 		end
 		sumir(partes, 0.15)
 	end)
+	return partes
 end
 
 local function telegrafoCone(centro: Vector3, direcao: Vector3, raio: number, arcoGraus: number, duracao: number, cor: Color3)
@@ -63056,6 +63313,7 @@ local function telegrafoCone(centro: Vector3, direcao: Vector3, raio: number, ar
 		end
 		sumir(partes, 0.15)
 	end)
+	return partes
 end
 
 local function telegrafoLinha(inicio: Vector3, direcao: Vector3, comprimento: number, largura: number, duracao: number, cor: Color3)
@@ -63075,17 +63333,60 @@ local function telegrafoLinha(inicio: Vector3, direcao: Vector3, comprimento: nu
 		end
 		sumir(partes, 0.15)
 	end)
+	return partes
 end
 
+-- Avisos de cada inimigo ([modelo] = listas de peças): somem na hora se o golpe não sair
+-- (o inimigo foi atordoado ou morreu), para não ficar uma área vermelha sem nada acontecer
+local avisosPorDono = {}
+
 function Vfx.telegrafo(dados)
-	local cor = if dados.chefe then Color3.fromRGB(255, 40, 60) else Color3.fromRGB(255, 80, 50)
+	-- "puxar" é um aviso diferente (verde): não dá dano, só puxa
+	local cor = if dados.tipoAviso == "puxar" then Color3.fromRGB(90, 255, 140)
+		elseif dados.chefe then Color3.fromRGB(255, 40, 60)
+		else Color3.fromRGB(255, 80, 50)
 	local centro = dados.pos + Vector3.new(0, 0.12, 0)
+	local partes
 	if dados.forma == "cone" then
-		telegrafoCone(centro, dados.dir, dados.raio, dados.arco, dados.duracao, cor)
+		partes = telegrafoCone(centro, dados.dir, dados.raio, dados.arco, dados.duracao, cor)
 	elseif dados.forma == "linha" then
-		telegrafoLinha(centro, dados.dir, dados.comprimento, dados.largura, dados.duracao, cor)
+		partes = telegrafoLinha(centro, dados.dir, dados.comprimento, dados.largura, dados.duracao, cor)
 	else
-		telegrafoCirculo(centro, dados.raio, dados.duracao, cor)
+		partes = telegrafoCirculo(centro, dados.raio, dados.duracao, cor)
+	end
+	local dono = dados.dono
+	if typeof(dono) == "Instance" and partes then
+		local lista = avisosPorDono[dono]
+		if not lista then
+			lista = {}
+			avisosPorDono[dono] = lista
+		end
+		table.insert(lista, partes)
+		task.delay(dados.duracao + 0.3, function()
+			local atual = avisosPorDono[dono]
+			if atual then
+				local i = table.find(atual, partes)
+				if i then
+					table.remove(atual, i)
+				end
+				if #atual == 0 then
+					avisosPorDono[dono] = nil
+				end
+			end
+		end)
+	end
+end
+
+-- Apaga os avisos de um inimigo (atordoado, morto ou golpe cancelado)
+function Vfx.cancelarAvisos(dono: Instance)
+	local lista = avisosPorDono[dono]
+	avisosPorDono[dono] = nil
+	for _, partes in lista or {} do
+		for _, p in partes do
+			if p.Parent then
+				p:Destroy()
+			end
+		end
 	end
 end
 
@@ -64443,7 +64744,9 @@ function Vfx.tornado(dados)
 		Vfx.tremerEm(de, if perfeito then 1.6 else 1.1, 0.25)
 		local substituir = Vfx.temPrefab("Tornado")
 		-- a espada bate no chão: pancada do pacote de VFX no ponto de saída (no lugar da onda feita por código)
-		local lancamento = Vfx.prefab("LancamentoTornado", CFrame.new(de + Vector3.new(0, 0.3, 0)), nil, 0.4) ~= nil
+		local lancamento = Vfx.prefab("LancamentoTornado", CFrame.new(de + Vector3.new(0, 0.3, 0)), nil, 0.55) ~= nil
+		-- corte em volta no lançamento (a espada bate no chão girando)
+		Vfx.prefab(if dados.fogo and Vfx.temPrefab("CorteGiratorioFogo") then "CorteGiratorioFogo" else "CorteGiratorio", CFrame.lookAt(de + Vector3.new(0, 1.5, 0), ate + Vector3.new(0, 1.5, 0)), nil, raio / 4)
 		if not substituir and not lancamento then
 			-- a espada bate no chão: onda e poeira no ponto de saída
 			local onda = disco(de + Vector3.new(0, 0.15, 0), 2, cor:Lerp(BRANCO, 0.4), 0.2)
@@ -64464,9 +64767,14 @@ function Vfx.tornado(dados)
 		-- o tornado do pacote de VFX (azul; de fogo com uma carta de fogo)
 		local nomeTornado = if dados.fogo and Vfx.temPrefab("TornadoChamas") then "TornadoChamas" else "Tornado"
 		substituir = Vfx.temPrefab(nomeTornado)
+		-- funil maior e mais cheio (a escala aumenta o efeito inteiro, não só as partículas)
 		local pararPrefab = Vfx.prefab(nomeTornado, function()
 			return if terminou then nil else CFrame.lookAt(centroAtual, centroAtual + (ate - de) + Vector3.new(0, 0, 0.001))
-		end, dados.duracao + 0.4, raio / 6)
+		end, dados.duracao + 0.4, raio / 5, { inteiro = true, cor = if dados.fogo then nil else cor })
+		-- anel de vento girando no chão embaixo do tornado
+		Vfx.prefab("LevitacaoMago", function()
+			return if terminou then nil else CFrame.new(centroAtual + Vector3.new(0, 0.2, 0))
+		end, dados.duracao + 0.2, raio / 2.2, { cor = cor })
 		if substituir then
 			local inicio = os.clock()
 			local conexao
@@ -64476,6 +64784,9 @@ function Vfx.tornado(dados)
 				if k >= 1 then
 					conexao:Disconnect()
 					terminou = true
+					-- o tornado se desfaz: vento estourando e um último corte
+					Vfx.prefab("LancamentoTornado", CFrame.new(centroAtual + Vector3.new(0, 0.3, 0)), nil, 0.4, { taxa = 0.6 })
+					Vfx.prefab(if dados.fogo and Vfx.temPrefab("ImpactoCorteFogo") then "ImpactoCorteFogo" else "ImpactoCorte", CFrame.new(centroAtual + Vector3.new(0, 2, 0)), nil, 1.4)
 				end
 			end)
 			return
@@ -64593,17 +64904,17 @@ function Vfx.ventoCarga(personagem: Model, cor: Color3, carga: (() -> number)?):
 	local ALTURA_ESPADA = Vector3.new(0, 2.3, 0)
 	local pararPrefab = Vfx.prefab("CargaCavaleiro", function()
 		return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position + ALTURA_ESPADA)
-	end, 0, 1.4)
+	end, 0, 1.2, { taxa = 0.6 })
 	if substituir then
 		-- partículas do pacote de VFX: energia azul subindo em volta do corpo enquanto carrega;
 		-- quando a carga enche, um estouro dourado e um brilho dourado na espada
 		local pararAura = Vfx.prefab("CargaAura", function()
 			return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position)
-		end, 0, 1.3)
+		end, 0, 1.05, { taxa = 0.35 })
 		local pararBrilho: (() -> ())? = nil
 		local luz = Instance.new("PointLight")
 		luz.Color = cor
-		luz.Range = 14
+		luz.Range = 10
 		luz.Brightness = 0
 		luz.Parent = raiz
 		local cheio = false
@@ -64622,14 +64933,14 @@ function Vfx.ventoCarga(personagem: Model, cor: Color3, carga: (() -> number)?):
 				return
 			end
 			local nivel = if carga then carga() else 1
-			luz.Brightness = 0.6 + 2 * nivel
+			luz.Brightness = 0.3 + 0.9 * nivel
 			if nivel >= 1 and not cheio then
 				cheio = true
 				luz.Color = OURO
-				Vfx.prefab("CargaCheia", CFrame.new(raiz.Position + ALTURA_ESPADA), nil, 0.8)
+				Vfx.prefab("CargaCheia", CFrame.new(raiz.Position + ALTURA_ESPADA), nil, 0.6, { taxa = 0.5 })
 				pararBrilho = Vfx.prefab("CargaBrilhoCheia", function()
 					return if apagado or not raiz.Parent then nil else CFrame.new(raiz.Position + ALTURA_ESPADA)
-				end, 0, 1.6)
+				end, 0, 1.1, { taxa = 0.4 })
 			end
 		end)
 		return function()
@@ -65100,9 +65411,9 @@ function Vfx.puxao(dados)
 	local raiz = raizDoModelo(dados.modelo)
 	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
 	local cor = efeitos and efeitos.cor or Color3.fromRGB(90, 255, 120)
-	-- redemoinho enorme no chão e cortes girando em volta dele enquanto puxa
-	Vfx.prefab("Redemoinho", CFrame.new(dados.pos + Vector3.new(0, 1, 0)), dados.duracao, dados.raio / 9, { cor = cor })
-	Vfx.prefab("Tornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), dados.duracao, 1.6, { cor = cor, inteiro = true })
+	-- redemoinho verde no chão em volta dele enquanto puxa (sem os cortes gigantes do Redemoinho)
+	Vfx.prefab("Tornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), dados.duracao, 1.3, { cor = cor, inteiro = true, taxa = 0.7 })
+	Vfx.prefab("LancamentoTornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), dados.duracao, 1, { cor = cor })
 	if raiz then
 		Vfx.prefab(efeitos and efeitos.furia or "RugidoRei", CFrame.new(raiz.Position), nil, 0.6)
 		Sons.tocar("vento", { pos = raiz.Position, tom = 0.6, volume = 1.4, alcance = 250, duracao = dados.duracao })
@@ -65118,6 +65429,64 @@ function Vfx.puxao(dados)
 		end
 	end
 	Vfx.tremer(1.2, dados.duracao)
+end
+
+-- Postura quebrada (grogue): estouro de luz branca e dourada no chefe e a tela sacode
+function Vfx.grogue(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local pos = if raiz then raiz.Position else dados.pos
+	Vfx.prefab("DefesaPerfeita", CFrame.new(pos + Vector3.new(0, 2, 0)), nil, 2.2)
+	Vfx.prefab("CargaCheia", CFrame.new(pos + Vector3.new(0, 4, 0)), nil, 1.6, { taxa = 0.6 })
+	Sons.tocar("escudoPerfeito", { pos = pos, tom = 0.7, volume = 1.4, alcance = 260 })
+	Sons.tocar("pouso", { pos = pos, tom = 0.45, volume = 1.3, alcance = 260 })
+	Vfx.tremerEm(pos, 2.4, 0.5)
+end
+
+-- Golpe fatal no chefe grogue: corte crítico enorme, impacto de luz, a câmera afunda e borra
+function Vfx.golpeFatal(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local pos = if raiz then raiz.Position else dados.pos
+	Vfx.prefab("ImpactoCostas", CFrame.new(pos + Vector3.new(0, 2, 0)), nil, 2.6, { inteiro = true })
+	Vfx.prefab("Julgamento", CFrame.new(pos - Vector3.new(0, 6, 0)), nil, 0.7, { cor = Color3.fromRGB(255, 110, 90) })
+	Vfx.prefab("InvestidaFim", CFrame.new(pos), nil, 0.5)
+	Sons.tocar("critico", { pos = pos, tom = 0.6, volume = 1.6, alcance = 260 })
+	Sons.tocar("trovao", { pos = pos, tom = 0.9, volume = 1, alcance = 260 })
+	Vfx.tremerEm(pos, 3.5, 0.5)
+	local minha = raizDoJogador(jogador)
+	if minha and (minha.Position - pos).Magnitude < 80 then
+		local camera = workspace.CurrentCamera
+		local fov = camera.FieldOfView
+		camera.FieldOfView = fov - 8
+		TweenService:Create(camera, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { FieldOfView = fov }):Play()
+		local borrao = Instance.new("BlurEffect")
+		borrao.Size = 14
+		borrao.Parent = camera
+		TweenService:Create(borrao, TweenInfo.new(0.45), { Size = 0 }):Play()
+		Debris:AddItem(borrao, 0.5)
+	end
+end
+
+-- O chefe chama os servos: ergue a arma, ruge, a energia sobe dos pés e a tela treme cada vez
+-- mais até eles saírem do chão
+function Vfx.chamado(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	local cor = efeitos and efeitos.cor or Color3.fromRGB(90, 255, 120)
+	local duracao = dados.duracao or 1.2
+	if raiz then
+		Vfx.prefab(efeitos and efeitos.furia or "RugidoRei", CFrame.new(raiz.Position + Vector3.new(0, 3, 0)), nil, 0.6)
+		Sons.tocar("supremo", { pos = raiz.Position, tom = 0.55, volume = 1.1, alcance = 260 })
+	end
+	Vfx.prefab("LancamentoTornado", CFrame.new(dados.pos + Vector3.new(0, 0.3, 0)), duracao, 1.1, { cor = cor })
+	local inicio = os.clock()
+	task.spawn(function()
+		while os.clock() - inicio < duracao do
+			local t = (os.clock() - inicio) / duracao
+			Vfx.tremerEm(dados.pos, 0.8 + 2 * t, 0.3)
+			task.wait(0.15)
+		end
+		Vfx.tremerEm(dados.pos, 3, 0.5)
+	end)
 end
 
 -- Portal verde no céu sobre cada ponto da chuva de almas (aviso; o raio cai no fim)
@@ -66081,14 +66450,13 @@ local function cinematicaDeEntrada(v)
 	local altura = (v.rig.altura or 8) * v.escala
 	local chao = v.raiz.Position - Vector3.new(0, v.alturaRaiz, 0)
 	local frente = v.raiz.CFrame.LookVector
-	local lado = v.raiz.CFrame.RightVector
 	local rosto = chao + Vector3.new(0, altura * 0.78, 0) + frente * altura * 0.1
 	local peito = chao + Vector3.new(0, altura * 0.6, 0)
 	local tomadas = {
 		-- { até (s), posição da câmera, para onde olha }
-		{ subida - 0.35, chao + frente * altura * 2 + lado * altura * 0.55 + Vector3.new(0, 2, 0), peito },
-		{ subida + 0.6, rosto + frente * altura * 0.6 + lado * altura * 0.12 - Vector3.new(0, altura * 0.04, 0), rosto },
-		{ subida + 1.9, chao + frente * altura * 1.5 - lado * altura * 0.35 + Vector3.new(0, altura * 0.25, 0), peito },
+		{ subida - 0.35, chao + frente * altura * 2 + Vector3.new(0, 2, 0), peito },
+		{ subida + 0.6, rosto + frente * altura * 0.6 - Vector3.new(0, altura * 0.04, 0), rosto },
+		{ subida + 1.9, chao + frente * altura * 1.6 + Vector3.new(0, altura * 0.25, 0), peito },
 	}
 	local volta = 0.7
 	local original = camera.CFrame
@@ -66633,8 +67001,28 @@ local function atualizarEstados(v)
 		gotas:Destroy()
 	end
 
+	-- grogue (postura quebrada): ajoelha e brilha em branco; o golpe que preparava some
+	local grogue = modelo:GetAttribute("Grogue") == true
+	if grogue ~= (v.grogue == true) then
+		v.grogue = grogue
+		if grogue then
+			Vfx.cancelarAvisos(modelo)
+			for _, parar in v.efeitosAtivos or {} do
+				parar()
+			end
+			v.efeitosAtivos = {}
+		end
+		if v.destaque then
+			v.destaque.OutlineColor = BRANCO
+			v.destaque.OutlineTransparency = if grogue then 0.2 else 1
+			v.destaque.FillColor = BRANCO
+			v.destaque.FillTransparency = 1
+		end
+	end
+
 	local atordoado = modelo:GetAttribute("Atordoado") == true
 	if atordoado and not v.estrelas then
+		Vfx.cancelarAvisos(modelo) -- o golpe que ele preparava não vai sair
 		v.estrelas = {}
 		for _ = 1, 3 do
 			local estrela = Instance.new("Part")
@@ -67193,12 +67581,98 @@ local function poseSenhor(v, t: number, andar: number, alvos)
 		c.oy = -0.7 * e
 		b = { 0.05, 0.1, 0, 0.1 }
 	end
+	if v.grogue then
+		-- de joelhos, curvado sobre a espada fincada no chão, respirando pesado
+		local ofego = math.sin(t * 2.4)
+		c.rx = -0.5 + ofego * 0.04
+		c.ry = 0.1
+		c.rz = math.sin(t * 1.3) * 0.04
+		c.oy = (-2.4 + ofego * 0.12) * e
+		c.oz = -0.8 * e
+		c.direto = nil
+		b = { 0.45, 0.25, 0.1, 0.1 }
+	end
 	c.rx += v.impacto * 0.06
 	alvos.corpo = c
 	alvos.braco = b
 end
 
+-- Ceifador Esmeralda (lacaio do Skullbane): passos ágeis de esqueleto, tronco curvado para a
+-- frente e a espada em pé na guarda; ergue a espada atrás da cabeça e corta para a frente,
+-- ou varre de lado. Sai do chão encolhido e se endireita.
+local function poseCeifador(v, t: number, andar: number, alvos)
+	local e = v.escala
+	local f = v.fase
+	local tremor = math.sin(t * 11 + v.nascimento) * 0.012 -- ossos que nunca param
+	local c = {
+		rx = -0.12 - 0.14 * andar + tremor,
+		ry = math.sin(f) * 0.12 * andar,
+		rz = math.sin(f) * 0.08 * andar + math.sin(t * 1.7) * 0.02,
+		oy = ((math.abs(math.cos(f)) - 0.6) * 0.5 * andar + math.sin(t * 2.1) * 0.05) * e,
+	}
+	local b = { 0.1 + math.sin(f) * 0.25 * andar, 0.05, 0, 0.1 }
+	local acao, at = v.acao, v.acaoT
+	local function braco(alvo, k: number?, rapido: boolean?)
+		k = k or 1
+		b = { b[1] + (alvo[1] - b[1]) * k, b[2] + (alvo[2] - b[2]) * k, b[3] + (alvo[3] - b[3]) * k, b[4] + (alvo[4] - b[4]) * k, rapido = rapido }
+	end
+	if acao == "preparar" then
+		local k = suaveEntre(0, 0.45, at)
+		c.rx = 0.18 * k
+		c.ry = -0.3 * k
+		c.oy = 0.2 * k * e
+		braco({ 2.4, 0.2, 0, 0.5 }, k)
+	elseif acao == "golpe" then
+		local k = 1 - suaveEntre(0.3, 0.9, at)
+		c.rx = -0.4 * k
+		c.ry = 0.25 * k
+		c.oz = -1 * k * e
+		c.oy = -0.4 * k * e
+		c.rapido = at < 0.2
+		braco({ 1.5, 0.05, 0.3, 0 }, k, at < 0.2)
+	elseif acao == "prepararVarrida" then
+		local k = suaveEntre(0, 0.4, at)
+		c.ry = -0.5 * k
+		c.oy = -0.3 * k * e
+		braco({ 0.6, 1, -0.7, 0.3 }, k)
+	elseif acao == "golpeVarrida" then
+		local k = suaveEntre(0, 0.12, at) * (1 - suaveEntre(0.4, 0.9, at))
+		c.ry = 0.5 * k
+		c.oy = -0.35 * k * e
+		c.oz = -0.6 * k * e
+		c.rapido = at < 0.2
+		braco({ 1.3, -0.2, 0.9, 0.1 }, math.max(k, 0.0001), at < 0.2)
+	elseif acao == "prepararInvestida" then
+		local k = suaveEntre(0, 0.5, at)
+		c.rx = -0.4 * k
+		c.oy = -0.6 * k * e
+		braco({ 1.2, 0.4, -0.4, 0.2 }, k)
+	elseif acao == "investida" then
+		c.rx = -0.5
+		c.oy = (math.abs(math.sin(t * 24)) * 0.3 - 0.2) * e
+		braco({ 1.5, 0.1, 0, 0 })
+	end
+	-- saindo do chão: encolhido, a cabeça baixa, e se endireita com um tremor
+	local idade = t - v.nascimento
+	local subida = v.rig.subida or 1
+	if idade < subida + 0.4 then
+		local s = math.clamp(idade / subida, 0, 1)
+		c.rx = -0.8 * (1 - s) + math.sin(t * 30) * 0.03 * (1 - s)
+		c.rz = math.sin(t * 17) * 0.05 * (1 - s)
+		braco({ 2.2, 0.3, 0, 0.3 }, 1 - suaveEntre(subida, subida + 0.4, idade))
+	end
+	if v.atordoado then
+		c.rx = -0.4
+		c.rz = math.sin(t * 3) * 0.08
+		b = { 0, 0.1, 0, 0 }
+	end
+	c.rx += v.impacto * 0.2
+	alvos.corpo = c
+	alvos.braco = b
+end
+
 local POSES = {
+	ceifador = poseCeifador,
 	senhor = poseSenhor,
 	rei = poseRei,
 	bipede = poseBipede,
@@ -67360,6 +67834,8 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 			v.flashTransparencia = v.destaque.FillTransparency
 			v.destaque.FillTransparency = 0.45
 		end
+	elseif v.grogue and not v.flashAtivo and v.destaque then
+		v.destaque.FillTransparency = 0.7 + 0.15 * math.sin(agora * 7)
 	elseif v.flashAtivo and agora >= v.flashAte then
 		v.flashAtivo = false
 		for _, peca in v.pecas do
@@ -67407,7 +67883,53 @@ end
 
 -- Morte de chefe com modelo 3D: ele cambaleia e cai de joelhos, as almas estouram pelo corpo
 -- e um raio de luz verde desce do céu sobre ele, que some aos poucos. Só efeitos do pacote.
+-- Lacaio com modelo 3D: desaba para trás, as almas escapam e ele some
+local function morteDeLacaio3D(v)
+	local cor = v.rig.corAura or BRANCO
+	local corpo = v.ossos.corpo
+	local mundo0 = corpo.mundo
+	local inicio = os.clock()
+	for _, parar in v.efeitosAtivos or {} do
+		parar()
+	end
+	local centro = v.ancoraCorpo and v.ancoraCorpo.Position or v.ultimaPos
+	Vfx.prefab("ImpactoFlecha", CFrame.new(centro), nil, 1.6, { inteiro = true })
+	Sons.tocar("inimigoMorre", { pos = centro, tom = 0.7 })
+	task.spawn(function()
+		while true do
+			local s = (os.clock() - inicio) / 0.6
+			if s >= 1 then
+				break
+			end
+			local cf = mundo0 * CFrame.new(0, -s * s * 2.5 * v.escala, s * 0.6 * v.escala) * CFrame.Angles(0.9 * s * s, 0, 0.2 * s)
+			local partes, cframes = {}, {}
+			for _, peca in v.pecas do
+				if peca.parte.Parent then
+					table.insert(partes, peca.parte)
+					table.insert(cframes, cf * peca.local_)
+				end
+			end
+			workspace:BulkMoveTo(partes, cframes, Enum.BulkMoveMode.FireCFrameChanged)
+			task.wait()
+		end
+		Vfx.prefab("TumuloRei", CFrame.new(v.ultimaPos - Vector3.new(0, v.alturaRaiz, 0)), nil, 0.8)
+		Vfx.prefab("ChamaEspectral", CFrame.new(centro), 0.6, 1, { cor = cor })
+		for _, peca in v.pecas do
+			if peca.ancora then
+				peca.parte:Destroy()
+			else
+				TweenService:Create(peca.parte, TweenInfo.new(0.5), { Transparency = 1 }):Play()
+			end
+		end
+		Debris:AddItem(v.visual, 0.6)
+	end)
+end
+
 local function morteDeModelo3D(v)
+	if not v.chefe then
+		morteDeLacaio3D(v)
+		return
+	end
 	local cor = v.rig.corAura or BRANCO
 	local corpo = v.ossos.corpo
 	local inicio = os.clock()
@@ -67574,7 +68096,7 @@ local function adicionar(modelo: Instance)
 		table.insert(v.conexoes, modelo:GetAttributeChangedSignal("Acao"):Connect(function()
 			atualizarAcao(v)
 		end))
-		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando", "Escudo", "Inspirado" } do
+		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando", "Escudo", "Inspirado", "Grogue" } do
 			table.insert(v.conexoes, modelo:GetAttributeChangedSignal(atributo):Connect(function()
 				atualizarEstados(v)
 			end))
@@ -67583,6 +68105,7 @@ local function adicionar(modelo: Instance)
 end
 
 local function remover(modelo: Instance)
+	Vfx.cancelarAvisos(modelo)
 	local v = visuais[modelo]
 	if v then
 		visuais[modelo] = nil

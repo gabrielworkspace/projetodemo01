@@ -170,6 +170,19 @@ Inimigos.TIPOS = {
 		},
 	},
 
+	-- Ceifador Esmeralda: lacaio que o Skullbane chama do chão (não aparece sozinho nas salas)
+	ceifadorEsmeralda = {
+		nome = "Ceifador Esmeralda", raiz = V(2.6, 3.4, 2), quadril = 2.3, raio = 1.8, alturaBarra = 5.6,
+		vida = 130, dano = 15, velocidade = 15, ouro = 14, armadura = 0.1,
+		entrada = 1.6, -- saindo do chão: não ataca nem leva dano
+		aleatorio = true,
+		ataques = {
+			{ nome = "corte", tipo = "golpe", alcance = 8, arco = 80, preparo = 0.75, atrasoVariavel = { 0.85, 1.4 }, recarga = 3.2, mult = 1.3, peso = 2 },
+			{ nome = "varrida", tipo = "golpe", anim = "Varrida", alcance = 8, arco = 150, preparo = 0.6, recarga = 2.4, mult = 1, peso = 3, seguir = { { "corte", 0.3 } } },
+			{ nome = "investida", tipo = "investida", alcance = 22, minimo = 9, preparo = 0.6, recarga = 6, inicial = 3, distancia = 16, largura = 4, mult = 1.1, peso = 2 },
+		},
+	},
+
 	-- Chefes ---------------------------------------------------------------
 	--[[ Skullbane (primeiro chefe): senhor da guerra morto-vivo com a lâmina presa no braço.
 		A luta é feita de golpes pesados e bem avisados: a Fissura de Almas corre pelo chão até o
@@ -181,6 +194,8 @@ Inimigos.TIPOS = {
 		raiz = V(5, 6, 4), quadril = 5, raio = 4, alturaBarra = 11,
 		vida = 1600, dano = 24, velocidade = 12, ouro = 180, armadura = 0.1,
 		entrada = 5.4, -- desperta (sobe do chão, ruge, câmera) antes de lutar; imune nesse tempo
+		posturaMax = 100, -- parry tira 35, esquiva perfeita 12, golpes ~6% do dano (Combate.ferirPostura)
+		grogue = 4, -- segundos ajoelhado quando a postura quebra
 		pausa = { 0.5, 1.3 }, -- entre um ataque e outro ele anda e rodeia o alvo
 		-- inspirado nos chefes de Elden Ring: escolhe os golpes ao acaso (nunca o mesmo padrão),
 		-- encadeia combos de surpresa, segura alguns golpes por um tempo diferente a cada vez
@@ -210,7 +225,8 @@ Inimigos.TIPOS = {
 			{ nome = "laminas", tipo = "disparo", anim = "Varrida", projetil = "alma", alcance = 50, minimo = 14, preparo = 0.8, recarga = 7, inicial = 6, quantidade = 3, espalhamento = 16, velocidade = 48, mult = 0.9, peso = 1.5, pesoLonge = 2.5 },
 			{ nome = "fissura", tipo = "fissura", alcance = 48, minimo = 10, preparo = 1, recarga = 8, inicial = 4, comprimento = 44, largura = 5, passos = 10, entre = 0.07, mult = 1.2, peso = 1.5, pesoLonge = 2.5 },
 			{ nome = "investida", tipo = "investida", alcance = 34, minimo = 12, preparo = 0.95, recarga = 12, inicial = 15, distancia = 32, largura = 7, mult = 1.3, peso = 1, pesoLonge = 2, seguir = { { "descendente", 0.5 } } },
-			{ nome = "invocar", tipo = "invocar", recarga = 18, inicial = 10, preparo = 1.1, invocado = "esqueleto", quantidade = 3, maxVivos = 10, peso = 0.6 },
+			-- chama Ceifadores Esmeralda do chão (a tela treme)
+			{ nome = "invocar", tipo = "invocar", recarga = 20, inicial = 10, preparo = 1.5, invocado = "ceifadorEsmeralda", quantidade = 2, maxVivos = 8, peso = 0.8, pesoLonge = 1.2 },
 		},
 		fase2 = {
 			anuncio = "Skullbane desperta as almas do calabouço! A lâmina arde em verde!",
@@ -220,6 +236,7 @@ Inimigos.TIPOS = {
 			combos = 1.4, -- encadeia mais golpes na 2ª fase
 			ataques = {
 				{ nome = "guardiao", tipo = "invocar", recarga = 26, inicial = 2, preparo = 1, invocado = "guardiao", quantidade = 1, maxVivos = 12, peso = 0.8 },
+				{ nome = "exercito", tipo = "invocar", recarga = 24, inicial = 8, preparo = 1.5, invocado = "ceifadorEsmeralda", quantidade = 3, maxVivos = 10, peso = 1 },
 				{ nome = "fissuraTripla", tipo = "fissura", alcance = 50, minimo = 6, preparo = 0.9, recarga = 9, inicial = 4, comprimento = 46, largura = 5, passos = 11, entre = 0.06, quantidade = 3, abertura = 32, mult = 1.1, peso = 2, pesoLonge = 3 },
 				{ nome = "aneis", tipo = "anel", recarga = 12, inicial = 7, preparo = 0.8, aneis = 3, largura = 4, entre = 0.7, mult = 1.2, efeito = "alma", peso = 1.5, pesoPerto = 2.5 },
 				{ nome = "espiral", tipo = "espiral", recarga = 13, inicial = 10, preparo = 0.9, projetil = "alma", quantidade = 12, ondas = 5, intervalo = 0.3, giro = 0.22, velocidade = 30, mult = 0.7, peso = 1.2 },
@@ -585,6 +602,7 @@ local function ataqueGolpe(run, inimigo, ataque, alvoPos: Vector3, agora: number
 	definirAcao(inimigo, nomePreparo)
 	inimigo.ocupadoAte = agora + preparo + (acertos - 1) * entre + 0.4
 	Vfx.partida(run, "telegrafo", {
+		dono = inimigo.modelo,
 		forma = if giro then "circulo" else "cone",
 		pos = noChao(run, inimigo.raiz.Position),
 		dir = direcao,
@@ -685,7 +703,7 @@ local function ataqueRajada(run, inimigo, ataque, agora: number): boolean
 	parar(inimigo)
 	definirAcao(inimigo, "conjurar")
 	inimigo.ocupadoAte = agora + preparo + 0.5
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 3, duracao = preparo, chefe = true })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 3, duracao = preparo, chefe = true, dono = inimigo.modelo })
 	task.delay(preparo, function()
 		if not podeContinuar(run, inimigo) then
 			return
@@ -735,6 +753,7 @@ local function ataqueInvestida(run, inimigo, ataque, alvoPos: Vector3, agora: nu
 	definirAcao(inimigo, "prepararInvestida")
 	inimigo.ocupadoAte = agora + preparo + 0.7
 	Vfx.partida(run, "telegrafo", {
+		dono = inimigo.modelo,
 		forma = "linha",
 		pos = noChao(run, inimigo.raiz.Position),
 		dir = direcao,
@@ -783,7 +802,7 @@ local function ataqueSalto(run, inimigo, ataque, alvoPos: Vector3, agora: number
 	olharPara(inimigo, alvoPos)
 	definirAcao(inimigo, "prepararSalto")
 	inimigo.ocupadoAte = agora + preparo + voo + 0.45
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = destino, raio = raio, duracao = preparo + voo, chefe = inimigo.chefe })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = destino, raio = raio, duracao = preparo + voo, chefe = inimigo.chefe, dono = inimigo.modelo })
 
 	task.delay(preparo, function()
 		if not podeContinuar(run, inimigo) then
@@ -830,7 +849,7 @@ local function ataqueExplodir(run, inimigo, ataque, agora: number): boolean
 	parar(inimigo)
 	definirAcao(inimigo, "prepararExplosao")
 	inimigo.ocupadoAte = agora + 99
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = raio, duracao = ataque.preparo })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = raio, duracao = ataque.preparo, dono = inimigo.modelo })
 	task.delay(ataque.preparo, function()
 		if not inimigo.vivo or not run.ativa then
 			return
@@ -850,6 +869,10 @@ local function ataqueInvocar(run, inimigo, ataque, agora: number): boolean
 	parar(inimigo)
 	definirAcao(inimigo, "conjurar")
 	inimigo.ocupadoAte = agora + ataque.preparo + 0.4
+	if inimigo.chefe then
+		-- o chefe ergue a arma e chama: a tela treme e a terra começa a rachar
+		Vfx.partida(run, "chamado", { modelo = inimigo.modelo, pos = noChao(run, inimigo.raiz.Position), duracao = ataque.preparo, tipo = inimigo.tipo })
+	end
 	task.delay(ataque.preparo, function()
 		if not podeContinuar(run, inimigo) or not run.sala then
 			return
@@ -895,7 +918,7 @@ local function ataqueArea(run, inimigo, ataque, agora: number): boolean
 		local atraso = ataque.atraso or 1.2
 		for i = 1, math.min(#pontos, ataque.quantidade or 3) do
 			local ponto = pontos[i]
-			Vfx.partida(run, "telegrafo", { forma = "circulo", pos = ponto, raio = raio, duracao = atraso, chefe = true })
+			Vfx.partida(run, "telegrafo", { forma = "circulo", pos = ponto, raio = raio, duracao = atraso, chefe = true, dono = inimigo.modelo })
 			if ataque.visual == "meteoro" then
 				Vfx.partida(run, "meteoro", { pos = ponto, duracao = atraso, raio = raio })
 			elseif ataque.visual == "alma" then
@@ -971,7 +994,7 @@ local function ataquePuxar(run, inimigo, ataque, agora: number): boolean
 	definirAcao(inimigo, "prepararPuxao")
 	inimigo.ocupadoAte = agora + preparo + ataque.duracao + 0.2
 	local centro = noChao(run, inimigo.raiz.Position)
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raio, duracao = preparo, chefe = true })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raio, duracao = preparo, chefe = true, dono = inimigo.modelo, tipoAviso = "puxar" })
 	Vfx.partida(run, "puxaoPreparo", { modelo = inimigo.modelo, pos = centro, duracao = preparo, tipo = inimigo.tipo })
 	task.delay(preparo, function()
 		if not podeContinuar(run, inimigo) then
@@ -1018,6 +1041,7 @@ local function ataqueFissura(run, inimigo, ataque, alvoPos: Vector3, agora: numb
 	inimigo.ocupadoAte = agora + preparo + passos * entre + 0.5
 	for _, direcao in direcoes do
 		Vfx.partida(run, "telegrafo", {
+			dono = inimigo.modelo,
 			forma = "linha",
 			pos = centro + direcao * inimigo.raio,
 			dir = direcao,
@@ -1070,7 +1094,7 @@ local function ataqueEspiral(run, inimigo, ataque, agora: number): boolean
 	parar(inimigo)
 	definirAcao(inimigo, "conjurar")
 	inimigo.ocupadoAte = agora + preparo + ondas * intervalo + 0.3
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 4, duracao = preparo, chefe = true })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 4, duracao = preparo, chefe = true, dono = inimigo.modelo })
 	task.delay(preparo, function()
 		local giro = math.random() * math.pi
 		for _ = 1, ondas do
@@ -1391,7 +1415,7 @@ local function entrarNaFase2(run, inimigo)
 	local centro = noChao(run, inimigo.raiz.Position)
 	local raioOnda = inimigo.raio + 14
 	Vfx.partida(run, "fase2", { modelo = inimigo.modelo, pos = centro, cor = cor, duracao = TRANSFORMACAO, raio = raioOnda, tipo = inimigo.tipo })
-	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raioOnda, duracao = TRANSFORMACAO, chefe = true })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raioOnda, duracao = TRANSFORMACAO, chefe = true, dono = inimigo.modelo })
 
 	task.delay(TRANSFORMACAO, function()
 		if not inimigo.vivo or not run.ativa then
@@ -1432,6 +1456,20 @@ end
 
 local function decidir(run, inimigo, agora: number)
 	local def = inimigo.def
+
+	-- postura: esvazia sozinha depois de 3s sem pressão; o grogue acaba e a barra zera
+	if def.posturaMax then
+		if inimigo.grogueAte and agora >= inimigo.grogueAte then
+			inimigo.grogueAte = nil
+			inimigo.fatalPronto = false
+			inimigo.postura = 0
+			inimigo.modelo:SetAttribute("Grogue", false)
+			inimigo.modelo:SetAttribute("Postura", 0)
+		elseif (inimigo.postura or 0) > 0 and not inimigo.grogueAte and agora - (inimigo.posturaTocadaEm or 0) > 3 then
+			inimigo.postura = math.max(0, inimigo.postura - 1.4)
+			inimigo.modelo:SetAttribute("Postura", inimigo.postura / def.posturaMax)
+		end
+	end
 
 	if agora < inimigo.atordoadoAte then
 		parar(inimigo)
@@ -1669,7 +1707,7 @@ function Inimigos.morrer(run, inimigo)
 	-- Elite explosiva: explode logo depois de morrer
 	if inimigo.modificador and inimigo.modificador.explosivo then
 		local raio = 8 * inimigo.escala
-		Vfx.partida(run, "telegrafo", { forma = "circulo", pos = chao, raio = raio, duracao = 1 })
+		Vfx.partida(run, "telegrafo", { forma = "circulo", pos = chao, raio = raio, duracao = 1, dono = inimigo.modelo })
 		task.delay(1, function()
 			if not run.ativa then
 				return
