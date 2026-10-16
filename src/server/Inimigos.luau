@@ -525,9 +525,11 @@ local function limitarNaSala(run, pos: Vector3, margem: number): Vector3
 	if not sala then
 		return pos
 	end
+	-- (na sala com câmaras, só dentro da câmara trancada)
 	local local_ = pos - sala.origem
-	local x = math.clamp(local_.X, -sala.largura / 2 + margem + 1, sala.largura / 2 - margem - 1)
-	local z = math.clamp(local_.Z, -sala.comprimento / 2 + margem + 1, sala.comprimento / 2 - margem - 1)
+	local x0, x1, z0, z1 = Masmorra.limites(sala)
+	local x = math.clamp(local_.X, x0 + margem + 1, x1 - margem - 1)
+	local z = math.clamp(local_.Z, z0 + margem + 1, z1 - margem - 1)
 	return sala.origem + Vector3.new(x, local_.Y, z)
 end
 

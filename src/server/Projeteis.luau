@@ -134,6 +134,13 @@ local function bateuNaSala(run, pos: Vector3): boolean
 			return true
 		end
 	end
+	-- paredes internas e rocha das salas com câmaras
+	for _, b in sala.blocos or {} do
+		local d = pos - b.centro
+		if math.abs(d.X) < b.meio.X and math.abs(d.Z) < b.meio.Z then
+			return true
+		end
+	end
 	return false
 end
 

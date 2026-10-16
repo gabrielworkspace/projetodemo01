@@ -86,8 +86,42 @@ local function sequencia(pontos): NumberSequence
 	return NumberSequence.new(chaves)
 end
 
--- Fogo: chama clássica + faíscas subindo
+-- Efeito do pacote de VFX (ReplicatedStorage > EfeitosVFX) preso numa peça e ligado direto,
+-- como no lobby (Lobby.luau). Devolve nil se o efeito não existe.
+local function efeitoPronto(nome: string, pai: BasePart, escala: number, deslocamento: CFrame?): Attachment?
+	local efeitos = ReplicatedStorage:FindFirstChild("EfeitosVFX")
+	local molde = efeitos and efeitos:FindFirstChild(nome)
+	if not molde then
+		return nil
+	end
+	local anexo = Instance.new("Attachment")
+	anexo.Name = "Efeito" .. nome
+	anexo.CFrame = deslocamento or CFrame.identity
+	anexo.Parent = pai
+	for _, original in molde:GetDescendants() do
+		if original:IsA("ParticleEmitter") then
+			local emissor = original:Clone()
+			if escala ~= 1 then
+				local chaves = {}
+				for _, chave in emissor.Size.Keypoints do
+					table.insert(chaves, NumberSequenceKeypoint.new(chave.Time, chave.Value * escala, chave.Envelope * escala))
+				end
+				emissor.Size = NumberSequence.new(chaves)
+				emissor.Speed = NumberRange.new(emissor.Speed.Min * escala, emissor.Speed.Max * escala)
+			end
+			emissor.Enabled = true
+			emissor.Parent = anexo
+		end
+	end
+	return anexo
+end
+
+-- Fogo das tochas e braseiros: as chamas do pacote de VFX (LaminaFogo). Sem o pacote, usa a
+-- chama clássica do Roblox com faíscas subindo.
 local function fogo(pai: BasePart, cor: Color3, tamanho: number)
+	if efeitoPronto("LaminaFogo", pai, tamanho * 0.3, CFrame.new(0, 0.2, 0)) then
+		return
+	end
 	local f = Instance.new("Fire")
 	f.Size = tamanho
 	f.Heat = tamanho * 2
@@ -125,10 +159,40 @@ local function noCaminho(sala, pos: Vector3, folga: number): boolean
 	return pertoDaEntrada or pertoDaPorta
 end
 
+-- Limites (coordenadas locais) de onde os inimigos podem ficar: a câmara trancada no momento
+-- ou a sala inteira
+function Masmorra.limites(sala): (number, number, number, number)
+	local c = sala.camaraAtiva
+	if c then
+		return c.x0, c.x1, c.z0, c.z1
+	end
+	return -sala.largura / 2, sala.largura / 2, -sala.comprimento / 2, sala.comprimento / 2
+end
+
+-- Bate em parede interna ou rocha maciça (para projéteis)
+function Masmorra.bloqueado(sala, pos: Vector3): boolean
+	for _, b in sala.blocos do
+		local d = pos - b.centro
+		if math.abs(d.X) < b.meio.X and math.abs(d.Z) < b.meio.Z then
+			return true
+		end
+	end
+	return false
+end
+
 function Masmorra.posicaoValida(sala, pos: Vector3, raio: number): boolean
 	local local_ = pos - sala.origem
-	if math.abs(local_.X) > sala.largura / 2 - raio or math.abs(local_.Z) > sala.comprimento / 2 - raio then
+	local x0, x1, z0, z1 = Masmorra.limites(sala)
+	if local_.X < x0 + raio or local_.X > x1 - raio or local_.Z < z0 + raio or local_.Z > z1 - raio then
 		return false
+	end
+	for _, lista in { sala.blocos, sala.reservas } do
+		for _, b in lista do
+			local d = pos - b.centro
+			if math.abs(d.X) < b.meio.X + raio and math.abs(d.Z) < b.meio.Z + raio then
+				return false
+			end
+		end
 	end
 	for _, pilar in sala.pilares do
 		if planar(pos - pilar.pos).Magnitude < pilar.raio + raio then
@@ -145,9 +209,10 @@ function Masmorra.posicaoValida(sala, pos: Vector3, raio: number): boolean
 end
 
 local function posicaoLivre(sala, rng: Random, raio: number, evitarCaminho: boolean): Vector3?
+	local x0, x1, z0, z1 = Masmorra.limites(sala)
 	for _ = 1, 40 do
-		local x = rng:NextNumber(-sala.largura / 2 + raio + 2, sala.largura / 2 - raio - 2)
-		local z = rng:NextNumber(-sala.comprimento / 2 + raio + 2, sala.comprimento / 2 - raio - 2)
+		local x = rng:NextNumber(x0 + raio + 2, x1 - raio - 2)
+		local z = rng:NextNumber(z0 + raio + 2, z1 - raio - 2)
 		local pos = sala.origem + Vector3.new(x, 0, z)
 		if Masmorra.posicaoValida(sala, pos, raio) and not (evitarCaminho and noCaminho(sala, pos, raio)) then
 			return pos
@@ -267,7 +332,7 @@ local function criarParedes(sala)
 			local x = lado * (meiaL - 1)
 			parte(modelo, "Contraforte", Vector3.new(2.4, ALTURA_PAREDE, 2.4), CFrame.new(origem + Vector3.new(x, y, z)), matDetalhe, corDetalhe)
 			parte(modelo, "Capitel", Vector3.new(3, 1, 3), CFrame.new(origem + Vector3.new(x, ALTURA_PAREDE - 3, z)), matDetalhe, escurecer(corDetalhe, 0.15), { colide = false })
-			if i < passos and i % 2 == 0 then
+			if i < passos and i % 2 == 0 and not Masmorra.bloqueado(sala, origem + Vector3.new(lado * (meiaL - 3), 0, z + (sala.comprimento - 8) / passos / 2)) then
 				local zMeio = z + (sala.comprimento - 8) / passos / 2
 				criarArandela(sala, origem + Vector3.new(lado * meiaL, 8, zMeio), Vector3.new(-lado, 0, 0))
 			end
@@ -364,7 +429,8 @@ local function criarPilares(sala, rng: Random)
 		}
 	elseif sala.tipo == "combate" then
 		-- mais pilares em salas maiores (cobertura contra disparos)
-		local area = sala.largura * sala.comprimento / 8000
+		-- (com câmaras, as paredes internas já dão cobertura: menos pilares)
+		local area = sala.largura * sala.comprimento / 8000 * (if sala.camaras then 0.55 else 1)
 		for _ = 1, math.floor(rng:NextInteger(3, 6) * area + 0.5) do
 			local pos = posicaoLivre(sala, rng, 9, true)
 			if pos then
@@ -426,6 +492,9 @@ local function criarDecoracao(sala, rng: Random)
 	for _ = 1, quantidade do
 		local pos, dentro = pontoNaParede(sala, rng, 3)
 		local giro = CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+		if not Masmorra.posicaoValida(sala, pos, 2) then
+			continue -- (sala com câmaras) dentro da rocha ou na frente de um portão
+		end
 		if tema.id == "calabouco" then
 			if rng:NextNumber() < 0.5 then
 				local barril = parte(modelo, "Barril", Vector3.new(3, 2.2, 2.2), CFrame.new(pos + Vector3.new(0, 1.5, 0)) * EM_PE, Enum.Material.WoodPlanks, Color3.fromRGB(110, 72, 44), { formato = Enum.PartType.Cylinder })
@@ -624,14 +693,323 @@ local function criarBau(sala)
 end
 
 ------------------------------------------------------------------------
+-- Câmaras: a sala grande é dividida em três fileiras de câmaras ligadas por portões. Uma
+-- fileira pode ocupar a largura toda, ser estreita (rocha maciça dos lados) ou ter uma câmara
+-- de desafio ao lado. Ao entrar numa câmara, os portões trancam e as ondas começam (Partida).
+------------------------------------------------------------------------
+
+local ESPESSURA_DIVISORIA = 3
+
+-- Obstáculo sólido retangular (coordenadas locais): nada aparece ali e os projéteis batem
+local function bloco(sala, x0: number, x1: number, z0: number, z1: number)
+	table.insert(sala.blocos, {
+		centro = sala.origem + Vector3.new((x0 + x1) / 2, 0, (z0 + z1) / 2),
+		meio = Vector3.new((x1 - x0) / 2, 0, (z1 - z0) / 2),
+	})
+end
+
+-- Área que precisa ficar livre (vãos dos portões): nada é construído nem aparece ali
+local function reservar(sala, centro: Vector3, meioX: number, meioZ: number)
+	table.insert(sala.reservas, { centro = centro, meio = Vector3.new(meioX, 0, meioZ) })
+end
+
+-- Contraforte com tocha numa face de parede interna. "paraDentro" aponta para a câmara.
+local function contraforteComTocha(sala, pos: Vector3, paraDentro: Vector3, tocha: boolean)
+	local tema, modelo = sala.tema, sala.modelo
+	local y = ALTURA_PAREDE / 2
+	parte(modelo, "Contraforte", Vector3.new(2.4, ALTURA_PAREDE, 2.4), CFrame.new(pos + Vector3.new(0, y, 0)), tema.detalhe.material, tema.detalhe.cor)
+	parte(modelo, "Capitel", Vector3.new(3, 1, 3), CFrame.new(pos + Vector3.new(0, ALTURA_PAREDE - 3, 0)), tema.detalhe.material, escurecer(tema.detalhe.cor, 0.15), { colide = false })
+	if tocha then
+		criarArandela(sala, pos + paraDentro * 1.2 + Vector3.new(0, 8, 0), paraDentro)
+	end
+end
+
+-- Pedaço de parede interna entre (a) e (b) ao longo de um eixo; "aoLongoDeX" = a parede corre em X
+local function segmentoDeParede(sala, aoLongoDeX: boolean, fixo: number, a: number, b: number, altura: number, base: number)
+	if b - a < 0.2 then
+		return
+	end
+	local tema, modelo = sala.tema, sala.modelo
+	local meio = (a + b) / 2
+	local tamanho = if aoLongoDeX then Vector3.new(b - a, altura, ESPESSURA_DIVISORIA) else Vector3.new(ESPESSURA_DIVISORIA, altura, b - a)
+	local pos = if aoLongoDeX then Vector3.new(meio, base + altura / 2, fixo) else Vector3.new(fixo, base + altura / 2, meio)
+	parte(modelo, "Divisoria", tamanho, CFrame.new(sala.origem + pos), tema.parede.material, tema.parede.cor)
+	if base == 0 then
+		local h = ESPESSURA_DIVISORIA / 2
+		if aoLongoDeX then
+			bloco(sala, a, b, fixo - h, fixo + h)
+		else
+			bloco(sala, fixo - h, fixo + h, a, b)
+		end
+		-- rodapé e cornija dos dois lados
+		local faixa = if aoLongoDeX then Vector3.new(b - a, 1.6, ESPESSURA_DIVISORIA + 1) else Vector3.new(ESPESSURA_DIVISORIA + 1, 1.6, b - a)
+		local centroFaixa = if aoLongoDeX then Vector3.new(meio, 0.8, fixo) else Vector3.new(fixo, 0.8, meio)
+		parte(modelo, "Rodape", faixa, CFrame.new(sala.origem + centroFaixa), tema.detalhe.material, tema.detalhe.cor)
+		parte(modelo, "Cornija", faixa + (if aoLongoDeX then Vector3.new(0, -0.4, 0.4) else Vector3.new(0.4, -0.4, 0)), CFrame.new(sala.origem + centroFaixa + Vector3.new(0, altura - 1.6, 0)), tema.detalhe.material, tema.detalhe.cor, { colide = false })
+		-- contrafortes com tochas nas duas faces
+		local passos = math.floor((b - a) / 18)
+		for i = 1, passos do
+			local t = a + i * (b - a) / (passos + 1)
+			for _, lado in { -1, 1 } do
+				local dentro = if aoLongoDeX then Vector3.new(0, 0, lado) else Vector3.new(lado, 0, 0)
+				local p = sala.origem + (if aoLongoDeX then Vector3.new(t, 0, fixo) else Vector3.new(fixo, 0, t)) + dentro * (ESPESSURA_DIVISORIA / 2 + 1)
+				contraforteComTocha(sala, p, dentro, i % 2 == 1)
+			end
+		end
+	end
+end
+
+-- Portão levadiço com moldura de pedra num vão de parede (começa aberto)
+local function criarPortao(sala, centro: Vector3, largura: number, aoLongoDeX: boolean)
+	local tema, modelo = sala.tema, sala.modelo
+	local corDetalhe, matDetalhe = tema.detalhe.cor, tema.detalhe.material
+	local base = CFrame.new(centro) * (if aoLongoDeX then CFrame.identity else CFrame.Angles(0, math.rad(90), 0))
+	for _, lado in { -1, 1 } do
+		parte(modelo, "Umbral", Vector3.new(2.4, ALTURA_PORTA + 1, ESPESSURA_DIVISORIA + 1.2), base * CFrame.new(lado * (largura / 2 + 1.2), (ALTURA_PORTA + 1) / 2, 0), matDetalhe, corDetalhe)
+	end
+	parte(modelo, "Arco", Vector3.new(largura + 4.8, 2.2, ESPESSURA_DIVISORIA + 1.2), base * CFrame.new(0, ALTURA_PORTA + 1.1, 0), matDetalhe, corDetalhe)
+	local runas = {}
+	for _, lado in { -1, 1 } do
+		local runa = parte(modelo, "Runa", Vector3.new(1.2, 1.2, 0.3), base * CFrame.new(0, ALTURA_PORTA + 1.1, lado * (ESPESSURA_DIVISORIA / 2 + 0.7)) * CFrame.Angles(0, 0, math.rad(45)), Enum.Material.Neon, Color3.fromRGB(90, 255, 150), { colide = false })
+		table.insert(runas, runa)
+	end
+	local corFerro = Color3.fromRGB(46, 44, 46)
+	local barras = {}
+	local n = math.max(5, math.floor(largura / 1.8))
+	for i = 0, n do
+		local x = -largura / 2 + 0.6 + i * ((largura - 1.2) / n)
+		local barra = parte(modelo, "Barra", Vector3.new(0.5, ALTURA_PORTA, 0.5), base * CFrame.new(x, ALTURA_PORTA / 2, 0), Enum.Material.Metal, corFerro)
+		table.insert(barras, { barra, barra.CFrame })
+	end
+	for _, h in { 3, 7, 11 } do
+		local travessa = parte(modelo, "Travessa", Vector3.new(largura, 0.4, 0.4), base * CFrame.new(0, h, 0), Enum.Material.Metal, corFerro)
+		table.insert(barras, { travessa, travessa.CFrame })
+	end
+	-- aberto: erguido dentro da parede e sem colisão
+	for _, info in barras do
+		info[1].CFrame = info[2] + Vector3.new(0, ALTURA_PORTA - 1, 0)
+		info[1].CanCollide = false
+	end
+	local portao = { barras = barras, runas = runas, aberto = true, centro = centro }
+	table.insert(sala.portoes, portao)
+	reservar(sala, centro, if aoLongoDeX then largura / 2 + 3 else 6, if aoLongoDeX then 6 else largura / 2 + 3)
+	return portao
+end
+
+local function moverPortao(portao, aberto: boolean)
+	if portao.aberto == aberto then
+		return
+	end
+	portao.aberto = aberto
+	for _, info in portao.barras do
+		local peca, fechado = info[1], info[2]
+		if peca.Parent then
+			peca.CanCollide = not aberto
+			TweenService:Create(peca, TweenInfo.new(if aberto then 1.2 else 0.35, if aberto then Enum.EasingStyle.Quad else Enum.EasingStyle.Bounce, Enum.EasingDirection.Out), {
+				CFrame = if aberto then fechado + Vector3.new(0, ALTURA_PORTA - 1, 0) else fechado,
+			}):Play()
+		end
+	end
+	for _, runa in portao.runas do
+		runa.Color = if aberto then Color3.fromRGB(90, 255, 150) else Color3.fromRGB(255, 70, 70)
+	end
+end
+
+-- Divisória que atravessa a sala em X na altura "z", com um vão (portão) centrado em "xVao"
+local function divisoriaX(sala, z: number, x0: number, x1: number, xVao: number, largura: number)
+	local a, b = xVao - largura / 2, xVao + largura / 2
+	segmentoDeParede(sala, true, z, x0, a, ALTURA_PAREDE, 0)
+	segmentoDeParede(sala, true, z, b, x1, ALTURA_PAREDE, 0)
+	segmentoDeParede(sala, true, z, a, b, ALTURA_PAREDE - ALTURA_PORTA, ALTURA_PORTA) -- verga
+	return criarPortao(sala, sala.origem + Vector3.new(xVao, 0, z), largura, true)
+end
+
+local function divisoriaZ(sala, x: number, z0: number, z1: number, zVao: number, largura: number)
+	local a, b = zVao - largura / 2, zVao + largura / 2
+	segmentoDeParede(sala, false, x, z0, a, ALTURA_PAREDE, 0)
+	segmentoDeParede(sala, false, x, b, z1, ALTURA_PAREDE, 0)
+	segmentoDeParede(sala, false, x, a, b, ALTURA_PAREDE - ALTURA_PORTA, ALTURA_PORTA)
+	return criarPortao(sala, sala.origem + Vector3.new(x, 0, zVao), largura, false)
+end
+
+-- Rocha maciça que estreita uma fileira (com contrafortes e tochas na face da câmara)
+local function massaDeRocha(sala, rng: Random, x0: number, x1: number, z0: number, z1: number, ladoDaCamara: number)
+	if x1 - x0 < 1 then
+		return
+	end
+	local tema, modelo = sala.tema, sala.modelo
+	parte(modelo, "Rocha", Vector3.new(x1 - x0, ALTURA_PAREDE, z1 - z0), CFrame.new(sala.origem + Vector3.new((x0 + x1) / 2, ALTURA_PAREDE / 2, (z0 + z1) / 2)), tema.parede.material, escurecer(tema.parede.cor, 0.08))
+	bloco(sala, x0, x1, z0, z1)
+	local face = if ladoDaCamara > 0 then x1 else x0
+	local dentro = Vector3.new(ladoDaCamara, 0, 0)
+	parte(modelo, "Rodape", Vector3.new(1, 1.6, z1 - z0), CFrame.new(sala.origem + Vector3.new(face + ladoDaCamara * 0.5, 0.8, (z0 + z1) / 2)), tema.detalhe.material, tema.detalhe.cor)
+	parte(modelo, "Cornija", Vector3.new(1.6, 1.2, z1 - z0), CFrame.new(sala.origem + Vector3.new(face + ladoDaCamara * 0.4, ALTURA_PAREDE - 1.6, (z0 + z1) / 2)), tema.detalhe.material, tema.detalhe.cor, { colide = false })
+	local passos = math.max(1, math.floor((z1 - z0) / 18))
+	for i = 1, passos do
+		local z = z0 + i * (z1 - z0) / (passos + 1)
+		contraforteComTocha(sala, sala.origem + Vector3.new(face, 0, z) + dentro * 1.2, dentro, i % 2 == 1)
+	end
+	-- pedras soltas no pé da rocha
+	for _ = 1, math.floor((z1 - z0) / 10) do
+		local t = rng:NextNumber(1, 2.6)
+		local p = sala.origem + Vector3.new(face + ladoDaCamara * rng:NextNumber(0.5, 2.5), t / 2 - 0.2, rng:NextNumber(z0 + 3, z1 - 3))
+		parte(modelo, "Pedregulho", Vector3.new(t, t * 0.8, t * 1.1), CFrame.new(p) * CFrame.Angles(rng:NextNumber(-0.4, 0.4), rng:NextNumber(0, 3), rng:NextNumber(-0.4, 0.4)), tema.parede.material, escurecer(tema.parede.cor, rng:NextNumber(0, 0.2)))
+	end
+end
+
+local function sortearLinhas(sala, rng: Random)
+	local meiaL, meiaC = sala.largura / 2, sala.comprimento / 2
+	local zA = -meiaC + sala.comprimento * rng:NextNumber(0.3, 0.36)
+	local zB = zA + sala.comprimento * rng:NextNumber(0.3, 0.36)
+	local zs = { -meiaC, zA, zB, meiaC }
+	local tipos = { "inteira", "estreita", "dividida" }
+	local linhas = {}
+	local temDividida = false
+	for r = 1, 3 do
+		local tipo = tipos[rng:NextInteger(1, 3)]
+		if r == 2 and not temDividida and rng:NextNumber() < 0.5 then
+			tipo = "dividida"
+		end
+		if r == 3 and linhas[1].tipo == "inteira" and linhas[2].tipo == "inteira" and tipo == "inteira" then
+			tipo = "estreita"
+		end
+		local linha = { z0 = zs[r], z1 = zs[r + 1], tipo = tipo }
+		if tipo == "inteira" then
+			linha.px0, linha.px1 = -meiaL, meiaL
+		elseif tipo == "estreita" then
+			local w = sala.largura * rng:NextNumber(0.5, 0.68)
+			local folga = if r == 2 then meiaL - w / 2 else math.min(meiaL - w / 2, w / 2 - 16)
+			local c = rng:NextNumber(-folga, folga)
+			linha.px0, linha.px1 = c - w / 2, c + w / 2
+		else
+			temDividida = true
+			local lado = if rng:NextNumber() < 0.5 then -1 else 1
+			local xs = lado * rng:NextNumber(25, meiaL - 42)
+			linha.xs = xs
+			if lado > 0 then
+				linha.px0, linha.px1 = -meiaL, xs
+				linha.lado = { x0 = xs, x1 = meiaL }
+			else
+				linha.px0, linha.px1 = xs, meiaL
+				linha.lado = { x0 = -meiaL, x1 = xs }
+			end
+		end
+		linhas[r] = linha
+	end
+	-- portões entre as fileiras: no trecho que as duas câmaras do caminho têm em comum
+	local largura = Config.CAMARAS.porta
+	for r = 1, 2 do
+		local a, b = linhas[r], linhas[r + 1]
+		local x0 = math.max(a.px0, b.px0) + largura / 2 + 7
+		local x1 = math.min(a.px1, b.px1) - largura / 2 - 7
+		if x1 < x0 then
+			return nil
+		end
+		a.xPorta = rng:NextNumber(x0, x1)
+	end
+	return linhas
+end
+
+local function criarCamaras(sala, rng: Random)
+	local meiaL = sala.largura / 2
+	local largura = Config.CAMARAS.porta
+	local linhas = nil
+	for _ = 1, 30 do
+		linhas = sortearLinhas(sala, rng)
+		if linhas then
+			break
+		end
+	end
+	if not linhas then
+		return -- (nunca deveria acontecer) fica uma sala só
+	end
+	local h = ESPESSURA_DIVISORIA / 2
+	local camaras = {}
+	for r, linha in linhas do
+		local z0 = linha.z0 + (if r > 1 then h else 0)
+		local z1 = linha.z1 - (if r < 3 then h else 0)
+		local x0, x1 = linha.px0, linha.px1
+		if linha.tipo == "dividida" then
+			if linha.xs > 0 then
+				x1 -= h
+			else
+				x0 += h
+			end
+		end
+		local camara = { x0 = x0, x1 = x1, z0 = z0, z1 = z1, caminho = true, linha = r, portoes = {}, numero = r }
+		camaras[r] = camara
+		linha.camara = camara
+		if linha.tipo == "dividida" then
+			local lx0, lx1 = linha.lado.x0, linha.lado.x1
+			if linha.xs > 0 then
+				lx0 += h
+			else
+				lx1 -= h
+			end
+			local lateral = { x0 = lx0, x1 = lx1, z0 = z0, z1 = z1, caminho = false, linha = r, portoes = {}, desafio = true }
+			linha.lateral = lateral
+		end
+	end
+	for _, linha in linhas do
+		if linha.lateral then
+			table.insert(camaras, linha.lateral)
+		end
+	end
+
+	-- divisórias entre as fileiras (com o portão do caminho)
+	for r = 1, 2 do
+		local portao = divisoriaX(sala, linhas[r].z1, -meiaL, meiaL, linhas[r].xPorta, largura)
+		table.insert(linhas[r].camara.portoes, portao)
+		table.insert(linhas[r + 1].camara.portoes, portao)
+	end
+	for r, linha in linhas do
+		if linha.tipo == "dividida" then
+			local z0 = linha.z0 + (if r > 1 then h else 0)
+			local z1 = linha.z1 - (if r < 3 then h else 0)
+			local zVao = rng:NextNumber(z0 + largura / 2 + 8, z1 - largura / 2 - 8)
+			local portao = divisoriaZ(sala, linha.xs, z0, z1, zVao, largura - 2)
+			table.insert(linha.camara.portoes, portao)
+			table.insert(linha.lateral.portoes, portao)
+		elseif linha.tipo == "estreita" then
+			local z0 = linha.z0 + (if r > 1 then h else 0)
+			local z1 = linha.z1 - (if r < 3 then h else 0)
+			massaDeRocha(sala, rng, -meiaL, linha.px0, z0, z1, 1)
+			massaDeRocha(sala, rng, linha.px1, meiaL, z0, z1, -1)
+		end
+	end
+	sala.camaras = camaras
+	sala.linhas = linhas
+end
+
+-- Braseiros nos cantos de cada câmara (cada câmara é iluminada por conta própria)
+local function iluminarCamaras(sala)
+	for _, c in sala.camaras do
+		for _, cx in { c.x0 + 5, c.x1 - 5 } do
+			for _, cz in { c.z0 + 5, c.z1 - 5 } do
+				local pos = sala.origem + Vector3.new(cx, 0, cz)
+				if Masmorra.posicaoValida(sala, pos, 2) then
+					criarBraseiro(sala, pos, 1)
+				end
+			end
+		end
+	end
+end
+
+------------------------------------------------------------------------
 -- API
 ------------------------------------------------------------------------
 
 -- Cria uma sala nova. "origem" é o centro do chão (a superfície fica em origem.Y).
 function Masmorra.construir(origem: Vector3, numero: number, tipo: string, rng: Random)
+	local tema = Config.temaDaSala(numero)
+	local comCamaras = tipo == "combate" and tema.camaras == true
 	local largura, comprimento
 	-- salas amplas: espaço para esquivar, cercar e lutar em grupo
-	if tipo == "chefe" then
+	if comCamaras then
+		local info = Config.CAMARAS
+		largura = rng:NextInteger(info.largura[1] // 5, info.largura[2] // 5) * 5
+		comprimento = rng:NextInteger(info.comprimento[1] // 5, info.comprimento[2] // 5) * 5
+	elseif tipo == "chefe" then
 		largura, comprimento = 150, 150
 	elseif tipo == "tesouro" then
 		largura, comprimento = 64, 70
@@ -648,15 +1026,22 @@ function Masmorra.construir(origem: Vector3, numero: number, tipo: string, rng: 
 		origem = origem,
 		numero = numero,
 		tipo = tipo,
-		tema = Config.temaDaSala(numero),
+		tema = tema,
 		largura = largura,
 		comprimento = comprimento,
 		pilares = {},
 		perigos = {},
+		blocos = {}, -- paredes internas e rocha maciça (sala com câmaras)
+		reservas = {}, -- vãos dos portões (ficam livres)
+		portoes = {},
+		camaras = nil, -- lista de câmaras (sala com câmaras); camaraAtiva = a trancada agora
 		spawn = CFrame.lookAt(origem + Vector3.new(0, 3, -comprimento / 2 + 7), origem + Vector3.new(0, 3, comprimento / 2)),
 	}
 
 	criarChao(sala, rng)
+	if comCamaras then
+		criarCamaras(sala, rng) -- antes do resto: paredes, pilares e enfeites desviam das câmaras
+	end
 	criarParedes(sala)
 	criarPorta(sala)
 	criarEntrada(sala)
@@ -668,6 +1053,8 @@ function Masmorra.construir(origem: Vector3, numero: number, tipo: string, rng: 
 		criarSalaDoChefe(sala)
 	elseif tipo == "tesouro" then
 		criarBau(sala)
+	elseif sala.camaras then
+		iluminarCamaras(sala)
 	else
 		-- braseiros nos cantos da entrada e no meio das laterais (iluminam a sala grande)
 		local meiaL, meiaC = largura / 2, comprimento / 2
@@ -679,6 +1066,58 @@ function Masmorra.construir(origem: Vector3, numero: number, tipo: string, rng: 
 		criarBraseiro(sala, origem + Vector3.new(meiaL - 5, 0, meiaC - 5), 1)
 	end
 	return sala
+end
+
+-- Câmara em que um ponto está (nil = no vão de um portão ou fora)
+function Masmorra.camaraDe(sala, pos: Vector3)
+	local local_ = pos - sala.origem
+	for _, c in sala.camaras or {} do
+		if local_.X > c.x0 + 1 and local_.X < c.x1 - 1 and local_.Z > c.z0 + 1 and local_.Z < c.z1 - 1 then
+			return c
+		end
+	end
+	return nil
+end
+
+-- Tranca uma câmara (portões descem; os inimigos ficam presos nela) ou destranca (camara = nil)
+function Masmorra.trancar(sala, camara)
+	if sala.camaraAtiva then
+		for _, portao in sala.camaraAtiva.portoes do
+			moverPortao(portao, true)
+		end
+	end
+	sala.camaraAtiva = camara
+	if camara then
+		for _, portao in camara.portoes do
+			moverPortao(portao, false)
+		end
+	end
+end
+
+-- Ponto livre para um inimigo dentro da câmara, longe dos pontos de "evitar" (os jogadores)
+function Masmorra.posicaoNaCamara(sala, rng: Random, camara, evitar: { Vector3 }, distancia: number): Vector3
+	local anterior = sala.camaraAtiva
+	sala.camaraAtiva = camara
+	local melhor = nil
+	for tentativa = 1, 40 do
+		local pos = posicaoLivre(sala, rng, 3, false)
+		if pos then
+			local longe = true
+			for _, p in evitar do
+				if planar(pos - p).Magnitude < (if tentativa > 30 then distancia * 0.5 else distancia) then
+					longe = false
+					break
+				end
+			end
+			melhor = melhor or pos
+			if longe then
+				melhor = pos
+				break
+			end
+		end
+	end
+	sala.camaraAtiva = anterior
+	return melhor or (sala.origem + Vector3.new((camara.x0 + camara.x1) / 2, 0, (camara.z0 + camara.z1) / 2))
 end
 
 -- Ponto no chão para um inimigo aparecer, longe da entrada dos jogadores

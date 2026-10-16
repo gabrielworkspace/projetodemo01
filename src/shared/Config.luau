@@ -24,6 +24,21 @@ Config.MAX_JOGADORES_POR_PARTIDA = 4
 Config.CONTAGEM_PORTAL = 10 -- segundos em cima do portal até a partida começar
 Config.CONTAGEM_PORTAL_CHEIO = 3 -- contagem quando o grupo já está completo
 Config.SALAS_POR_ANDAR = 5 -- a cada 5 salas vem um chefe e o elevador
+
+-- Salas com câmaras (temas com "camaras = true"): a sala de combate é bem maior e dividida em
+-- três câmaras seguidas (às vezes estreitas, entre rochas, ou com uma câmara de desafio ao
+-- lado). Ao entrar numa câmara os portões trancam e vêm ondas rápidas, uma emendando na outra;
+-- limpou, os portões abrem. A porta da sala abre quando as três câmaras do caminho estão limpas.
+Config.CAMARAS = {
+	largura = { 170, 185 },
+	comprimento = { 230, 250 },
+	porta = 16, -- largura dos portões entre as câmaras
+	inimigosMult = 1.35, -- inimigos a mais que numa sala comum (somando as câmaras)
+	vivosExtra = 3, -- inimigos vivos ao mesmo tempo a mais que numa sala comum
+	ondas = { 2, 3 }, -- ondas por câmara (a próxima chega quando sobram poucos)
+	sobramParaProxima = 2, -- a próxima onda vem quando restam estes inimigos
+	desafio = 6, -- inimigos da câmara de desafio (mais 0,5 por sala); a 1ª leva é elite
+}
 Config.CHANCE_SALA_TESOURO = 0.15
 Config.TEMPO_ESCOLHER_CARTA = 20
 Config.TEMPO_ELEVADOR = 25
@@ -74,7 +89,7 @@ Config.OURO_MANTIDO_AO_MORRER = 0.25
 
 -- Versão do jogo: aparece no canto da tela junto com a data e a hora do build (o build.py
 -- grava ReplicatedStorage > Versao). Suba o número quando publicar uma atualização grande.
-Config.VERSAO = "0.14"
+Config.VERSAO = "0.15"
 
 -- Inimigos ficam mais fortes a cada sala
 Config.VIDA_INIMIGO_POR_SALA = 0.14
@@ -179,6 +194,7 @@ Config.TEMAS = {
 		tinta = Color3.fromRGB(255, 236, 220),
 		particulas = "poeira",
 		lava = false,
+		camaras = true, -- salas de combate divididas em câmaras (Config.CAMARAS)
 	},
 	{
 		id = "caverna",
@@ -194,6 +210,7 @@ Config.TEMAS = {
 		tinta = Color3.fromRGB(225, 255, 230),
 		particulas = "esporos",
 		lava = false,
+		camaras = true, -- salas de combate divididas em câmaras (Config.CAMARAS)
 	},
 	{
 		id = "cripta",
@@ -209,6 +226,7 @@ Config.TEMAS = {
 		tinta = Color3.fromRGB(220, 235, 255),
 		particulas = "neve",
 		lava = false,
+		camaras = true, -- salas de combate divididas em câmaras (Config.CAMARAS)
 	},
 	{
 		id = "fornalha",
@@ -224,6 +242,7 @@ Config.TEMAS = {
 		tinta = Color3.fromRGB(255, 220, 200),
 		particulas = "brasas",
 		lava = true,
+		camaras = true,
 	},
 }
 

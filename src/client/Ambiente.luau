@@ -36,8 +36,8 @@ end
 
 -- Visual "mágico" (estilo desenho animado vivo): luz de dia suave e sem sombras escuras, cores
 -- bem saturadas, névoa clara ao fundo e brilho macio nas partes claras.
-local SATURACAO = 0.15 -- (o cenário do lobby já é colorido)
-local CONTRASTE = 0.1
+local SATURACAO = 0 -- (lobby realista: cores naturais, sem exagero)
+local CONTRASTE = 0.14
 local SATURACAO_MASMORRA = 0.3
 local CONTRASTE_MASMORRA = 0.26
 local masmorraAtiva = false
@@ -92,7 +92,7 @@ function Ambiente.lobby()
 	atmosfera.Color = Color3.fromRGB(214, 226, 255)
 	atmosfera.Decay = Color3.fromRGB(150, 180, 255)
 	atmosfera.Glare = 0
-	atmosfera.Haze = 0.2
+	atmosfera.Haze = 0.9 -- ar mais denso ao longe (perspectiva realista)
 	bloom.Intensity = 0.15
 	bloom.Size = 16
 	bloom.Threshold = 2.2

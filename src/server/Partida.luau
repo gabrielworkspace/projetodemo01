@@ -399,9 +399,173 @@ local function sortearElite(run, numero: number): string?
 	return nil
 end
 
+-- Sala com câmaras (Config.CAMARAS): ao entrar numa câmara os portões trancam e vêm ondas
+-- rápidas, a próxima chegando quando sobram poucos inimigos. Limpou, os portões abrem e a
+-- próxima câmara espera. A câmara de desafio (ao lado) é opcional: elites e ouro extra.
+-- Retorna true quando as câmaras do caminho foram limpas, false se o grupo inteiro caiu.
+local function salaDeCamaras(run): boolean
+	local sala = run.sala
+	local numero = run.numeroSala
+	local extras = math.max(0, run:quantidadeJogadores() - 1)
+	local info = Config.CAMARAS
+	run.inimigosPendentes = 0
+	local total = math.min(math.floor((7 + numero * 1.1 + extras * Config.INIMIGOS_POR_JOGADOR_EXTRA) * info.inimigosMult + 0.5), 60)
+	local maximoVivos = math.min(8 + numero // 3 + extras * Config.VIVOS_POR_JOGADOR_EXTRA + info.vivosExtra, 21)
+
+	-- inimigos de cada câmara do caminho conforme o tamanho dela
+	local caminho = {}
+	local areaTotal = 0
+	for _, c in sala.camaras do
+		if c.caminho then
+			table.insert(caminho, c)
+			areaTotal += (c.x1 - c.x0) * (c.z1 - c.z0)
+		elseif c.desafio then
+			c.cota = math.floor(info.desafio + numero * 0.5 + extras * 2)
+		end
+	end
+	for _, c in caminho do
+		c.cota = math.max(5, math.floor(total * (c.x1 - c.x0) * (c.z1 - c.z0) / areaTotal + 0.5))
+	end
+
+	local function personagens(soDePe: boolean)
+		local lista = {}
+		for _, estado in run.jogadores do
+			local personagem = estado.player.Character
+			local raiz = personagem and personagem:FindFirstChild("HumanoidRootPart")
+			if estado.vivo and (not soDePe or not estado.caido) and raiz and raiz:IsA("BasePart") then
+				table.insert(lista, { estado = estado, personagem = personagem, raiz = raiz })
+			end
+		end
+		return lista
+	end
+
+	local function grupoCaiu(): boolean
+		return not run.ativa or run:jogadoresAtivos() == 0
+	end
+
+	-- uma câmara: tranca, ondas e destranca. false = o grupo caiu
+	local function lutar(camara): boolean
+		Masmorra.trancar(sala, camara)
+		-- quem ficou do lado de fora é puxado para dentro: o grupo luta junto
+		local dentro = nil
+		for _, p in personagens(true) do
+			if Masmorra.camaraDe(sala, p.raiz.Position) == camara then
+				dentro = p.raiz
+				break
+			end
+		end
+		if dentro then
+			for _, p in personagens(false) do
+				if Masmorra.camaraDe(sala, p.raiz.Position) ~= camara then
+					p.personagem:PivotTo(dentro.CFrame * CFrame.new(run.rng:NextNumber(-3, 3), 0, 3))
+				end
+			end
+		end
+		local ondas = if camara.desafio then 1 else run.rng:NextInteger(info.ondas[1], info.ondas[2])
+		if camara.desafio then
+			run:anunciar("💀 Câmara de desafio! Elites guardam o ouro.", Color3.fromRGB(255, 170, 80))
+		else
+			run:anunciar(string.format("⚔️ Câmara %d de %d trancada!", camara.numero or 1, #caminho), COR_VERMELHO)
+		end
+		task.wait(0.6)
+
+		local restante = camara.cota
+		for onda = 1, ondas do
+			local tamanho = if onda == ondas then restante else math.floor(camara.cota / ondas + 0.5)
+			restante -= tamanho
+			if ondas > 1 then
+				run:enviarTodos("aviso", { texto = string.format("⚔️ Onda %d de %d", onda, ondas) })
+			end
+			local criados = 0
+			while run.sala == sala and criados < tamanho do
+				if grupoCaiu() then
+					return false
+				end
+				if run:quantidadeInimigos() + run.inimigosPendentes < maximoVivos then
+					local tipoInimigo = sortearDaTabela(run.rng, tabelaDaSala(sala.tema.inimigos, numero))
+					local grupo = Inimigos.TIPOS[tipoInimigo].grupo or 1
+					local evitar = {}
+					for _, p in personagens(true) do
+						table.insert(evitar, p.raiz.Position)
+					end
+					local base = Masmorra.posicaoNaCamara(sala, run.rng, camara, evitar, 14)
+					for g = 1, grupo do
+						local pos = if g == 1 then base else base + Vector3.new(run.rng:NextNumber(-3, 3), 0, run.rng:NextNumber(-3, 3))
+						local elite = nil
+						if g == 1 then
+							elite = if camara.desafio and criados < 3 then Inimigos.LISTA_ELITES[run.rng:NextInteger(1, #Inimigos.LISTA_ELITES)] else sortearElite(run, numero)
+						end
+						run:invocar(tipoInimigo, pos, elite)
+					end
+					criados += grupo
+					task.wait(0.25)
+				else
+					task.wait(0.2)
+				end
+			end
+			-- a próxima onda chega quando sobram poucos (a última precisa ser limpa)
+			local sobram = if onda == ondas then 0 else info.sobramParaProxima
+			while run.inimigosPendentes > 0 or run:quantidadeInimigos() > sobram do
+				if grupoCaiu() then
+					return false
+				end
+				task.wait(0.2)
+			end
+		end
+
+		camara.limpa = true
+		Masmorra.trancar(sala, nil)
+		if camara.desafio then
+			local centro = sala.origem + Vector3.new((camara.x0 + camara.x1) / 2, 2, (camara.z0 + camara.z1) / 2)
+			for _, estado in run.jogadores do
+				darOuro(run, estado, 30 + numero * 8)
+			end
+			Vfx.partida(run, "moedas", { pos = centro, quantidade = 30 })
+			run:anunciar("💰 Desafio vencido! Ouro para todos.", COR_OURO)
+		elseif camara ~= caminho[#caminho] then
+			run:anunciar("✅ Câmara limpa! Os portões se abriram.", COR_VERDE)
+		end
+		return true
+	end
+
+	task.wait(0.8)
+	if not lutar(caminho[1]) then
+		return false
+	end
+	while run.ativa do
+		if run:jogadoresAtivos() == 0 then
+			return false
+		end
+		local todas = true
+		for _, c in caminho do
+			if not c.limpa then
+				todas = false
+			end
+		end
+		if todas then
+			return true
+		end
+		-- a próxima câmara tranca quando alguém entra nela
+		for _, p in personagens(true) do
+			local c = Masmorra.camaraDe(sala, p.raiz.Position)
+			if c and not c.limpa then
+				if not lutar(c) then
+					return false
+				end
+				break
+			end
+		end
+		task.wait(0.15)
+	end
+	return false
+end
+
 -- Retorna true se a sala foi limpa, false se o grupo inteiro caiu
 local function salaDeCombate(run, tipo: string): boolean
 	local sala = run.sala
+	if sala.camaras then
+		return salaDeCamaras(run)
+	end
 	local numero = run.numeroSala
 	local jogadores = run:quantidadeJogadores()
 	run.inimigosPendentes = 0

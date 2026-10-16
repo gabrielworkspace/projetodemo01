@@ -72,6 +72,15 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 - **Cadência dos ataques:** depois de cada golpe é preciso esperar ele terminar para atacar de novo (clicar sem parar não adianta). Um clique feito pouco antes da hora fica guardado e sai no momento certo. A **barrinha embaixo do seu personagem** (e a sombra no quadradinho do Ataque) mostra quando o próximo ataque fica pronto; ela pisca quando libera. Mago e Arqueiro são os mais lentos. Os tempos ficam em `cadencia` dentro de `ataque` em Classes.luau.
 - **Peso dos golpes:** os personagens se preparam antes de cada ataque (erguem a espada, puxam a flecha, juntam a magia) e andam mais devagar enquanto atacam. O golpe só acerta no fim da preparação. Para deixar tudo mais rápido ou mais lento, mude `Config.PREPARO_GOLPE` (1 = sem atraso extra; padrão 1,7). A velocidade ao atacar é `Config.VELOCIDADE_ATACANDO`. O ajuste de cada classe fica em `preparo` dentro de `ataque` em Classes.luau.
 - **Salas maiores:** as salas de combate são bem mais largas (105 a 140 studs), com mais pilares, poças de lava e enfeites. A sala do chefe tem 150x150. As ondas têm mais inimigos e mais inimigos vivos ao mesmo tempo.
+- **Salas com câmaras (roguelike frenético):** as salas de combate têm cerca de 175x240 studs e são divididas em **três câmaras seguidas**, ligadas por portões. Cada fileira é sorteada:
+  - inteira (a largura toda);
+  - estreita (rocha maciça dos lados);
+  - com uma **câmara de desafio** ao lado.
+  - **Câmaras trancadas:** ao entrar numa câmara, os portões descem (runas vermelhas) e quem ficou do lado de fora é puxado para dentro. Vêm 2 ou 3 **ondas**, e a próxima chega quando sobram 2 inimigos. Limpou, os portões sobem (runas verdes).
+  - **Câmara de desafio** (opcional): uma onda com elites e ouro extra para todos no fim.
+  - A porta da sala abre quando as três câmaras do caminho estão limpas. Os inimigos ficam presos na câmara trancada, e flechas e magias batem nas paredes internas.
+  - Tochas e braseiros usam o fogo do pacote de VFX (`LaminaFogo`).
+  - Os números ficam em `Config.CAMARAS`. Para voltar à sala única, tire `camaras = true` do tema em `Config.TEMAS`.
 - **Inimigos de apoio** (a partir da 2ª sala de cada andar). Vale matar esses primeiro:
   - **Acólito** (manto verde): fica atrás do grupo e **cura** os aliados com um feixe verde.
   - **Guardião** (armadura de pedra e escudo de runas): dá **escudos azuis** aos aliados. O escudo absorve o dano antes da vida e aparece como uma bolha e uma barra azul.
@@ -191,6 +200,8 @@ py ferramentas/ver_poses.py --luau CAMINHO/luau.exe --acao ataque3 --tempos 0.09
 ```
 
 ## Editar o mapa no Studio (lobby)
+
+O lobby está com **materiais realistas** (grama, terra, pedra, madeira, tecido e metal, com cores mais naturais). Isso foi feito por `py ferramentas/lobby_realista.py`, que troca só o material e a cor de cada peça e mantém as posições e as suas edições. Antes de mudar, ele guarda uma cópia em `.backups/`.
 
 O cenário do lobby fica salvo dentro do jogo: abra o `MasmorraDasCartas.rbxlx` e ele aparece em **Workspace > Mapa > Lobby**, separado em pastas (Chao, Praca, Portal, Santuarios, Loja, Placa, Lago, Decoracao, Natureza, Limites).
 
