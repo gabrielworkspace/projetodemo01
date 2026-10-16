@@ -10,6 +10,7 @@ local Projeteis = require(servidor.Projeteis)
 local Combate = require(servidor.Combate)
 local Masmorra = require(servidor.Masmorra)
 local Remotos = require(servidor.Remotos)
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"))
 
 local Inimigos = {}
 
@@ -173,13 +174,14 @@ Inimigos.TIPOS = {
 	-- Ceifador Esmeralda: lacaio que o Skullbane chama do chão (não aparece sozinho nas salas)
 	ceifadorEsmeralda = {
 		nome = "Ceifador Esmeralda", raiz = V(2.6, 3.4, 2), quadril = 2.3, raio = 1.8, alturaBarra = 5.6,
-		vida = 130, dano = 15, velocidade = 15, ouro = 14, armadura = 0.1,
+		vida = 130, dano = 15, velocidade = 18, ouro = 14, armadura = 0.1,
 		entrada = 1.6, -- saindo do chão: não ataca nem leva dano
 		aleatorio = true,
+		encarar = true, -- anda sempre de frente para o alvo e rodeia entre um golpe e outro
 		ataques = {
-			{ nome = "corte", tipo = "golpe", alcance = 8, arco = 80, preparo = 0.75, atrasoVariavel = { 0.85, 1.4 }, recarga = 3.2, mult = 1.3, peso = 2 },
-			{ nome = "varrida", tipo = "golpe", anim = "Varrida", alcance = 8, arco = 150, preparo = 0.6, recarga = 2.4, mult = 1, peso = 3, seguir = { { "corte", 0.3 } } },
-			{ nome = "investida", tipo = "investida", alcance = 22, minimo = 9, preparo = 0.6, recarga = 6, inicial = 3, distancia = 16, largura = 4, mult = 1.1, peso = 2 },
+			{ nome = "corte", tipo = "golpe", alcance = 8, arco = 80, preparo = 0.75, atrasoVariavel = { 0.85, 1.4 }, recarga = 2.2, mult = 1.3, peso = 2 },
+			{ nome = "varrida", tipo = "golpe", anim = "Varrida", alcance = 8, arco = 150, preparo = 0.6, recarga = 1.6, mult = 1, peso = 3, seguir = { { "corte", 0.3 } } },
+			{ nome = "investida", tipo = "investida", alcance = 22, minimo = 9, preparo = 0.6, recarga = 4.5, inicial = 2, distancia = 16, largura = 4, mult = 1.1, peso = 2 },
 		},
 	},
 
@@ -192,11 +194,18 @@ Inimigos.TIPOS = {
 	skullbane = {
 		nome = "Skullbane", titulo = "O Senhor da Guerra Caído", chefe = true, pesado = true,
 		raiz = V(5, 6, 4), quadril = 5, raio = 4, alturaBarra = 11,
-		vida = 1600, dano = 24, velocidade = 12, ouro = 180, armadura = 0.1,
-		entrada = 5.4, -- desperta (sobe do chão, ruge, câmera) antes de lutar; imune nesse tempo
-		posturaMax = 100, -- parry tira 35, esquiva perfeita 12, golpes ~6% do dano (Combate.ferirPostura)
-		grogue = 4, -- segundos ajoelhado quando a postura quebra
-		pausa = { 0.5, 1.3 }, -- entre um ataque e outro ele anda e rodeia o alvo
+		vida = 2600, dano = 24, velocidade = 15, ouro = 180, armadura = 0.25,
+		maldicaoDoAlto = true, -- a cada Config.MALDICAO_INTERVALO uma alma amaldiçoa um jogador
+		caveiras = true, -- a cada Config.CAVEIRAS_INTERVALO solta caveiras que perseguem
+		-- fica frágil pouco e por pouco tempo (a luta não acaba em poucos golpes fatais)
+		fatalMult = 2, -- golpe fatal no grogue: dano dobrado (padrão: triplo)
+		grogueMult = 1.2, -- dano a mais enquanto está grogue (padrão: 1,4)
+		presoMult = 1.2, -- dano a mais com a lâmina presa no chão (padrão: 1,35)
+		posturaRecupera = 3, -- quanto a postura esvazia por vez sem pressão (padrão: 1,4)
+		entrada = 3.6, -- desperta (sobe do chão, ruge, câmera) antes de lutar; imune nesse tempo
+		posturaMax = 220, -- parry tira 35, esquiva perfeita 12, golpes ~6% do dano (Combate.ferirPostura)
+		grogue = 2, -- segundos ajoelhado quando a postura quebra
+		pausa = { 0.25, 0.7 }, -- entre um ataque e outro ele anda e rodeia o alvo
 		-- inspirado nos chefes de Elden Ring: escolhe os golpes ao acaso (nunca o mesmo padrão),
 		-- encadeia combos de surpresa, segura alguns golpes por um tempo diferente a cada vez
 		-- (para errar o tempo da esquiva), pune quem fica perto e puxa quem foge para longe.
@@ -206,7 +215,7 @@ Inimigos.TIPOS = {
 		ataques = {
 			-- Corte Descendente: ergue a lâmina acima da cabeça e desce com tudo; às vezes a
 			-- lâmina fica presa no chão (janela para bater com +35% de dano)
-			{ nome = "descendente", tipo = "golpe", alcance = 15, arco = 70, preparo = 1, atrasoVariavel = { 0.8, 1.7 }, recarga = 5, inicial = 3, mult = 1.6, preso = 1.4, presoChance = 0.5, peso = 3, pesoPerto = 2.5, seguir = { { "varrida", 0.35 } } },
+			{ nome = "descendente", tipo = "golpe", alcance = 15, arco = 70, preparo = 1, atrasoVariavel = { 0.8, 1.7 }, recarga = 5, inicial = 3, mult = 1.6, preso = 0.8, presoChance = 0.3, peso = 3, pesoPerto = 2.5, seguir = { { "varrida", 0.35 } } },
 			-- Varrida: a lâmina varre de lado na altura da cintura; pode voltar pelo outro lado
 			{ nome = "varrida", tipo = "golpe", anim = "Varrida", alcance = 13, arco = 170, preparo = 0.7, recarga = 3.5, inicial = 2, mult = 1, peso = 3, pesoPerto = 3, seguir = { { "varridaVolta", 0.55 }, { "descendente", 0.25 } } },
 			{ nome = "varridaVolta", tipo = "golpe", anim = "Varrida", volta = true, alcance = 13, arco = 170, preparo = 0.45, recarga = 0, mult = 1.1, peso = 0, seguir = { { "estocada", 0.3 } } },
@@ -235,7 +244,6 @@ Inimigos.TIPOS = {
 			recarga = 0.72,
 			combos = 1.4, -- encadeia mais golpes na 2ª fase
 			ataques = {
-				{ nome = "guardiao", tipo = "invocar", recarga = 26, inicial = 2, preparo = 1, invocado = "guardiao", quantidade = 1, maxVivos = 12, peso = 0.8 },
 				{ nome = "exercito", tipo = "invocar", recarga = 24, inicial = 8, preparo = 1.5, invocado = "ceifadorEsmeralda", quantidade = 3, maxVivos = 10, peso = 1 },
 				{ nome = "fissuraTripla", tipo = "fissura", alcance = 50, minimo = 6, preparo = 0.9, recarga = 9, inicial = 4, comprimento = 46, largura = 5, passos = 11, entre = 0.06, quantidade = 3, abertura = 32, mult = 1.1, peso = 2, pesoLonge = 3 },
 				{ nome = "aneis", tipo = "anel", recarga = 12, inicial = 7, preparo = 0.8, aneis = 3, largura = 4, entre = 0.7, mult = 1.2, efeito = "alma", peso = 1.5, pesoPerto = 2.5 },
@@ -392,8 +400,11 @@ function Inimigos.criar(run, tipo: string, posicao: Vector3, mult, elite: string
 	local def = Inimigos.TIPOS[tipo]
 	local modificador = elite and Inimigos.ELITES[elite]
 	local escala = if modificador then modificador.escala or 1 else 1
-	local vida = def.vida * mult.vida * (if modificador then 1.5 * (modificador.vida or 1) else 1)
-	local dano = def.dano * mult.dano * (if modificador then modificador.dano or 1 else 1)
+	-- chefes usam a vida do grupo própria deles (sobe mais por jogador: todos batem nele)
+	local multVida = if def.chefe and mult.vidaChefe then mult.vidaChefe else mult.vida
+	local vida = def.vida * multVida * (if modificador then 1.5 * (modificador.vida or 1) else 1)
+	local multDano = if def.chefe and mult.danoChefe then mult.danoChefe else mult.dano
+	local dano = def.dano * multDano * (if modificador then modificador.dano or 1 else 1)
 
 	local modelo, raiz, humanoid = criarCaixa(def.nome, def.raiz * escala, def.quadril * escala)
 	local alturaRaiz = def.quadril * escala + def.raiz.Y * escala / 2
@@ -446,6 +457,9 @@ function Inimigos.criar(run, tipo: string, posicao: Vector3, mult, elite: string
 		modificador = modificador,
 		velocidadeMult = if modificador then modificador.velocidade or 1 else 1,
 		recargaMult = if modificador then modificador.recarga or 1 else 1,
+		-- chefe em grupo: golpes voltam mais rápido e a postura aguenta mais (Config)
+		recargaGrupo = if def.chefe then mult.recargaChefe or 1 else 1,
+		posturaMax = if def.posturaMax then def.posturaMax * (if def.chefe then mult.posturaChefe or 1 else 1) else nil,
 		ouro = def.ouro * (if elite then 3 else 1),
 		vivo = true,
 		ameaca = {},
@@ -460,17 +474,28 @@ function Inimigos.criar(run, tipo: string, posicao: Vector3, mult, elite: string
 		lado = if math.random() < 0.5 then -1 else 1,
 		trocaLadoEm = agora + 2,
 	}
-	-- chefes que rodeiam o alvo viram pelo nosso código (sempre encarando quem perseguem)
-	if def.pausa then
+	-- chefes, Ceifadores e quem luta de longe viram pelo nosso código: andam sempre de frente
+	-- para o alvo (recuando ou rodeando, não mostram as costas)
+	inimigo.encara = def.pausa ~= nil or def.encarar == true or (def.comportamento ~= nil and def.comportamento ~= "perseguir")
+	if inimigo.encara then
 		humanoid.AutoRotate = false
+	end
+	if def.maldicaoDoAlto then
+		inimigo.proximaMaldicao = agora + (def.entrada or 0) + Config.MALDICAO_INTERVALO
+	end
+	if def.caveiras then
+		inimigo.proximasCaveiras = agora + (def.entrada or 0) + Config.CAVEIRAS_INTERVALO
 	end
 	-- entrada de chefe: sobe do chão e ruge, sem atacar nem levar dano
 	if def.entrada then
 		inimigo.ocupadoAte = agora + def.entrada
 		inimigo.invulneravelAte = agora + def.entrada
 	end
+	-- chefes começam a usar os golpes logo depois de despertar (Config.INICIO_ATAQUES_CHEFE)
+	local inicioMult = if def.chefe then Config.INICIO_ATAQUES_CHEFE else 1
 	for _, ataque in ataques do
-		inimigo.prontoEm[ataque] = agora + (def.entrada or 0) + (ataque.inicial or math.random() * (ataque.recarga or 1) * 0.5)
+		local inicial = ataque.inicial or math.random() * (ataque.recarga or 1) * 0.5
+		inimigo.prontoEm[ataque] = agora + (def.entrada or 0) + inicial * inicioMult
 	end
 	run.inimigos[inimigo] = true
 	return inimigo
@@ -538,6 +563,9 @@ local function opcoesDoEfeito(inimigo, efeito: string?)
 	end
 	if efeito == "queimar" then
 		opcoes.queimar = inimigo.dano * 0.15
+	end
+	if efeito == "maldicao" then
+		opcoes.maldicao = Config.MALDICAO_DURACAO
 	end
 	return opcoes
 end
@@ -1454,8 +1482,142 @@ local function sortearSeguinte(inimigo, ataque)
 	return nil
 end
 
+--[[ Maldição do Alto (Skullbane): uma alma cai do alto num jogador do grupo (sorteado). O selo
+	segue a pessoa e só trava no lugar Config.MALDICAO_TRAVA segundos antes da queda: escapa quem
+	dá a esquiva bem na hora (fica intocável ou sai do selo) ou quem defende com o escudo. Quem é
+	atingido leva dano e fica amaldiçoado (sem dash, corrida e habilidades). Vem do céu, não dele:
+	acontece mesmo com o chefe atacando ou tonto. ]]
+local idMaldicao = 0
+local function maldicaoDoAlto(run, inimigo, forte: boolean)
+	local candidatos = {}
+	for _, estado in run.jogadores do
+		local personagem = estado.player.Character
+		local raiz = personagem and personagem:FindFirstChild("HumanoidRootPart")
+		if estado.vivo and not estado.caido and raiz then
+			table.insert(candidatos, estado)
+		end
+	end
+	if #candidatos == 0 then
+		return
+	end
+	local alvo = candidatos[math.random(#candidatos)]
+	local function posicaoDoAlvo(): Vector3?
+		local personagem = alvo.player.Character
+		local raiz = personagem and personagem:FindFirstChild("HumanoidRootPart") :: BasePart?
+		return if raiz then noChao(run, raiz.Position) else nil
+	end
+	local centro = posicaoDoAlvo()
+	if not centro then
+		return
+	end
+	idMaldicao += 1
+	local id = idMaldicao
+	local raio = if forte then Config.MALDICAO_FORTE_RAIO else Config.MALDICAO_RAIO
+	local duracao = if forte then Config.MALDICAO_FORTE_DURACAO else Config.MALDICAO_DURACAO
+	local trava = math.min(Config.MALDICAO_TRAVA, Config.MALDICAO_AVISO)
+	Vfx.partida(run, "maldicaoCeu", { id = id, jogador = alvo.player, pos = centro, raio = raio, duracao = Config.MALDICAO_AVISO, forte = forte })
+	task.delay(Config.MALDICAO_AVISO - trava, function()
+		if not run.ativa or not inimigo.vivo then
+			return
+		end
+		-- o selo trava onde a pessoa está agora
+		centro = posicaoDoAlvo() or centro
+		Vfx.partida(run, "maldicaoTrava", { id = id, pos = centro, resta = trava })
+		task.delay(trava, function()
+			if not run.ativa or not inimigo.vivo then
+				return
+			end
+			for _, estado in run.jogadores do
+				local personagem = estado.player.Character
+				local raiz = personagem and personagem:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if estado.vivo and not estado.caido and raiz and planar(raiz.Position - centro).Magnitude <= raio + 0.5 then
+					if estado.defendendoDesde then
+						-- escudo erguido: a alma bate no escudo e some
+						Vfx.partida(run, "defesa", { jogador = estado.player, perfeita = true, pos = raiz.Position + Vector3.new(0, 2.5, 0), dir = Vector3.yAxis })
+					else
+						-- (esquivando ou com escudo ativo, o dano e a maldição são anulados em danoAoJogador)
+						Combate.danoAoJogador(run, estado, inimigo.dano * (if forte then 0.7 else 0.3), inimigo, { maldicao = duracao, origem = centro })
+					end
+				end
+			end
+		end)
+	end)
+end
+
+--[[ Caveiras (Skullbane): saem do peito dele e perseguem os jogadores, virando devagar
+	(Config.CAVEIRAS_GIRO). Dá para fugir, desviar de lado na hora certa ou atravessar com a
+	esquiva (intocável). ]]
+local function soltarCaveiras(run, inimigo)
+	local alvos = {}
+	for _, estado in run.jogadores do
+		local personagem = estado.player.Character
+		if estado.vivo and not estado.caido and personagem and personagem:FindFirstChild("HumanoidRootPart") then
+			table.insert(alvos, estado)
+		end
+	end
+	if #alvos == 0 then
+		return
+	end
+	local quantidade = math.max(Config.CAVEIRAS_MINIMO, #alvos)
+	local origem = inimigo.raiz.Position + Vector3.new(0, 3, 0)
+	local frente = unidade(inimigo.raiz.CFrame.LookVector, Vector3.new(0, 0, -1))
+	local lista = {}
+	for i = 1, quantidade do
+		local estado = alvos[(i - 1) % #alvos + 1]
+		local saida = CFrame.Angles(0, (i - (quantidade + 1) / 2) * 0.9, 0):VectorToWorldSpace(frente)
+		table.insert(lista, {
+			lado = "inimigo",
+			tipo = "caveira",
+			pos = origem + saida * (inimigo.raio + 2),
+			dir = saida,
+			velocidade = Config.CAVEIRAS_VELOCIDADE,
+			alcance = Config.CAVEIRAS_VELOCIDADE * Config.CAVEIRAS_DURACAO,
+			raio = 1.3,
+			aoMover = function(projetil, dt)
+				-- vira devagar em direção à pessoa que persegue
+				local personagem = estado.player.Character
+				local raiz = personagem and personagem:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if raiz and estado.vivo and not estado.caido then
+					local desejada = planar(raiz.Position - projetil.pos)
+					if desejada.Magnitude > 0.5 then
+						local alvoDir = desejada.Unit
+						local angulo = math.acos(math.clamp(projetil.dir:Dot(alvoDir), -1, 1))
+						if angulo > 0.001 then
+							local nova = projetil.dir:Lerp(alvoDir, math.min(1, Config.CAVEIRAS_GIRO * dt / angulo))
+							if nova.Magnitude > 0.001 then
+								projetil.dir = nova.Unit
+							end
+						end
+					end
+				end
+				-- os computadores dos jogadores recebem a direção nova algumas vezes por segundo
+				projetil.tempoAviso = (projetil.tempoAviso or 0) + dt
+				if projetil.tempoAviso >= 0.12 then
+					projetil.tempoAviso = 0
+					Vfx.partida(run, "projetilDir", { id = projetil.id, pos = projetil.pos, dir = projetil.dir, silencioso = true })
+				end
+			end,
+			aoAcertar = function(alvoEstado, _, projetil)
+				Combate.danoAoJogador(run, alvoEstado, inimigo.dano * Config.CAVEIRAS_DANO, inimigo, { origem = projetil.pos - projetil.dir * 4 })
+			end,
+		})
+	end
+	Vfx.partida(run, "caveiras", { pos = origem })
+	Projeteis.disparar(run, lista)
+end
+
 local function decidir(run, inimigo, agora: number)
 	local def = inimigo.def
+	if def.maldicaoDoAlto and inimigo.proximaMaldicao and agora >= inimigo.proximaMaldicao then
+		inimigo.proximaMaldicao = agora + Config.MALDICAO_INTERVALO
+		inimigo.maldicoes = (inimigo.maldicoes or 0) + 1
+		maldicaoDoAlto(run, inimigo, inimigo.maldicoes % Config.MALDICAO_FORTE_A_CADA == 0)
+	end
+	-- caveiras: saem dele, então não com ele tonto ou grogue (soltam assim que ele se recupera)
+	if def.caveiras and inimigo.proximasCaveiras and agora >= inimigo.proximasCaveiras and agora >= (inimigo.atordoadoAte or 0) then
+		inimigo.proximasCaveiras = agora + Config.CAVEIRAS_INTERVALO
+		soltarCaveiras(run, inimigo)
+	end
 
 	-- postura: esvazia sozinha depois de 3s sem pressão; o grogue acaba e a barra zera
 	if def.posturaMax then
@@ -1466,8 +1628,8 @@ local function decidir(run, inimigo, agora: number)
 			inimigo.modelo:SetAttribute("Grogue", false)
 			inimigo.modelo:SetAttribute("Postura", 0)
 		elseif (inimigo.postura or 0) > 0 and not inimigo.grogueAte and agora - (inimigo.posturaTocadaEm or 0) > 3 then
-			inimigo.postura = math.max(0, inimigo.postura - 1.4)
-			inimigo.modelo:SetAttribute("Postura", inimigo.postura / def.posturaMax)
+			inimigo.postura = math.max(0, inimigo.postura - (def.posturaRecupera or 1.4))
+			inimigo.modelo:SetAttribute("Postura", inimigo.postura / (inimigo.posturaMax or def.posturaMax))
 		end
 	end
 
@@ -1555,12 +1717,12 @@ local function decidir(run, inimigo, agora: number)
 				if sorteio <= 0 then
 					local ataque = item[1]
 					if executarAtaque(run, inimigo, ataque, info.estado, alvoPos, agora) then
-						inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult
+						inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult * inimigo.recargaGrupo
 						inimigo.ultimoAtaque = ataque
 						inimigo.encadear = sortearSeguinte(inimigo, ataque)
 						if def.pausa and not inimigo.encadear then
 							local pausa = def.pausa[1] + math.random() * (def.pausa[2] - def.pausa[1])
-							inimigo.ataqueLivreEm = inimigo.ocupadoAte + pausa * (if inimigo.fase2 then 0.7 else 1)
+							inimigo.ataqueLivreEm = inimigo.ocupadoAte + pausa * (if inimigo.fase2 then 0.7 else 1) * inimigo.recargaGrupo
 						end
 						return
 					end
@@ -1575,10 +1737,10 @@ local function decidir(run, inimigo, agora: number)
 		if podeAtacar and agora >= (inimigo.prontoEm[ataque] or 0) and distancia <= (ataque.alcance or 999) * inimigo.escala and distancia >= (ataque.minimo or 0) then
 			if executarAtaque(run, inimigo, ataque, info.estado, alvoPos, agora) then
 				local apressado = if inspirado and ataque.tipo ~= "grito" then 0.7 else 1
-				inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult * apressado
+				inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult * inimigo.recargaGrupo * apressado
 				if def.pausa then
 					local pausa = def.pausa[1] + math.random() * (def.pausa[2] - def.pausa[1])
-					inimigo.ataqueLivreEm = inimigo.ocupadoAte + pausa * (if inimigo.fase2 then 0.7 else 1)
+					inimigo.ataqueLivreEm = inimigo.ocupadoAte + pausa * (if inimigo.fase2 then 0.7 else 1) * inimigo.recargaGrupo
 				end
 				return
 			else
@@ -1591,25 +1753,34 @@ local function decidir(run, inimigo, agora: number)
 	local comportamento = def.comportamento or "perseguir"
 	if comportamento == "perseguir" then
 		local alcanceGolpe = 4
+		local menorGolpe = math.huge
 		for _, ataque in inimigo.ataques do
 			if ataque.tipo == "golpe" or ataque.tipo == "explodir" then
 				alcanceGolpe = math.max(alcanceGolpe, ataque.alcance * inimigo.escala)
+				if not ataque.minimo then
+					menorGolpe = math.min(menorGolpe, ataque.alcance * inimigo.escala)
+				end
 			end
+		end
+		-- quem escolhe golpes ao acaso (chefe, Ceifador) chega no alcance do golpe mais curto,
+		-- para todos os golpes de perto poderem sair
+		if def.aleatorio and menorGolpe < math.huge then
+			alcanceGolpe = menorGolpe
 		end
 		if distancia > alcanceGolpe * 0.75 then
 			mover(run, inimigo, alvoPos)
-			if def.pausa then
+			if inimigo.encara then
 				olharPara(inimigo, alvoPos)
 			end
-		elseif def.pausa and not podeAtacar then
-			-- esperando o próximo ataque: rodeia o alvo devagar, encarando
+		elseif def.pausa or def.encarar then
+			-- esperando o próximo ataque (pausa ou golpes recarregando): rodeia o alvo, encarando
 			if agora >= inimigo.trocaLadoEm then
 				inimigo.lado = -inimigo.lado
 				inimigo.trocaLadoEm = agora + 1.5 + math.random() * 1.5
 			end
 			local pos = inimigo.raiz.Position
 			local paraAlvo = unidade(alvoPos - pos, Vector3.new(0, 0, 1))
-			inimigo.humanoid.WalkSpeed = velocidade * 0.55
+			inimigo.humanoid.WalkSpeed = velocidade * 0.75
 			mover(run, inimigo, pos + Vector3.new(-paraAlvo.Z, 0, paraAlvo.X) * inimigo.lado * 6)
 			olharPara(inimigo, alvoPos)
 		else
@@ -1661,6 +1832,10 @@ local function decidir(run, inimigo, agora: number)
 			local paraAlvo = unidade(alvoPos - pos, Vector3.new(0, 0, 1))
 			mover(run, inimigo, pos + Vector3.new(-paraAlvo.Z, 0, paraAlvo.X) * inimigo.lado * 6)
 		end
+	end
+	-- recuando ou andando de lado, quem encara continua de frente para o alvo
+	if inimigo.encara and comportamento ~= "perseguir" then
+		olharPara(inimigo, alvoPos)
 	end
 end
 

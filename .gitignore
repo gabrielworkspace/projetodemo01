@@ -14,3 +14,6 @@ powershell.bat
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Cópias que o build.py faz quando o jogo foi salvo pelo Studio
+.backups/

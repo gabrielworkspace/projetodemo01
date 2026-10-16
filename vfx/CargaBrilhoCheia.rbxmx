@@ -99,62 +99,6 @@
 						<SharedString name="Tags">yuZpQdnvvUBOTYh1jqZ2cA==</SharedString>
 						<UniqueId name="UniqueId">586019c069859bb00ae2dc6d000290a4</UniqueId>
 					</Properties>
-					<Item class="ParticleEmitter" referent="RBXBC3CF7CB8AA94E0DB4A4C1295F355D78">
-						<Properties>
-							<Vector3 name="Acceleration">
-								<X>0</X>
-								<Y>0</Y>
-								<Z>0</Z>
-							</Vector3>
-							<float name="Brightness">1</float>
-							<ColorSequence name="Color">0 1.0000 0.8392 0.3529 0 1 1.0000 0.8392 0.3529 0 </ColorSequence>
-							<float name="Drag">0</float>
-							<token name="EmissionDirection">1</token>
-							<bool name="Enabled">true</bool>
-							<bool name="FlipbookBlendFrames">true</bool>
-							<NumberRange name="FlipbookFramerate">1 1 </NumberRange>
-							<string name="FlipbookIncompatible">Particle texture must be 1024 by 1024 to use flipbooks.</string>
-							<token name="FlipbookLayout">0</token>
-							<token name="FlipbookMode">0</token>
-							<int name="FlipbookSizeX">1</int>
-							<int name="FlipbookSizeY">1</int>
-							<bool name="FlipbookStartRandom">false</bool>
-							<NumberRange name="Lifetime">0.5 1 </NumberRange>
-							<float name="LightEmission">1</float>
-							<float name="LightInfluence">0</float>
-							<bool name="LockedToPart">false</bool>
-							<token name="Orientation">0</token>
-							<float name="Rate">25</float>
-							<NumberRange name="RotSpeed">0 0 </NumberRange>
-							<NumberRange name="Rotation">-360 360 </NumberRange>
-							<token name="Shape">0</token>
-							<token name="ShapeInOut">0</token>
-							<float name="ShapePartial">1</float>
-							<token name="ShapeStyle">0</token>
-							<NumberSequence name="Size">0 1 0 1 2 0.25 </NumberSequence>
-							<NumberRange name="Speed">0 0 </NumberRange>
-							<Vector2 name="SpreadAngle">
-								<X>0</X>
-								<Y>0</Y>
-							</Vector2>
-							<NumberSequence name="Squash">0 0 0 1 0 0 </NumberSequence>
-							<Content name="Texture"><url>rbxassetid://4509687978</url></Content>
-							<float name="TimeScale">1</float>
-							<NumberSequence name="Transparency">0 1 0 0.5 0.75 0 1 1 0 </NumberSequence>
-							<float name="VelocityInheritance">0</float>
-							<bool name="WindAffectsDrag">false</bool>
-							<float name="ZOffset">0</float>
-							<BinaryString name="AttributesSerialize" />
-							<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
-							<bool name="DefinesCapabilities">false</bool>
-							<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
-							<string name="Name">Glow</string>
-							<BinaryString name="SerializedOverrides" />
-							<int64 name="SourceAssetId">-1</int64>
-							<SharedString name="Tags">yuZpQdnvvUBOTYh1jqZ2cA==</SharedString>
-							<UniqueId name="UniqueId">586019c069859bb00ae2dc6d000290a5</UniqueId>
-						</Properties>
-					</Item>
 					<Item class="ParticleEmitter" referent="RBX1ED6A186488A40B9920692C3C3F43CE5">
 						<Properties>
 							<Vector3 name="Acceleration">

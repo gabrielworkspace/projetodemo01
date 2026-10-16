@@ -3,8 +3,12 @@
 
 local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
+
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local Ambiente = {}
 
@@ -32,41 +36,77 @@ end
 
 -- Visual "mágico" (estilo desenho animado vivo): luz de dia suave e sem sombras escuras, cores
 -- bem saturadas, névoa clara ao fundo e brilho macio nas partes claras.
-local SATURACAO = 0.38
+local SATURACAO = 0.15 -- (o cenário do lobby já é colorido)
 local CONTRASTE = 0.1
 local SATURACAO_MASMORRA = 0.3
 local CONTRASTE_MASMORRA = 0.26
 local masmorraAtiva = false
 
+-- Música do acampamento (Config.MUSICA_LOBBY): entra devagar no lobby e some na masmorra
+local musica = Instance.new("Sound")
+musica.Name = "MusicaLobby"
+musica.SoundId = Config.MUSICA_LOBBY or ""
+musica.Looped = true
+musica.Volume = 0
+musica.Parent = SoundService
+local vezMusica = 0
+
+local function musicaDoLobby(ligar: boolean)
+	if musica.SoundId == "" then
+		return
+	end
+	vezMusica += 1
+	local minhaVez = vezMusica
+	if ligar then
+		if not musica.IsPlaying then
+			musica:Resume()
+		end
+		animar(musica, 2.5, { Volume = Config.VOLUME_MUSICA_LOBBY or 0.4 })
+	else
+		animar(musica, 1.2, { Volume = 0 })
+		task.delay(1.3, function()
+			if vezMusica == minhaVez then
+				musica:Pause()
+			end
+		end)
+	end
+end
+
 function Ambiente.lobby()
+	-- acampamento de fantasia (estilo desenho): sol de fim de tarde, mais baixo e quente, que faz
+	-- as árvores e as construções jogarem sombras compridas e bem marcadas no chão. A luz do céu
+	-- (ambiente) é baixa para não apagar as sombras, e o brilho (bloom) é fraco: só o que é muito
+	-- claro brilha um pouco.
 	masmorraAtiva = false
-	Lighting.ClockTime = 14.5
-	Lighting.Brightness = 2.4
-	Lighting.Ambient = Color3.fromRGB(150, 150, 160)
-	Lighting.OutdoorAmbient = Color3.fromRGB(175, 170, 165)
-	Lighting.EnvironmentDiffuseScale = 1
-	Lighting.EnvironmentSpecularScale = 0.8
+	Lighting.ClockTime = 16.3
+	Lighting.Brightness = 3.4
+	Lighting.Ambient = Color3.fromRGB(96, 96, 118)
+	Lighting.OutdoorAmbient = Color3.fromRGB(124, 128, 150)
+	Lighting.ColorShift_Top = Color3.fromRGB(255, 222, 176)
+	Lighting.EnvironmentDiffuseScale = 0.35
+	Lighting.EnvironmentSpecularScale = 0.2
 	Lighting.ExposureCompensation = 0.1
-	Lighting.ShadowSoftness = 0.6
-	atmosfera.Density = 0.28
-	atmosfera.Offset = 0.15
-	atmosfera.Color = Color3.fromRGB(210, 228, 255)
-	atmosfera.Decay = Color3.fromRGB(150, 175, 220)
-	atmosfera.Glare = 0.2
-	atmosfera.Haze = 1.6
-	bloom.Intensity = 0.6
-	bloom.Size = 40
-	bloom.Threshold = 1.05
-	cores.Brightness = 0.03
+	Lighting.ShadowSoftness = 0.12
+	atmosfera.Density = 0.24
+	atmosfera.Offset = 0.1
+	atmosfera.Color = Color3.fromRGB(214, 226, 255)
+	atmosfera.Decay = Color3.fromRGB(150, 180, 255)
+	atmosfera.Glare = 0
+	atmosfera.Haze = 0.2
+	bloom.Intensity = 0.15
+	bloom.Size = 16
+	bloom.Threshold = 2.2
+	cores.Brightness = 0
 	cores.Contrast = CONTRASTE
 	cores.Saturation = SATURACAO
-	cores.TintColor = Color3.fromRGB(255, 250, 240)
-	raiosDeSol.Intensity = 0.06
-	raiosDeSol.Spread = 0.8
+	cores.TintColor = Color3.fromRGB(255, 248, 236)
+	raiosDeSol.Intensity = 0.07
+	raiosDeSol.Spread = 0.5
 	foco.FocusDistance = 30
-	foco.InFocusRadius = 45
-	foco.FarIntensity = 0.12
+	foco.InFocusRadius = 50
+	foco.FarIntensity = 0.08
 	foco.NearIntensity = 0
+	musicaDoLobby(true)
 end
 
 -- Masmorra: escura (noite, salas sem teto), mas com luz de qualidade: tochas fortes com sombras
@@ -75,8 +115,10 @@ end
 
 function Ambiente.masmorra(tema)
 	masmorraAtiva = true
+	musicaDoLobby(false)
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 0.6
+	Lighting.ColorShift_Top = Color3.new(0, 0, 0) -- (o tom quente é só do acampamento)
 	Lighting.Ambient = tema.ambiente:Lerp(tema.luz, 0.15)
 	Lighting.OutdoorAmbient = tema.ambiente:Lerp(Color3.new(0, 0, 0), 0.1)
 	Lighting.EnvironmentDiffuseScale = 0.35

@@ -147,6 +147,9 @@ function Combate.calcularStats(estado)
 	estado.mana = math.min(estado.mana or estado.stats.manaMax, estado.stats.manaMax)
 	-- todos veem a lâmina pegando fogo quando o jogador tem uma carta de fogo
 	estado.player:SetAttribute("PoderFogo", temFogo(estado.stats))
+	-- cartas que todos veem no corpo do jogador: Aura do Protetor e Investida Brutal
+	estado.player:SetAttribute("AuraProtetor", estado.stats.protetor == true)
+	estado.player:SetAttribute("InvestidaBrutal", estado.stats.investida > 0)
 	return estado.stats
 end
 
@@ -210,6 +213,12 @@ function Combate.ganharMana(estado, quantidade: number)
 	Combate.enviarMana(estado)
 end
 
+-- Maldição das Almas: sem esquiva, corrida, habilidade e supremo até passar
+local function amaldicoado(estado): boolean
+	return os.clock() < (estado.amaldicoadoAte or 0)
+end
+Combate.amaldicoado = amaldicoado
+
 function Combate.aplicarVelocidade(estado)
 	local humanoid = humanoidDe(estado)
 	if not humanoid then
@@ -232,7 +241,7 @@ function Combate.aplicarVelocidade(estado)
 	local atacando = os.clock() < (estado.atacandoAte or 0)
 	if atacando then
 		fator *= Config.VELOCIDADE_ATACANDO
-	elseif estado.correndo and not estado.carregandoDesde and not estado.defendendoDesde then
+	elseif estado.correndo and not estado.carregandoDesde and not estado.defendendoDesde and not amaldicoado(estado) then
 		fator *= Config.VELOCIDADE_CORRIDA
 	end
 	humanoid.WalkSpeed = estado.stats.velocidade * fator
@@ -241,7 +250,7 @@ end
 -- Corrida leve (Shift): todos veem o personagem correndo pelo atributo "Correndo"
 function Combate.correr(estado, ativo: boolean)
 	estado.correndo = ativo
-	estado.player:SetAttribute("Correndo", ativo)
+	estado.player:SetAttribute("Correndo", ativo and not amaldicoado(estado))
 	Combate.aplicarVelocidade(estado)
 end
 
@@ -352,7 +361,7 @@ end
 	barra. Cheia, o chefe fica GROGUE: ajoelha brilhando, não ataca e leva mais dano; o primeiro
 	golpe vira um GOLPE FATAL (dano triplo). A barra esvazia sozinha (Inimigos.decidir). ]]
 function Combate.ferirPostura(run, inimigo, valor: number)
-	local maximo = inimigo.def.posturaMax
+	local maximo = inimigo.posturaMax or inimigo.def.posturaMax
 	local agora = os.clock()
 	if not maximo or not inimigo.vivo or agora < (inimigo.grogueAte or 0) or agora < (inimigo.invulneravelAte or 0) then
 		return
@@ -435,7 +444,7 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 	if os.clock() < (inimigo.grogueAte or 0) and not opcoes.dot then
 		if inimigo.fatalPronto and estado then
 			inimigo.fatalPronto = false
-			dano = math.floor(dano * 3 + 0.5)
+			dano = math.floor(dano * (inimigo.def.fatalMult or 3) + 0.5)
 			opcoes.cor = Color3.fromRGB(255, 70, 60)
 			opcoes.critico = true
 			Vfx.partida(run, "golpeFatal", { modelo = inimigo.modelo, pos = inimigo.raiz.Position, jogador = estado.player })
@@ -448,14 +457,14 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 			inimigo.grogueAte = os.clock() + 0.9
 			inimigo.atordoadoAte = inimigo.grogueAte
 		else
-			dano = math.floor(dano * 1.4 + 0.5)
+			dano = math.floor(dano * (inimigo.def.grogueMult or 1.4) + 0.5)
 		end
 	elseif estado and inimigo.def.posturaMax and not opcoes.dot then
 		Combate.ferirPostura(run, inimigo, dano * 0.06)
 	end
 	-- chefe com a lâmina presa no chão (Corte Devastador do Skullbane): leva mais dano
 	if os.clock() < (inimigo.vulneravelAte or 0) then
-		dano = math.floor(dano * 1.35 + 0.5)
+		dano = math.floor(dano * (inimigo.def.presoMult or 1.35) + 0.5)
 		opcoes.cor = opcoes.cor or Color3.fromRGB(255, 225, 90)
 	end
 	-- escudo de runas (Guardião Rúnico): absorve o dano antes da vida
@@ -495,6 +504,7 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		dot = opcoes.dot, -- dano contínuo (fogo, sangramento): sem som de golpe
 		principal = opcoes.principal == true, -- golpe da arma (o Cavaleiro mostra o impacto do corte)
 		fogo = opcoes.fogo == true, -- golpe com poder de fogo (impacto de fogo)
+		espinhos = opcoes.espinhos == true, -- dano devolvido pela carta Espinhos
 		sangue = opcoes.sangue or (estado ~= nil and opcoes.principal == true and estado.stats.sangueMax > 0),
 	})
 
@@ -728,7 +738,7 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 	end
 
 	if fonte and fonte.vivo and estado.stats.espinhos > 0 and not opcoes.ambiente then
-		Combate.danoAoInimigo(run, fonte, dano * estado.stats.espinhos, estado, { semEfeitos = true, cor = Color3.fromRGB(140, 255, 120) })
+		Combate.danoAoInimigo(run, fonte, dano * estado.stats.espinhos, estado, { semEfeitos = true, espinhos = true, cor = Color3.fromRGB(140, 255, 120) })
 	end
 
 	if dano >= humanoid.Health then
@@ -756,6 +766,14 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 	if opcoes.queimar then
 		estado.queimaAte = agora + 3
 		estado.queimaDps = opcoes.queimar
+	end
+	if opcoes.maldicao then
+		-- Maldição das Almas: some a corrida na hora; o resto é bloqueado até passar
+		estado.amaldicoadoAte = math.max(estado.amaldicoadoAte or 0, agora + opcoes.maldicao)
+		estado.player:SetAttribute("Amaldicoado", true)
+		estado.player:SetAttribute("Correndo", false)
+		Combate.aplicarVelocidade(estado)
+		Vfx.partida(run, "maldicao", { jogador = estado.player, duracao = opcoes.maldicao })
 	end
 end
 
@@ -863,6 +881,7 @@ local function golpeDeEspada(run, estado, classe, raiz: BasePart, direcao: Vecto
 			{
 				lado = "jogador",
 				tipo = "onda",
+				fogo = temFogo(stats),
 				pos = raiz.Position + direcao * 2,
 				dir = direcao,
 				velocidade = 55,
@@ -1548,7 +1567,7 @@ local function passoSombrio(run, estado, classe, raiz: BasePart, direcao: Vector
 end
 
 function Combate.habilidade(run, estado, direcao: any)
-	if not podeAgir(run, estado) then
+	if not podeAgir(run, estado) or amaldicoado(estado) then
 		return
 	end
 	local agora = os.clock()
@@ -1638,7 +1657,7 @@ laminasNoturnas = function(run, estado, classe)
 end
 
 function Combate.supremo(run, estado)
-	if not podeAgir(run, estado) or estado.carga < Config.CARGA_MAXIMA then
+	if not podeAgir(run, estado) or estado.carga < Config.CARGA_MAXIMA or amaldicoado(estado) then
 		return
 	end
 	estado.carga = 0
@@ -1739,7 +1758,7 @@ end
 ------------------------------------------------------------------------
 
 function Combate.esquiva(run, estado, direcao: any)
-	if not podeAgir(run, estado) then
+	if not podeAgir(run, estado) or amaldicoado(estado) then
 		return
 	end
 	local agora = os.clock()
@@ -1849,6 +1868,13 @@ function Combate.tick(run, dt: number)
 		local barreira = estado.vivo and not estado.caido and estado.escudoAtivo == true
 		if estado.player:GetAttribute("BarreiraArcana") ~= barreira then
 			estado.player:SetAttribute("BarreiraArcana", barreira)
+		end
+		-- a maldição acaba: a tela volta ao normal e a corrida (se o Shift estiver apertado) volta
+		local maldito = estado.vivo and amaldicoado(estado)
+		if (estado.player:GetAttribute("Amaldicoado") == true) ~= maldito then
+			estado.player:SetAttribute("Amaldicoado", maldito)
+			estado.player:SetAttribute("Correndo", estado.correndo == true and not maldito)
+			Combate.aplicarVelocidade(estado)
 		end
 		if estado.vivo then
 			if estado.caido then

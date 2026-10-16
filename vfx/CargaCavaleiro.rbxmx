@@ -238,62 +238,6 @@
 							<UniqueId name="UniqueId">0830a05c966397950ae2b536000057d3</UniqueId>
 						</Properties>
 					</Item>
-					<Item class="ParticleEmitter" referent="RBX9BC33A499A1F4063910DC016ABC502C0">
-						<Properties>
-							<Vector3 name="Acceleration">
-								<X>0</X>
-								<Y>0</Y>
-								<Z>0</Z>
-							</Vector3>
-							<float name="Brightness">5</float>
-							<ColorSequence name="Color">0 0.7059 0.8431 1.0000 0 1 0.7059 0.8431 1.0000 0 </ColorSequence>
-							<float name="Drag">0</float>
-							<token name="EmissionDirection">1</token>
-							<bool name="Enabled">true</bool>
-							<bool name="FlipbookBlendFrames">true</bool>
-							<NumberRange name="FlipbookFramerate">1 1 </NumberRange>
-							<string name="FlipbookIncompatible">Particle texture must be 1024 by 1024 to use flipbooks.</string>
-							<token name="FlipbookLayout">0</token>
-							<token name="FlipbookMode">0</token>
-							<int name="FlipbookSizeX">1</int>
-							<int name="FlipbookSizeY">1</int>
-							<bool name="FlipbookStartRandom">false</bool>
-							<NumberRange name="Lifetime">0.4 0.4 </NumberRange>
-							<float name="LightEmission">1</float>
-							<float name="LightInfluence">0</float>
-							<bool name="LockedToPart">true</bool>
-							<token name="Orientation">0</token>
-							<float name="Rate">150</float>
-							<NumberRange name="RotSpeed">0 0 </NumberRange>
-							<NumberRange name="Rotation">0 0 </NumberRange>
-							<token name="Shape">0</token>
-							<token name="ShapeInOut">0</token>
-							<float name="ShapePartial">1</float>
-							<token name="ShapeStyle">0</token>
-							<NumberSequence name="Size">0 0.5 0 1 0.5 0 </NumberSequence>
-							<NumberRange name="Speed">0.001 0.001 </NumberRange>
-							<Vector2 name="SpreadAngle">
-								<X>0</X>
-								<Y>0</Y>
-							</Vector2>
-							<NumberSequence name="Squash">0 0 0 1 0 0 </NumberSequence>
-							<Content name="Texture"><url>rbxassetid://1084982817</url></Content>
-							<float name="TimeScale">1</float>
-							<NumberSequence name="Transparency">0 0 0 1 0 0 </NumberSequence>
-							<float name="VelocityInheritance">0</float>
-							<bool name="WindAffectsDrag">false</bool>
-							<float name="ZOffset">0</float>
-							<BinaryString name="AttributesSerialize" />
-							<SecurityCapabilities name="Capabilities">0</SecurityCapabilities>
-							<bool name="DefinesCapabilities">false</bool>
-							<UniqueId name="HistoryId">00000000000000000000000000000000</UniqueId>
-							<string name="Name">Core1</string>
-							<BinaryString name="SerializedOverrides" />
-							<int64 name="SourceAssetId">-1</int64>
-							<SharedString name="Tags">yuZpQdnvvUBOTYh1jqZ2cA==</SharedString>
-							<UniqueId name="UniqueId">0830a05c966397950ae2b536000057d4</UniqueId>
-						</Properties>
 					</Item>
-				</Item>
 			</Item>
 			<SharedStrings><SharedString md5="yuZpQdnvvUBOTYh1jqZ2cA==" /></SharedStrings></roblox>

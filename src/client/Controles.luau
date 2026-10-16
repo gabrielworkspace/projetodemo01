@@ -335,8 +335,17 @@ local function defender(ativo: boolean)
 end
 Controles.defender = defender
 
+-- Maldição das Almas (Skullbane): sem dash, corrida, habilidade e supremo enquanto durar
+local function amaldicoado(): boolean
+	if jogador:GetAttribute("Amaldicoado") == true then
+		Vfx.maldicaoBloqueou()
+		return true
+	end
+	return false
+end
+
 local function usarHabilidade()
-	if Estado.modo ~= "partida" or not podeLutar() then
+	if Estado.modo ~= "partida" or not podeLutar() or amaldicoado() then
 		return
 	end
 	if os.clock() < Estado.habilidadeFim - 0.1 then
@@ -357,14 +366,14 @@ local function usarHabilidade()
 end
 
 local function usarSupremo()
-	if Estado.modo ~= "partida" or not podeLutar() or Estado.carga < Estado.cargaMax then
+	if Estado.modo ~= "partida" or not podeLutar() or Estado.carga < Estado.cargaMax or amaldicoado() then
 		return
 	end
 	Acao:FireServer("supremo")
 end
 
 local function esquivar()
-	if Estado.caido or Estado.morto or Estado.menusAbertos > 0 then
+	if Estado.caido or Estado.morto or Estado.menusAbertos > 0 or amaldicoado() then
 		return
 	end
 	local raiz, humanoid = personagem()

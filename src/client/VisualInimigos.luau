@@ -101,6 +101,16 @@ end
 
 -- Efeitos permanentes de cada modelo (alma, esporos, chama...)
 local function criarEfeito(ancora: BasePart, tipo: string, cor: Color3, escala: number)
+	local efeitos = game:GetService("ReplicatedStorage"):FindFirstChild("EfeitosVFX")
+	if (tipo == "chama" or tipo == "fogo") and efeitos and efeitos:FindFirstChild("LaminaFogo") then
+		-- chamas do pacote de VFX (as da lâmina de fogo do Cavaleiro) presas no corpo; fogo de
+		-- outra cor (azul, verde...) é tingido
+		local laranja = cor.R > 0.8 and cor.B < 0.4
+		Vfx.prefab("LaminaFogo", function()
+			return if ancora.Parent then ancora.CFrame else nil
+		end, 0, (if tipo == "fogo" then 1.6 else 0.45) * escala, if laranja then nil else { cor = cor })
+		return
+	end
 	if tipo == "chama" or tipo == "fogo" then
 		local f = Instance.new("Fire")
 		f.Size = (if tipo == "fogo" then 6 else 1.5) * escala
@@ -224,7 +234,7 @@ local function cinematicaDeEntrada(v)
 		-- { até (s), posição da câmera, para onde olha }
 		{ subida - 0.35, chao + frente * altura * 2 + Vector3.new(0, 2, 0), peito },
 		{ subida + 0.6, rosto + frente * altura * 0.6 - Vector3.new(0, altura * 0.04, 0), rosto },
-		{ subida + 1.9, chao + frente * altura * 1.6 + Vector3.new(0, altura * 0.25, 0), peito },
+		{ subida + 1.3, chao + frente * altura * 1.6 + Vector3.new(0, altura * 0.25, 0), peito },
 	}
 	local volta = 0.7
 	local original = camera.CFrame
@@ -668,6 +678,29 @@ local function atualizarAcao(v)
 	end
 end
 
+--[[ Efeito pronto (pacote de VFX) ligado enquanto um estado do inimigo durar (queimando, lento,
+	sangrando, tonto), preso no corpo e "altura" acima dele. Devolve false se o efeito não existe
+	(aí fica o efeito feito por código). ]]
+local function estadoPronto(v, chave: string, ativo: boolean, nome: string, escala: number, altura: number?): boolean
+	local efeitos = game:GetService("ReplicatedStorage"):FindFirstChild("EfeitosVFX")
+	if not (efeitos and efeitos:FindFirstChild(nome)) then
+		return false
+	end
+	v.estadosProntos = v.estadosProntos or {}
+	local parar = v.estadosProntos[chave]
+	if ativo and not parar then
+		local ancora = v.ancoraCorpo
+		local acima = Vector3.new(0, (altura or 0) * v.escala, 0)
+		v.estadosProntos[chave] = Vfx.prefab(nome, function()
+			return if ancora and ancora.Parent then CFrame.new(ancora.Position + acima) else nil
+		end, 0, escala * v.escala) or function() end
+	elseif not ativo and parar then
+		parar()
+		v.estadosProntos[chave] = nil
+	end
+	return true
+end
+
 local function atualizarEstados(v)
 	local modelo = v.modelo
 	local ancora = v.ancoraCorpo
@@ -676,7 +709,9 @@ local function atualizarEstados(v)
 	end
 	local queimando = modelo:GetAttribute("Queimando") == true
 	local fogo = ancora:FindFirstChild("Queimando")
-	if queimando and not fogo then
+	if estadoPronto(v, "Queimando", queimando, "LaminaFogo", 0.7) then
+		-- chamas do pacote de VFX
+	elseif queimando and not fogo then
 		local f = Instance.new("Fire")
 		f.Name = "Queimando"
 		f.Size = 4 * v.escala
@@ -688,7 +723,9 @@ local function atualizarEstados(v)
 
 	local lento = modelo:GetAttribute("Lento") == true
 	local gelo = ancora:FindFirstChild("Lento")
-	if lento and not gelo then
+	if estadoPronto(v, "Lento", lento, "LentoGelo", 0.8) then
+		-- névoa gelada do pacote de VFX
+	elseif lento and not gelo then
 		local e = emissor(ancora, Color3.fromRGB(150, 220, 255), { Rate = 20, Shape = Enum.ParticleEmitterShape.Sphere, Speed = NumberRange.new(0.5, 1.5) })
 		e.Name = "Lento"
 	elseif not lento and gelo then
@@ -752,7 +789,9 @@ local function atualizarEstados(v)
 	-- Sangrando (Assassino): gotas de sangue caindo, mais forte com mais cortes
 	local pilhas = modelo:GetAttribute("Sangrando") or 0
 	local gotas = ancora:FindFirstChild("Sangrando") :: ParticleEmitter?
-	if pilhas > 0 then
+	if estadoPronto(v, "Sangrando", pilhas > 0, "SangrandoInimigo", 0.8) then
+		-- sangue do pacote de VFX
+	elseif pilhas > 0 then
 		if not gotas then
 			gotas = emissor(ancora, Color3.fromRGB(150, 0, 15), {
 				LightEmission = 0,
@@ -789,6 +828,8 @@ local function atualizarEstados(v)
 	end
 
 	local atordoado = modelo:GetAttribute("Atordoado") == true
+	-- tonto: estrelas douradas do pacote girando acima da cabeça (as bolinhas viram invisíveis)
+	local estrelasProntas = estadoPronto(v, "Atordoado", atordoado, "Atordoado", 0.6, 2.4)
 	if atordoado and not v.estrelas then
 		Vfx.cancelarAvisos(modelo) -- o golpe que ele preparava não vai sair
 		v.estrelas = {}
@@ -798,6 +839,7 @@ local function atualizarEstados(v)
 			estrela.Size = Vector3.one * 0.45
 			estrela.Material = Enum.Material.Neon
 			estrela.Color = Color3.fromRGB(255, 230, 90)
+			estrela.Transparency = if estrelasProntas then 1 else 0
 			estrela.Anchored = true
 			estrela.CanCollide = false
 			estrela.CanQuery = false

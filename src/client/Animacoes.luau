@@ -480,18 +480,59 @@ local function atualizarArma(e, agora: number)
 			end
 		end
 	end
-	-- Mago com a Barreira Arcana ativa: bolha roxa em volta dele (some quando bloqueia um golpe)
-	local comBarreira = classeDe(e) == "mago" and e.jogador ~= nil and e.jogador:GetAttribute("BarreiraArcana") == true
+	-- Escudo ativo (Barreira Arcana do Mago, Escudo Abençoado do Cavaleiro ou o escudo que o
+	-- supremo do Cavaleiro dá aos aliados): bolha em volta do corpo até bloquear um golpe.
+	-- Roxa no Mago, dourada nas outras classes.
+	local comBarreira = e.jogador ~= nil and e.jogador:GetAttribute("BarreiraArcana") == true
 	if comBarreira and not e.pararBarreira then
 		local tronco = e.personagem:FindFirstChild("UpperTorso") or e.personagem:FindFirstChild("Torso")
 		if tronco and tronco:IsA("BasePart") then
-			e.pararBarreira = Vfx.prefab("BarreiraArcana", function()
+			local bolha = if classeDe(e) == "mago" then "BarreiraArcana" else "EscudoAbencoado"
+			e.pararBarreira = Vfx.prefab(bolha, function()
 				return if tronco.Parent then CFrame.new(tronco.Position) else nil
 			end, 0, 1.7) or false
 		end
 	elseif not comBarreira and e.pararBarreira then
 		e.pararBarreira()
 		e.pararBarreira = nil
+	end
+	-- Maldição das Almas (Skullbane): névoa verde em volta do corpo e o selo acima da cabeça
+	local maldito = e.jogador ~= nil and e.jogador:GetAttribute("Amaldicoado") == true
+	if maldito and not e.pararMaldicao then
+		local tronco = e.personagem:FindFirstChild("UpperTorso") or e.personagem:FindFirstChild("Torso")
+		local cabeca = e.personagem:FindFirstChild("Head")
+		if tronco and tronco:IsA("BasePart") and cabeca and cabeca:IsA("BasePart") then
+			local pararNevoa = Vfx.prefab("MaldicaoNevoa", function()
+				return if tronco.Parent then CFrame.new(tronco.Position) else nil
+			end, 0, 1.1)
+			local pararMarca = Vfx.prefab("MaldicaoMarca", function()
+				return if cabeca.Parent then CFrame.new(cabeca.Position + Vector3.new(0, 2.2, 0)) else nil
+			end, 0, 0.3)
+			e.pararMaldicao = function()
+				if pararNevoa then
+					pararNevoa()
+				end
+				if pararMarca then
+					pararMarca()
+				end
+			end
+		end
+	elseif not maldito and e.pararMaldicao then
+		e.pararMaldicao()
+		e.pararMaldicao = nil
+	end
+	-- Aura do Protetor: círculo dourado no chão do tamanho da área protegida (18 studs)
+	local comAura = e.jogador ~= nil and e.jogador:GetAttribute("AuraProtetor") == true
+	if comAura and not e.pararAura then
+		local raizAura = e.personagem:FindFirstChild("HumanoidRootPart")
+		if raizAura and raizAura:IsA("BasePart") then
+			e.pararAura = Vfx.prefab("AuraProtetor", function()
+				return if raizAura.Parent then CFrame.new(raizAura.Position - Vector3.new(0, 2.8, 0)) else nil
+			end, 0, 3.6) or false
+		end
+	elseif not comAura and e.pararAura then
+		e.pararAura()
+		e.pararAura = nil
 	end
 	-- carta de fogo: a lâmina pega fogo (chamas do pacote de VFX)
 	local comFogo = e.jogador ~= nil and e.jogador:GetAttribute("PoderFogo") == true
@@ -584,9 +625,12 @@ local function atualizarArma(e, agora: number)
 	end
 	local carga = cargaDe(e)
 	if e.glow and e.pontaArma then
-		local intensidade = math.clamp(e.brilho * 0.6 + carga, 0, 1.5)
+		-- carregando com o efeito do pacote (Orbe do Vazio na ponta do cajado), a bola de luz feita
+		-- por código não cresce: fica só o brilho de sempre do cristal
+		local cargaNaBola = if e.efeitoCarga then 0 else carga
+		local intensidade = math.clamp(e.brilho * 0.6 + cargaNaBola, 0, 1.5)
 		e.glow.Transparency = if intensidade > 0.02 then 1 - math.min(0.75, intensidade * 0.6) else 1
-		e.glow.Size = Vector3.one * (0.6 + intensidade * 1.6 + math.sin(agora * 20) * 0.08 * carga)
+		e.glow.Size = Vector3.one * (0.6 + intensidade * 1.6 + math.sin(agora * 20) * 0.08 * cargaNaBola)
 		e.glow.CFrame = CFrame.new(e.pontaArma.WorldPosition)
 		e.luzGlow.Brightness = intensidade * 3
 	end
@@ -597,6 +641,7 @@ local function atualizarArma(e, agora: number)
 		local cargaPronta = classe == "cavaleiro"
 			or (classe == "arqueiro" and Vfx.temPrefab("CargaArqueiro"))
 			or (classe == "assassino" and Vfx.temPrefab("CargaAssassino"))
+			or (classe == "mago" and e.efeitoCarga ~= nil)
 		e.emissorCarga.Rate = if e.carregando and not cargaPronta then 20 + 60 * carga else 0
 		if e.carregando and carga >= 1 and not e.cheioAvisado then
 			e.cheioAvisado = true
@@ -1048,6 +1093,13 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 			e.efeitoCarga = Vfx.prefab("CargaAssassino", function()
 				return if raizCarga.Parent then CFrame.new(raizCarga.Position) else nil
 			end, 0, 0.2)
+		elseif classe == "mago" then
+			-- o Orbe do Vazio (efeito do pacote) se forma na ponta do cajado enquanto carrega
+			pararEfeito(e, "efeitoCarga")
+			e.efeitoCarga = Vfx.prefab("ProjetilVazio", function()
+				local ponta = e.pontaArma
+				return if ponta and ponta.Parent and personagem.Parent then CFrame.new(ponta.WorldPosition) else nil
+			end, 0, 0.14)
 		end
 	elseif acao == "soltar" then
 		e.carregando = false

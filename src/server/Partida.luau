@@ -127,7 +127,7 @@ function Run:aoMorrerInimigo(inimigo, estadoMatador)
 				if not self.ativa then
 					return
 				end
-				Vfx.partida(self, "explosao", { pos = posicao, raio = 10, cor = Color3.fromRGB(255, 140, 40) })
+				Vfx.partida(self, "explosao", { pos = posicao, raio = 10, cor = Color3.fromRGB(255, 140, 40), magia = "bolaFogo" })
 				Combate.danoEmArea(self, posicao, 10, stats.dano * 0.6 * stats.explosaoMorte, estadoMatador, {
 					semEfeitos = true,
 					cor = Color3.fromRGB(255, 140, 40),
@@ -237,6 +237,8 @@ local function finalizarJogador(run, estado, motivo: string)
 		if player.Parent and not partidaDoJogador[player] then
 			player:SetAttribute("PoderFogo", false) -- as cartas ficam na partida
 			player:SetAttribute("BarreiraArcana", false)
+			player:SetAttribute("AuraProtetor", false)
+			player:SetAttribute("InvestidaBrutal", false)
 			player:LoadCharacterAsync()
 			Remotos.enviar(player, "lobby", {})
 			Dados.enviarPerfil(player)
@@ -261,12 +263,41 @@ local function escolherTipoSala(run, numero: number): string
 end
 
 local function multiplicadores(run, numero: number)
-	local jogadores = run:quantidadeJogadores()
+	local extras = math.max(0, run:quantidadeJogadores() - 1)
 	local ciclo = (numero - 1) // (Config.SALAS_POR_ANDAR * #Config.TEMAS)
+	local vidaSala = (1 + (numero - 1) * Config.VIDA_INIMIGO_POR_SALA) * (1 + ciclo * 0.5)
+	local danoSala = (1 + (numero - 1) * Config.DANO_INIMIGO_POR_SALA) * (1 + ciclo * 0.25)
 	return {
-		vida = (1 + (numero - 1) * Config.VIDA_INIMIGO_POR_SALA) * (1 + (jogadores - 1) * Config.VIDA_INIMIGO_POR_JOGADOR_EXTRA) * (1 + ciclo * 0.5),
-		dano = (1 + (numero - 1) * Config.DANO_INIMIGO_POR_SALA) * (1 + ciclo * 0.25),
+		vida = vidaSala * (1 + extras * Config.VIDA_INIMIGO_POR_JOGADOR_EXTRA),
+		dano = danoSala * (1 + extras * Config.DANO_INIMIGO_POR_JOGADOR_EXTRA),
+		-- chefes: vida, dano, recarga dos golpes e postura próprios do grupo
+		vidaChefe = vidaSala * (1 + extras * Config.VIDA_CHEFE_POR_JOGADOR_EXTRA),
+		danoChefe = danoSala * (1 + extras * Config.DANO_CHEFE_POR_JOGADOR_EXTRA),
+		recargaChefe = math.max(0.6, 1 - extras * Config.RECARGA_CHEFE_POR_JOGADOR_EXTRA),
+		posturaChefe = 1 + extras * Config.POSTURA_CHEFE_POR_JOGADOR_EXTRA,
 	}
+end
+
+-- Avisa o grupo quando a dificuldade muda porque alguém entrou ou saiu
+local function avisarDificuldade(run)
+	local jogadores = run:quantidadeJogadores()
+	if jogadores == (run.tamanhoAvisado or 1) then
+		return
+	end
+	run.tamanhoAvisado = jogadores
+	if jogadores <= 1 then
+		return
+	end
+	local extras = jogadores - 1
+	local function pct(valor: number): number
+		return math.floor(extras * valor * 100 + 0.5)
+	end
+	run:anunciar(string.format("👥 Grupo de %d: inimigos +%d%% vida e +%d%% dano · chefes +%d%% vida e +%d%% dano",
+		jogadores,
+		pct(Config.VIDA_INIMIGO_POR_JOGADOR_EXTRA),
+		pct(Config.DANO_INIMIGO_POR_JOGADOR_EXTRA),
+		pct(Config.VIDA_CHEFE_POR_JOGADOR_EXTRA),
+		pct(Config.DANO_CHEFE_POR_JOGADOR_EXTRA)), Color3.fromRGB(255, 170, 80))
 end
 
 local function prepararSala(run, numero: number, tipo: string)
@@ -287,6 +318,7 @@ local function prepararSala(run, numero: number, tipo: string)
 	run.sala = sala
 	run.numeroSala = numero
 	run.mult = multiplicadores(run, numero)
+	avisarDificuldade(run)
 
 	local jogadores = {}
 	for _, estado in run.jogadores do
@@ -342,20 +374,25 @@ local function sortearDaTabela(rng: Random, pesos): string
 	return ultimo
 end
 
--- Só os inimigos que já podem aparecer nesta sala (alguns esperam a 2ª sala)
+-- Só os inimigos que já podem aparecer nesta sala (alguns esperam a 2ª sala). Os de apoio
+-- (curam, dão escudo, gritam) aparecem mais vezes: Config.PESO_INIMIGOS_DE_APOIO
 local function tabelaDaSala(pesos, numero: number)
 	local filtrada = {}
 	for tipo, peso in pesos do
 		local def = Inimigos.TIPOS[tipo]
 		if def and numero >= (def.salaMinima or 1) then
-			filtrada[tipo] = peso
+			filtrada[tipo] = if def.comportamento == "suporte" then peso * Config.PESO_INIMIGOS_DE_APOIO else peso
 		end
 	end
 	return filtrada
 end
 
 local function sortearElite(run, numero: number): string?
-	local chance = math.min(Config.CHANCE_ELITE_BASE + numero * Config.CHANCE_ELITE_POR_SALA, Config.CHANCE_ELITE_MAXIMA)
+	local extras = math.max(0, run:quantidadeJogadores() - 1)
+	local chance = math.min(
+		Config.CHANCE_ELITE_BASE + numero * Config.CHANCE_ELITE_POR_SALA + extras * Config.ELITE_POR_JOGADOR_EXTRA,
+		Config.CHANCE_ELITE_MAXIMA + extras * Config.ELITE_POR_JOGADOR_EXTRA
+	)
 	if numero >= 2 and run.rng:NextNumber() < chance then
 		return Inimigos.LISTA_ELITES[run.rng:NextInteger(1, #Inimigos.LISTA_ELITES)]
 	end
@@ -373,13 +410,14 @@ local function salaDeCombate(run, tipo: string): boolean
 	if tipo == "chefe" then
 		local chefe = Inimigos.TIPOS[sala.tema.chefe]
 		run:enviarTodos("introChefe", { nome = chefe.nome, titulo = chefe.titulo or "" })
-		task.wait(2)
-		run:invocar(sala.tema.chefe, sala.origem, nil) -- no centro da sala, de frente para a entrada
+		task.wait(1.2)
+		-- sem o portal: o chefe tem a própria entrada (sobe da tumba enquanto o nome aparece)
+		run:invocar(sala.tema.chefe, sala.origem, nil, true) -- no centro da sala, de frente para a entrada
 		terminouDeInvocar = true
 	else
 		-- salas maiores: mais inimigos, chegando em ondas
-		local total = math.min(7 + math.floor(numero * 1.1) + (jogadores - 1) * 4, 42)
-		local maximoVivos = math.min(8 + numero // 3 + (jogadores - 1) * 2, 18)
+		local total = math.min(7 + math.floor(numero * 1.1) + (jogadores - 1) * Config.INIMIGOS_POR_JOGADOR_EXTRA, 42)
+		local maximoVivos = math.min(8 + numero // 3 + (jogadores - 1) * Config.VIVOS_POR_JOGADOR_EXTRA, 18)
 		task.spawn(function()
 			local criados = 0
 			while run.ativa and run.sala == sala and criados < total do

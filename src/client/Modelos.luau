@@ -283,7 +283,7 @@ function Modelos.skullbane()
 		warn("[Modelos] ReplicatedStorage > ModelosChefes > Skullbane não encontrado; usando o Rei Esqueleto.")
 		return Modelos.reiEsqueleto()
 	end
-	local subida = 2.8
+	local subida = 1.6 -- (o servidor espera Inimigos.skullbane.entrada = subida + 2 antes de ele lutar)
 	local rugido = subida + 0.6 -- quando ele ruge e a aura acende
 	-- efeito do pacote tingido de verde
 	local function verde(nome: string, ancora: string, escala: number, extra)
@@ -470,8 +470,9 @@ function Modelos.ceifadorEsmeralda()
 				osso = "corpo",
 				altura = 8,
 				centroX = 0.0757,
-				giro = 180,
-				-- medidas do .glb (frente +Z, espada no lado -X, apontando para cima)
+				-- a frente do modelo é o -Z do .glb (com 180 ele andava de costas para o jogador)
+				giro = 0,
+				-- medidas do .glb (espada no lado -X, apontando para cima)
 				braco = {
 					caixa = { min = V(-0.8404, -0.951, -0.5993), max = V(0.8451, 0.9464, 0.5946) },
 					cadeia = { V(-0.22, 0.27, -0.24), V(-0.36, 0.02, -0.22), V(-0.43, -0.12, -0.12), V(-0.55, 0.1, 0.1), V(-0.68, 0.38, 0.32), V(-0.8, 0.6, 0.53) },
@@ -481,19 +482,19 @@ function Modelos.ceifadorEsmeralda()
 				},
 			},
 		},
-		luzes = { { osso = "lamina", pos = V(3.4, 5.6, -1.4), cor = VERDE_ALMA, alcance = 7, brilho = 0.6 } },
+		luzes = { { osso = "lamina", pos = V(-3.4, 5.6, 1.4), cor = VERDE_ALMA, alcance = 7, brilho = 0.6 } },
 		efeitos = {},
 		ancoras = {
 			centro = { osso = "corpo", pos = V(0, 4, 0) },
-			lamina = { osso = "lamina", pos = V(3.4, 5.6, -1.4) },
-			ponta = { osso = "lamina", pos = V(3.9, 6.5, -2.2) },
+			lamina = { osso = "lamina", pos = V(-3.4, 5.6, 1.4) },
+			ponta = { osso = "lamina", pos = V(-3.9, 6.5, 2.2) },
 			frente = { osso = "corpo", pos = V(0, 2, -3) },
 			chao = { osso = "chao", pos = V(0, 0.2, 0) },
 		},
 		prefabs = {
 			{ osso = "corpo", pos = V(0, 6, -1.3), nome = "ChamaEspectral", escala = 0.28, atraso = 1.3 }, -- olhos
-			{ osso = "lamina", pos = V(3.4, 5.6, -1.4), nome = "ChamaEspectral", escala = 0.32, atraso = 1.5 },
-			{ osso = "lamina", pos = V(3.9, 6.5, -2.2), nome = "ChamaEspectral", escala = 0.28, atraso = 1.5 },
+			{ osso = "lamina", pos = V(-3.4, 5.6, 1.4), nome = "ChamaEspectral", escala = 0.32, atraso = 1.5 },
+			{ osso = "lamina", pos = V(-3.9, 6.5, 2.2), nome = "ChamaEspectral", escala = 0.28, atraso = 1.5 },
 			{ osso = "chao", pos = V(0, 0.3, 0), nome = "NevoaRei", escala = 1.2, taxa = 0.5, atraso = 1.5 },
 		},
 		efeitosAcao = {

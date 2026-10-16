@@ -7,11 +7,35 @@
   "children": [
     {
       "name": "Workspace",
-      "className": "Workspace"
+      "className": "Workspace",
+      "children": [
+        {
+          "name": "Mapa",
+          "className": "Folder",
+          "children": [
+            {
+              "name": "Lobby",
+              "className": "Model",
+              "filePaths": [
+                "mapas/Lobby.rbxmx"
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "Lighting",
-      "className": "Lighting"
+      "className": "Lighting",
+      "children": [
+        {
+          "name": "Obby Sky",
+          "className": "Sky",
+          "filePaths": [
+            "ceu/Ceu.rbxmx"
+          ]
+        }
+      ]
     },
     {
       "name": "Players",
@@ -60,6 +84,27 @@
           "className": "Folder",
           "children": [
             {
+              "name": "AdagaRastro",
+              "className": "Part",
+              "filePaths": [
+                "vfx/AdagaRastro.rbxmx"
+              ]
+            },
+            {
+              "name": "Atordoado",
+              "className": "Part",
+              "filePaths": [
+                "vfx/Atordoado.rbxmx"
+              ]
+            },
+            {
+              "name": "AuraProtetor",
+              "className": "Part",
+              "filePaths": [
+                "vfx/AuraProtetor.rbxmx"
+              ]
+            },
+            {
               "name": "BarreiraArcana",
               "className": "Part",
               "filePaths": [
@@ -78,6 +123,13 @@
               "className": "Part",
               "filePaths": [
                 "vfx/BloqueioEscudo.rbxmx"
+              ]
+            },
+            {
+              "name": "BolaDeFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/BolaDeFogo.rbxmx"
               ]
             },
             {
@@ -144,6 +196,13 @@
               ]
             },
             {
+              "name": "CaveiraAlma",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CaveiraAlma.rbxmx"
+              ]
+            },
+            {
               "name": "ChamaEspectral",
               "className": "Part",
               "filePaths": [
@@ -155,6 +214,13 @@
               "className": "Part",
               "filePaths": [
                 "vfx/ChamaFuria.rbxmx"
+              ]
+            },
+            {
+              "name": "ChaoArcano",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ChaoArcano.rbxmx"
               ]
             },
             {
@@ -200,6 +266,13 @@
               ]
             },
             {
+              "name": "CuraJogador",
+              "className": "Part",
+              "filePaths": [
+                "vfx/CuraJogador.rbxmx"
+              ]
+            },
+            {
               "name": "DefesaPerfeita",
               "className": "Part",
               "filePaths": [
@@ -235,6 +308,20 @@
               ]
             },
             {
+              "name": "EscudoAbencoado",
+              "className": "Part",
+              "filePaths": [
+                "vfx/EscudoAbencoado.rbxmx"
+              ]
+            },
+            {
+              "name": "EscudoAbencoadoQuebra",
+              "className": "Part",
+              "filePaths": [
+                "vfx/EscudoAbencoadoQuebra.rbxmx"
+              ]
+            },
+            {
               "name": "EscudoAtivado",
               "className": "Part",
               "filePaths": [
@@ -249,10 +336,24 @@
               ]
             },
             {
+              "name": "Espinhos",
+              "className": "Part",
+              "filePaths": [
+                "vfx/Espinhos.rbxmx"
+              ]
+            },
+            {
               "name": "ExplosaoArcana",
               "className": "Part",
               "filePaths": [
                 "vfx/ExplosaoArcana.rbxmx"
+              ]
+            },
+            {
+              "name": "ExplosaoChamas",
+              "className": "Part",
+              "filePaths": [
+                "vfx/ExplosaoChamas.rbxmx"
               ]
             },
             {
@@ -396,10 +497,31 @@
               ]
             },
             {
+              "name": "LentoGelo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/LentoGelo.rbxmx"
+              ]
+            },
+            {
               "name": "LevitacaoMago",
               "className": "Part",
               "filePaths": [
                 "vfx/LevitacaoMago.rbxmx"
+              ]
+            },
+            {
+              "name": "MaldicaoMarca",
+              "className": "Part",
+              "filePaths": [
+                "vfx/MaldicaoMarca.rbxmx"
+              ]
+            },
+            {
+              "name": "MaldicaoNevoa",
+              "className": "Part",
+              "filePaths": [
+                "vfx/MaldicaoNevoa.rbxmx"
               ]
             },
             {
@@ -428,6 +550,20 @@
               "className": "Part",
               "filePaths": [
                 "vfx/OlhosVermelhos.rbxmx"
+              ]
+            },
+            {
+              "name": "OndaCorte",
+              "className": "Part",
+              "filePaths": [
+                "vfx/OndaCorte.rbxmx"
+              ]
+            },
+            {
+              "name": "OndaCorteFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/OndaCorteFogo.rbxmx"
               ]
             },
             {
@@ -480,10 +616,38 @@
               ]
             },
             {
+              "name": "RaioCorrente",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RaioCorrente.rbxmx"
+              ]
+            },
+            {
               "name": "RaioTempestade",
               "className": "Part",
               "filePaths": [
                 "vfx/RaioTempestade.rbxmx"
+              ]
+            },
+            {
+              "name": "RajadaDragao",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RajadaDragao.rbxmx"
+              ]
+            },
+            {
+              "name": "RastroChoque",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RastroChoque.rbxmx"
+              ]
+            },
+            {
+              "name": "RastroChoqueFogo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/RastroChoqueFogo.rbxmx"
               ]
             },
             {
@@ -543,6 +707,13 @@
               ]
             },
             {
+              "name": "SangrandoInimigo",
+              "className": "Part",
+              "filePaths": [
+                "vfx/SangrandoInimigo.rbxmx"
+              ]
+            },
+            {
               "name": "SangueGota",
               "className": "Part",
               "filePaths": [
@@ -554,6 +725,13 @@
               "className": "Part",
               "filePaths": [
                 "vfx/SaraivadaInicio.rbxmx"
+              ]
+            },
+            {
+              "name": "SegundaChance",
+              "className": "Part",
+              "filePaths": [
+                "vfx/SegundaChance.rbxmx"
               ]
             },
             {
@@ -612,6 +790,10 @@
               ]
             }
           ]
+        },
+        {
+          "name": "Versao",
+          "className": "StringValue"
         }
       ]
     },
@@ -628,6 +810,19 @@
               "className": "Part",
               "filePaths": [
                 "modelos/EspadaCavaleiro.rbxmx"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PacoteCenario",
+          "className": "Folder",
+          "children": [
+            {
+              "name": "Map Decorations",
+              "className": "Model",
+              "filePaths": [
+                "cenario/NaturezaEstilizada.rbxmx"
               ]
             }
           ]

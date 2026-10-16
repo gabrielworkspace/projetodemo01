@@ -76,10 +76,25 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
   - **Acólito** (manto verde): fica atrás do grupo e **cura** os aliados com um feixe verde.
   - **Guardião** (armadura de pedra e escudo de runas): dá **escudos azuis** aos aliados. O escudo absorve o dano antes da vida e aparece como uma bolha e uma barra azul.
   - **Porta-Estandarte** (estandarte e corneta): dá um **grito de guerra**. Os aliados ficam com uma aura vermelha e andam e atacam mais rápido por alguns segundos.
+  - Eles aparecem **o dobro** do normal (cerca de 1 em cada 3 inimigos). Ajuste em `Config.PESO_INIMIGOS_DE_APOIO` (1 = normal).
+- **Dificuldade do grupo:** cada jogador a mais na partida deixa a masmorra mais difícil. Com 2, 3 ou 4 jogadores:
+
+  | Jogadores | Vida dos inimigos | Dano dos inimigos | Vida dos chefes | Dano dos chefes | Golpes do chefe | Postura do chefe | Inimigos por sala |
+  |---|---|---|---|---|---|---|---|
+  | 2 | +75% | +20% | +130% | +30% | 10% mais frequentes | +60% | +4 |
+  | 3 | +150% | +40% | +260% | +60% | 20% mais frequentes | +120% | +8 |
+  | 4 | +225% | +60% | +390% | +90% | 30% mais frequentes | +180% | +12 |
+
+  A chance de elite também sobe 4% por jogador. Quando o tamanho do grupo muda, aparece um aviso na tela. Os valores ficam no `Config.luau` (procure por `POR_JOGADOR_EXTRA`).
 - **Temas e chefes:** Calabouço (Skullbane), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas). O Rei Esqueleto continua no jogo: para voltar a ele, troque `chefe = "skullbane"` por `chefe = "reiEsqueleto"` no Calabouço, em `src/shared/Config.luau`.
 - **Skullbane, o Senhor da Guerra Caído** (1º chefe, modelo 3D próprio, inspirado nos chefes de Elden Ring). Todos os efeitos dele vêm do pacote de VFX (pasta `vfx/`); os que eram de outra cor são tingidos de verde pelo jogo.
   - **O braço mexe de verdade:** o braço com a lâmina gira pelo ombro e pelo cotovelo (o jogo deforma a malha do modelo com EditableMesh). Para isso, ligue **Game Settings > Security > Allow Mesh / Image APIs** (a mesma opção das texturas). Sem ela, o braço fica parado e ele luta só com o corpo, e aparece um aviso no Output.
-  - **Despertar:** a tumba racha e ele sobe curvado. Os olhos acendem (close da câmera), as chamas acendem uma a uma e ele ruge com a lâmina erguida. Fica imune até acabar.
+  - **Maldição do Alto** (só nesta luta): a cada **5 segundos** uma alma cai do alto em um jogador sorteado do grupo. Um selo verde **segue a pessoa** e só **trava no lugar 0,35s antes** da alma cair (o selo pisca): sair andando não adianta. Escapa quem **dá a esquiva bem na hora** (fica intocável ou sai do selo travado) ou quem **defende com o escudo**. Quem é atingido leva dano e fica **1,2 segundo sem dash, corrida, habilidade (E) e supremo (R)**. A cada **10 segundos** a queda é a **maldição forte**: círculo maior, alma maior, mais dano e **2,5 segundos** amaldiçoado. A tela de quem foi amaldiçoado fica verde, aparece o aviso "☠ AMALDIÇOADO" e todos veem uma névoa verde no corpo dele e um selo acima da cabeça. Ajustes em `Config.MALDICAO_INTERVALO`, `MALDICAO_DURACAO`, `MALDICAO_FORTE_A_CADA`, `MALDICAO_FORTE_DURACAO`, `MALDICAO_AVISO` e os raios.
+  - **Caveiras:** a cada **7 segundos** ele solta **caveiras em chamas verdes** (uma por jogador, no mínimo 2) que **perseguem** quem elas miram. Viram devagar: dá para fugir ou desviar de lado na hora certa, ou atravessar com a esquiva. Ajustes em `Config.CAVEIRAS_*`.
+  - **Resistente:** 2600 de vida e 25% de armadura. A postura aguenta muito mais e se recupera rápido; o grogue dura 2s e o golpe fatal dá dano dobrado (não triplo). A lâmina presa no chão acontece menos e dura menos.
+  - **Só esqueletos:** nesta luta só nascem os **Ceifadores Esmeralda** (as caveiras do modelo 3D); o Guardião da 2ª fase saiu.
+  - **Mais agressivo:** o Skullbane chega perto o bastante para todos os golpes, anda mais rápido e rodeia você entre um golpe e outro; os Ceifadores também, andando sempre de frente para o alvo.
+  - **Despertar:** a tumba racha e ele sobe curvado. Os olhos acendem (close da câmera), as chamas acendem uma a uma e ele ruge com a lâmina erguida. Fica imune até acabar (cerca de 3,6s) e logo depois já ataca. Todos os chefes começam a usar os golpes mais cedo: `Config.INICIO_ATAQUES_CHEFE` (1 = como antes; padrão 0,35).
   - **Aura:** discreta na 1ª fase (energia verde fraca em volta, anel no chão, névoa e chamas). Na 2ª fase fica evidente e **torcida**: um tornado verde gira em volta dele.
   - **Moveset sem padrão:** ele sorteia os golpes (quase nunca repete o mesmo) e às vezes **encadeia combos** de surpresa. Alguns golpes ele segura por um tempo diferente a cada vez, para você errar o tempo da esquiva.
   - **Ficar perto é perigoso:** quem fica colado nele leva Varridas, Giro e a **Explosão de Almas** (ele crava a lâmina e as almas explodem em volta).
@@ -175,9 +190,28 @@ Sem efeitos na pasta, o jogo usa os efeitos feitos por código normalmente.
 py ferramentas/ver_poses.py --luau CAMINHO/luau.exe --acao ataque3 --tempos 0.09,0.2,0.3,0.42 --saida giro.png
 ```
 
+## Editar o mapa no Studio (lobby)
+
+O cenário do lobby fica salvo dentro do jogo: abra o `MasmorraDasCartas.rbxlx` e ele aparece em **Workspace > Mapa > Lobby**, separado em pastas (Chao, Praca, Portal, Santuarios, Loja, Placa, Lago, Decoracao, Natureza, Limites).
+
+- **Mexa à vontade**: mova, apague, copie árvores, mude cores. Tudo em peças lisas e coloridas (estilo fantasia, sem textura realista).
+- **Mais árvores, pedras e cogumelos**: o pacote de natureza fica em **ServerStorage > PacoteCenario**. Copie o que quiser e cole no Workspace: aparece no meio da praça, é só arrastar para o lugar. Deixe dentro de `Mapa > Lobby` para ser guardado.
+- **Marcadores (rosa)**: a pasta `Marcadores` mostra onde o jogo monta o que é vivo: o círculo e o redemoinho do portal, cada altar, o balcão da loja, o nascimento e os vagalumes. Mover um marcador muda onde aquilo aparece. No jogo eles ficam invisíveis.
+- **Santuários das classes**: um por classe, em meia-lua à esquerda da praça, cada um virado para o centro. A arma que gira, o prompt e o nome da classe aparecem em cima do marcador `Altar_<classe>` (no pedestal). Se mover um santuário, leve o marcador junto.
+- **Lago com água de verdade**: a peça azul meio transparente `Lago > Agua` só mostra no Studio onde a água fica. Ao dar Play, o jogo enche esse volume com água do Terrain (ondas, reflexo, dá para nadar) e some com a peça. Se mudar o lago, ajuste a `Agua` junto com a margem.
+- **Portal**: o redemoinho roxo do arco e o do chão do círculo são efeitos do pacote (`PortalChuva`), ligados pelo código nos marcadores `Vortice` e `Portal`. Só aparecem ao dar Play.
+- **Música do lobby**: o som "Ambient Trust" toca em loop no acampamento e some na masmorra. Troque ou desligue em `Config.MUSICA_LOBBY` (volume em `Config.VOLUME_MUSICA_LOBBY`).
+- **Céu**: o Sky que estiver em Lighting também é guardado.
+- **Para guardar**: salve no mesmo arquivo (**Arquivo > Salvar no arquivo**) e me avise. Quando o `build.py` roda, ele percebe que o arquivo foi salvo pelo Studio, faz uma cópia em `.backups/` e puxa o seu mapa (para `mapas/`) e o seu céu (para `ceu/`) antes de gerar o jogo de novo. O que você puser **fora** de `Workspace > Mapa` é avisado e fica só na cópia.
+- `ferramentas/gerar_lobby.py` gera o lobby do zero (apaga as edições feitas à mão); `mapas/lobby_visto_de_cima.png` mostra o lobby visto de cima.
+
 ## Publicar no Roblox
 
-1. **File > Publish to Roblox**.
+O jogo que as pessoas jogam (fora do Studio) é a **última versão publicada**. Testar no Studio ou usar "Salvar no Roblox" não muda o jogo publicado.
+
+**Conferir a versão:** no canto de baixo à direita da tela aparece algo como `v0.13 · 16/10/2026 00:55`: o número de `Config.VERSAO` mais a data e a hora em que o `build.py` gerou o arquivo. Se o jogo publicado mostrar a mesma data e hora do Studio, ele está atualizado. Suba `Config.VERSAO` quando publicar uma atualização grande.
+
+1. **File > Publish to Roblox** (Alt+P). Depois, em create.roblox.com, abra o jogo e use **Desligar todos os servidores**: os servidores abertos continuam com a versão antiga.
 2. Para o progresso salvar também no Studio: **Game Settings > Security > Enable Studio Access to API Services**.
 3. O arquivo do jogo já vem com **R15** e com as juntas clássicas (StarterPlayer > AvatarJointUpgrade = Disabled). Se mudar em **Game Settings > Avatar**, mantenha **R15**: os golpes usam cotovelo, pulso e cintura, que o R6 não tem.
 

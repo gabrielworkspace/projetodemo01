@@ -14,6 +14,10 @@ Config.SONS_IDS = {
 	espadaPesada = "rbxassetid://135315310485417",
 	golpeEspada = "rbxassetid://135315310485417", -- espada acertando o inimigo
 }
+-- Música do acampamento (o som "Ambient Trust" que você colocou no jogo): toca em loop no lobby
+-- e some ao entrar na masmorra. Deixe "" para desligar.
+Config.MUSICA_LOBBY = "rbxassetid://91000345218760"
+Config.VOLUME_MUSICA_LOBBY = 0.4
 
 -- Partida
 Config.MAX_JOGADORES_POR_PARTIDA = 4
@@ -68,10 +72,61 @@ Config.VIDA_AO_REVIVER = 0.4
 -- Ouro: quem morre fica só com esta parte. Quem sobe no elevador fica com tudo.
 Config.OURO_MANTIDO_AO_MORRER = 0.25
 
--- Inimigos ficam mais fortes a cada sala e quando há mais jogadores
+-- Versão do jogo: aparece no canto da tela junto com a data e a hora do build (o build.py
+-- grava ReplicatedStorage > Versao). Suba o número quando publicar uma atualização grande.
+Config.VERSAO = "0.14"
+
+-- Inimigos ficam mais fortes a cada sala
 Config.VIDA_INIMIGO_POR_SALA = 0.14
 Config.DANO_INIMIGO_POR_SALA = 0.06
-Config.VIDA_INIMIGO_POR_JOGADOR_EXTRA = 0.4
+
+-- Dificuldade do grupo: cada jogador a mais na partida deixa a masmorra mais difícil.
+-- Com 4 jogadores: inimigos com +225% de vida e +60% de dano; chefes com +390% de vida,
+-- +90% de dano, golpes 30% mais frequentes e postura +180% (mais difícil de quebrar).
+Config.VIDA_INIMIGO_POR_JOGADOR_EXTRA = 0.75
+Config.DANO_INIMIGO_POR_JOGADOR_EXTRA = 0.2
+-- o grupo inteiro bate no chefe ao mesmo tempo e o dano dele se divide entre todos
+Config.VIDA_CHEFE_POR_JOGADOR_EXTRA = 1.3
+Config.DANO_CHEFE_POR_JOGADOR_EXTRA = 0.3
+Config.RECARGA_CHEFE_POR_JOGADOR_EXTRA = 0.1 -- recarga dos golpes 10% menor por jogador a mais (mínimo 60%)
+Config.POSTURA_CHEFE_POR_JOGADOR_EXTRA = 0.6 -- mais parries no grupo: a postura aguenta mais
+Config.INIMIGOS_POR_JOGADOR_EXTRA = 4 -- inimigos a mais em cada sala de combate
+Config.VIVOS_POR_JOGADOR_EXTRA = 2 -- inimigos a mais ao mesmo tempo na sala
+Config.ELITE_POR_JOGADOR_EXTRA = 0.04 -- chance de elite a mais (o máximo também sobe)
+
+-- Inimigos de apoio (Acólito cura, Guardião dá escudo, Porta-Estandarte grita) aparecem
+-- mais nas salas grandes: o peso deles em Config.TEMAS é multiplicado por isto (1 = normal).
+-- Com 2, eles passam de ~1 em 5 para ~1 em 3 inimigos.
+Config.PESO_INIMIGOS_DE_APOIO = 2
+
+-- Maldição do Alto (só o Skullbane, 1º chefe): a cada MALDICAO_INTERVALO segundos uma alma cai
+-- do alto num jogador do grupo. O círculo verde avisa; quem sai dele, esquiva ou defende com o
+-- escudo escapa. Quem é atingido fica sem esquiva (dash), corrida, habilidade (E) e supremo (R),
+-- com a tela verde. A cada MALDICAO_FORTE_A_CADA quedas vem a maldição forte (maior e mais longa).
+Config.MALDICAO_INTERVALO = 5
+Config.MALDICAO_DURACAO = 1.2
+Config.MALDICAO_RAIO = 5
+Config.MALDICAO_AVISO = 1.4 -- tempo do selo no chão até a alma cair
+-- o selo segue a pessoa e só trava no lugar este tempo antes de a alma cair: sair andando não
+-- adianta; escapa quem dá a esquiva (dash) bem na hora ou quem defende com o escudo
+Config.MALDICAO_TRAVA = 0.35
+Config.MALDICAO_FORTE_A_CADA = 2 -- uma queda sim, outra não: a forte vem a cada 10s
+Config.MALDICAO_FORTE_DURACAO = 2.5
+Config.MALDICAO_FORTE_RAIO = 7
+
+-- Caveiras (só o Skullbane): a cada CAVEIRAS_INTERVALO segundos ele solta caveiras em chamas
+-- verdes que perseguem os jogadores (uma por jogador, no mínimo CAVEIRAS_MINIMO). Elas viram
+-- devagar (CAVEIRAS_GIRO, em radianos por segundo): dá para fugir ou desviar de lado na hora certa.
+Config.CAVEIRAS_INTERVALO = 7
+Config.CAVEIRAS_MINIMO = 2
+Config.CAVEIRAS_VELOCIDADE = 17
+Config.CAVEIRAS_GIRO = 2.2
+Config.CAVEIRAS_DURACAO = 5 -- segundos até a caveira se desfazer
+Config.CAVEIRAS_DANO = 0.45 -- parte do dano do chefe
+
+-- Chefes começam a atacar logo depois de despertar: o tempo até o primeiro uso de cada
+-- golpe ("inicial" em Inimigos.luau) é multiplicado por isto
+Config.INICIO_ATAQUES_CHEFE = 0.35
 
 -- Inimigos de elite (mais fortes, com um poder especial, dão mais ouro)
 Config.CHANCE_ELITE_BASE = 0.05

@@ -77,6 +77,38 @@ Os arquivos `.rbxmx` desta pasta vão para **ReplicatedStorage > EfeitosVFX** qu
 | `InvestidaFim`       | explosão no fim da Investida Letal e no começo do supremo       |
 | `OlhosVermelhos`     | supremo: olhos vermelhos brilhando                              |
 
+**Cartas** (o que cada carta faz em combate aparece com efeito do pacote):
+
+| Nome do efeito       | Carta / quando toca                                             |
+|----------------------|-----------------------------------------------------------------|
+| `OndaCorte` (+`Fogo`) | Onda de Corte: a meia-lua que voa                              |
+| `RastroChoque` (+`Fogo`) | Onda de Corte e Investida Brutal: rastro de choque no chão  |
+| `RajadaDragao`       | Fúria do Dragão: sopro de fogo à frente em cada golpe           |
+| `EscudoAbencoado`    | Escudo Abençoado e escudo do supremo do Cavaleiro: bolha dourada |
+| `EscudoAbencoadoQuebra` | a bolha dourada estoura ao bloquear                          |
+| `AuraProtetor`       | Aura do Protetor: círculo dourado no chão (área protegida)      |
+| `RaioCorrente`       | Corrente Elétrica: raio roxo em quem leva o choque              |
+| `Espinhos`           | Espinhos: cortes verdes em quem bateu                           |
+| `AdagaRastro`        | Leque de Adagas: riscos atrás de cada adaga                     |
+| `SegundaChance`      | Segunda Chance (e ao ganhar um escudo): luz sagrada             |
+| `CuraJogador`        | qualquer cura que aparece (+vida)                               |
+| `LentoGelo`          | inimigo lento (Toque Gélido, Chuva de Flechas...)               |
+| `SangrandoInimigo`   | inimigo sangrando (Assassino)                                   |
+| `Atordoado`          | inimigo tonto: estrelas acima da cabeça                         |
+
+**Skullbane (1º chefe) e fogo dos inimigos:**
+
+| Nome do efeito       | Quando toca                                                     |
+|----------------------|-----------------------------------------------------------------|
+| `MaldicaoMarca`      | selo verde da Maldição do Alto (segue a pessoa e pisca ao travar) e selo acima da cabeça de quem está amaldiçoado |
+| `MaldicaoNevoa`      | névoa verde no corpo de quem está amaldiçoado                   |
+| `CaveiraAlma`        | caveiras que perseguem: orbe de alma, olhos em chamas e chamas verdes |
+| `BolaDeFogo`         | bolas de fogo dos inimigos e meteoro do chefe de fogo           |
+| `ExplosaoChamas`     | explosões de fogo (e as outras explosões, tingidas na cor do ataque) |
+| `ChaoArcano`         | chão em chamas roxas do Meteoro do Mago                         |
+
+A Combustão usa `ExplosaoFogo`, o Ricochete usa `ImpactoFlecha` e o inimigo queimando usa `LaminaFogo`.
+
 Os efeitos que estão aqui hoje vieram dos pacotes de VFX que você salvou no jogo, com as cores
 puxadas para a cor de cada classe: **azul e dourado** no Cavaleiro, **roxo** no Mago, **verde** no
 Arqueiro e **carmesim e preto** no Assassino (e fogo com as cartas de fogo). Os pacotes inteiros estão guardados, **sem scripts**, em

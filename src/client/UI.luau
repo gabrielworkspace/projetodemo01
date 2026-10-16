@@ -365,7 +365,8 @@ function UI.medalhao(propriedades): Frame
 end
 
 --[[ Barra com rastro: o pedaço perdido some devagar (como nos jogos de luta).
-	Devolve { quadro, definir(fracao, texto) } ]]
+	propriedades: Position, Size, Cor, CorClara, Fundo, Raio, Borda e EspessuraBorda (contorno)
+	Devolve { quadro, definir(fracao, texto), cor(nova) } ]]
 function UI.barra(propriedades)
 	local quadro = criar("Frame", {
 		AnchorPoint = propriedades.AnchorPoint or Vector2.zero,
@@ -376,7 +377,7 @@ function UI.barra(propriedades)
 		Parent = propriedades.Parent,
 	})
 	UI.cantos(quadro, propriedades.Raio or 6)
-	UI.borda(quadro, UI.cores.preto, 2, 0.1)
+	UI.borda(quadro, propriedades.Borda or UI.cores.preto, propriedades.EspessuraBorda or 2, if propriedades.Borda then 0 else 0.1)
 	local rastro = criar("Frame", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = propriedades.CorRastro or Color3.fromRGB(255, 236, 200),

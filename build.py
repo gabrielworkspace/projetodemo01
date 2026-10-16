@@ -7,11 +7,22 @@ Também gera sourcemap.json (usado por ferramentas de análise de código Luau).
 
 Modelos salvos do Studio (.rbxmx, "Save to File...") dentro das pastas do projeto também
 entram no jogo, por exemplo os efeitos da pasta vfx/ (ReplicatedStorage > EfeitosVFX).
+
+Mapa e céu editáveis no Studio: o cenário do lobby fica em mapas/ (Workspace > Mapa) e o céu em
+ceu/ (Lighting). Se o arquivo do jogo foi salvo pelo Studio depois do último build, antes de
+gerar de novo o build:
+  1. guarda uma cópia do arquivo salvo em .backups/;
+  2. puxa o mapa (Workspace > Mapa) e o céu (o Sky em Lighting) que você editou para mapas/ e ceu/;
+  3. avisa o que mais você colocou no jogo e que não faz parte do projeto (fica só na cópia).
 """
 
+import copy
 import json
 import os
+import re
+import shutil
 import sys
+from datetime import datetime
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
@@ -111,9 +122,14 @@ def no_do_modelo(caminho):
 
 
 def no_do_projeto(nome, especificacao, nome_pai):
+    no = None
     if "$path" in especificacao:
-        no = no_do_caminho(os.path.join(RAIZ, especificacao["$path"]), nome)
-    else:
+        caminho = os.path.join(RAIZ, especificacao["$path"])
+        if os.path.exists(caminho):
+            no = no_do_caminho(caminho, nome)
+        else:
+            print(f"AVISO: {especificacao['$path']} não existe; {nome} fica vazio")
+    if no is None:
         no = {"name": nome, "className": "Folder", "children": [], "props": {}}
 
     if "$className" in especificacao:
@@ -189,13 +205,97 @@ def para_sourcemap(no):
     return saida
 
 
+def _nome_xml(item):
+    n = item.find("./Properties/string[@name='Name']")
+    return n.text if n is not None else "?"
+
+
+def _gravar_modelo(itens, compartilhados, destino):
+    """Grava itens (com as strings compartilhadas que eles usam) num .rbxmx."""
+    usados = {e.text.strip() for item in itens for e in item.iter("SharedString") if e.text}
+    documento = ET.Element("roblox", {"version": "4"})
+    for item in itens:
+        documento.append(copy.deepcopy(item))
+    if usados:
+        bloco = ET.SubElement(documento, "SharedStrings")
+        for md5 in sorted(usados):
+            ET.SubElement(bloco, "SharedString", {"md5": md5}).text = compartilhados.get(md5, "")
+    os.makedirs(os.path.dirname(destino), exist_ok=True)
+    ET.ElementTree(documento).write(destino, encoding="utf-8")
+
+
+def guardar_edicoes_do_studio(projeto):
+    """Se o .rbxlx foi salvo pelo Studio depois do último build, guarda o mapa e o céu editados."""
+    if not (os.path.exists(SAIDA) and os.path.exists(SOURCEMAP)):
+        return
+    if os.path.getmtime(SAIDA) <= os.path.getmtime(SOURCEMAP) + 1:
+        return  # ninguém mexeu no arquivo depois do último build
+    pasta_backup = os.path.join(RAIZ, ".backups")
+    os.makedirs(pasta_backup, exist_ok=True)
+    copia = os.path.join(pasta_backup, datetime.now().strftime("MasmorraDasCartas_%Y%m%d_%H%M%S.rbxlx"))
+    shutil.copy2(SAIDA, copia)
+    print(f"O jogo foi salvo pelo Studio depois do último build: cópia em {os.path.relpath(copia, RAIZ)}")
+    raiz = ET.parse(SAIDA).getroot()
+    compartilhados = {t.get("md5"): t.text or "" for b in raiz.findall("SharedStrings") for t in b}
+    servicos = {s.get("class"): s for s in raiz.findall("Item")}
+
+    # mapa: cada modelo dentro de Workspace > Mapa volta para mapas/<nome>.rbxmx
+    workspace = servicos.get("Workspace")
+    mapa = next((f for f in workspace.findall("Item") if _nome_xml(f) == "Mapa"), None) if workspace is not None else None
+    if mapa is not None:
+        for item in mapa.findall("Item"):
+            destino = os.path.join(RAIZ, "mapas", _nome_xml(item) + ".rbxmx")
+            _gravar_modelo([item], compartilhados, destino)
+            print(f"  mapa guardado: {os.path.relpath(destino, RAIZ)}")
+    # céu: o Sky que estiver em Lighting
+    lighting = servicos.get("Lighting")
+    ceus = [f for f in lighting.findall("Item") if f.get("class") == "Sky"] if lighting is not None else []
+    if ceus:
+        _gravar_modelo(ceus[:1], compartilhados, os.path.join(RAIZ, "ceu", "Ceu.rbxmx"))
+        print(f"  céu guardado: ceu/Ceu.rbxmx ({_nome_xml(ceus[0])})")
+
+    # o que mais foi colocado e não faz parte do projeto (só fica na cópia)
+    arvore = projeto["tree"]
+    conhecidos = {"Workspace": {"Camera", "Terrain", "Mapa"}, "Lighting": set(), "ReplicatedStorage": {"Versao"}}
+    for servico, especificacao in arvore.items():
+        if isinstance(especificacao, dict):
+            conhecidos.setdefault(servico, set()).update(k for k in especificacao if not k.startswith("$"))
+    extras = []
+    for servico in ("Workspace", "ServerStorage", "ReplicatedStorage", "StarterPack", "StarterGui"):
+        item = servicos.get(servico)
+        if item is None:
+            continue
+        for filho in item.findall("Item"):
+            if filho.get("class") in ("Camera", "Terrain"):
+                continue
+            if _nome_xml(filho) not in conhecidos.get(servico, set()):
+                extras.append(f"{servico} > {_nome_xml(filho)}")
+    if extras:
+        print("  AVISO: estes itens que você colocou não fazem parte do projeto e saem do jogo novo")
+        print("  (continuam na cópia; peça para eu guardar o que quiser manter):")
+        for extra in extras:
+            print("   -", extra)
+
+
 def main():
     with open(PROJETO, encoding="utf-8") as arquivo:
         projeto = json.load(arquivo)
+    guardar_edicoes_do_studio(projeto)
     arvore = projeto["tree"]
 
     servicos = [no_do_projeto(nome, especificacao, "DataModel")
                 for nome, especificacao in arvore.items() if not nome.startswith("$")]
+
+    # versão na tela: Config.VERSAO + data e hora deste build (muda a cada build, para conferir
+    # se o jogo publicado é o mesmo do Studio)
+    with open(os.path.join(RAIZ, "src", "shared", "Config.luau"), encoding="utf-8") as arquivo:
+        achada = re.search(r'Config\.VERSAO\s*=\s*"([^"]*)"', arquivo.read())
+    versao = f"v{achada.group(1) if achada else '?'} · {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    for servico in servicos:
+        if servico["name"] == "ReplicatedStorage":
+            servico["children"].append({"name": "Versao", "className": "StringValue", "children": [],
+                                        "props": {"Value": versao}})
+    print("Versão:", versao)
 
     linhas = ['<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" '
               'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '

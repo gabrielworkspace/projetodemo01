@@ -906,6 +906,13 @@ end
 
 
 function Vfx.rajada(dados)
+	if Vfx.temPrefab("RajadaDragao") then
+		-- o fogo do pacote sai para o +Y da peça: deita ela na direção do golpe
+		local boca = dados.pos + dados.dir * 2 + Vector3.new(0, 0.6, 0)
+		Vfx.prefab("RajadaDragao", CFrame.lookAt(boca, boca + dados.dir) * CFrame.Angles(-math.pi / 2, 0, 0), nil, math.clamp(dados.alcance / 24, 0.5, 1.1))
+		Sons.tocar("bolaFogo", { pos = boca, tom = 0.8, volume = 0.7 })
+		return
+	end
 	local origem = CFrame.lookAt(dados.pos, dados.pos + dados.dir)
 	for _ = 1, 9 do
 		local inicio = origem * CFrame.Angles(0, math.rad(math.random(-28, 28)), 0)
@@ -1298,6 +1305,11 @@ local PROJETIL_PRONTO = {
 	flechaCarregada = { "FlechaCarregada", 0.6, corpo = true, fogo = "FlechaCarregadaFogo" },
 	fantasma = { "FlechaCarregada", 0.8, corpo = true },
 	alma = { "ProjetilVazio", 0.3, cor = Color3.fromRGB(90, 255, 120) }, -- almas do Skullbane (orbe do vazio tingido de verde)
+	-- cartas: Onda de Corte (meia-lua voando + rastro de choque no chão) e Leque de Adagas
+	onda = { "OndaCorte", 1.1, esconder = true, fogo = "OndaCorteFogo", rastroChao = "RastroChoque" },
+	fogo = { "BolaDeFogo", 0.45 }, -- bolas de fogo dos inimigos
+	caveira = { "CaveiraAlma", 1 }, -- caveiras do Skullbane: orbe de alma, olhos em chamas e chamas verdes (só pacote)
+	adaga = { "AdagaRastro", 1, corpo = true },
 }
 local TIPOS_FLECHA = { flecha = true, flechaGrande = true, flechaCarregada = true, fantasma = true }
 
@@ -1361,7 +1373,7 @@ function Vfx.projeteis(dados)
 			if prefabDe(nomePronto) then
 				if pronto.corpo then
 					apagarRastro(visual, extras)
-				elseif Vfx.temPrefab(nomePronto) then
+				elseif pronto.esconder or Vfx.temPrefab(nomePronto) then
 					esconderVisual(visual, extras)
 				end
 			end
@@ -1383,6 +1395,18 @@ function Vfx.projeteis(dados)
 				local p = projeteis[id]
 				return if p then CFrame.lookAt(p.pos, p.pos + p.dir) else nil
 			end, 0, pronto[2] * (info.tamanho or 1), if pronto.cor then { cor = pronto.cor } else nil)
+			if pronto.rastroChao then
+				-- rastro de choque: o chão estoura em faíscas e fogo baixo por onde a onda passa
+				local nomeRastro = if info.fogo and prefabDe(pronto.rastroChao .. "Fogo") then pronto.rastroChao .. "Fogo" else pronto.rastroChao
+				task.spawn(function()
+					while projeteis[id] do
+						local p = projeteis[id]
+						local chao = chaoAbaixo(p.pos)
+						Vfx.prefab(nomeRastro, CFrame.lookAt(chao, chao + p.dir), nil, 0.3)
+						task.wait(0.07)
+					end
+				end)
+			end
 		end
 	end
 end
@@ -1412,6 +1436,15 @@ local function removerProjetil(id: number, impacto: boolean, pos: Vector3?)
 		elseif string.find(tipo, "flecha") or tipo == "adaga" or tipo == "fantasma" then
 			Sons.tocar("flechaImpacto", { pos = onde })
 		end
+		if tipo == "caveira" and prefabDe("RugidoRei") then
+			Vfx.prefab("RugidoRei", CFrame.new(onde), nil, 0.18)
+			Sons.tocar("passoSombrio", { pos = onde, tom = 0.8, volume = 0.9 })
+			return
+		end
+		if tipo == "adaga" and prefabDe("ImpactoAdaga") then
+			Vfx.prefab("ImpactoAdaga", CFrame.new(onde), nil, 0.4)
+			return
+		end
 		if TIPOS_FLECHA[tipo] and prefabDe("ImpactoFlecha") then
 			return -- o impacto da flecha é o efeito pronto, que sai em Vfx.dano
 		end
@@ -1440,7 +1473,14 @@ function Vfx.projetilDir(dados)
 	if p then
 		p.pos = dados.pos
 		p.dir = dados.dir
-		particulas(dados.pos, { cor = p.cor, quantidade = 6, tamanho = 0.3, velocidade = 10, vida = 0.25 })
+		if dados.silencioso then
+			return
+		end
+		if TIPOS_FLECHA[p.tipo or ""] and prefabDe("ImpactoFlecha") then
+			Vfx.prefab("ImpactoFlecha", CFrame.new(dados.pos), nil, 0.2)
+		else
+			particulas(dados.pos, { cor = p.cor, quantidade = 6, tamanho = 0.3, velocidade = 10, vida = 0.25 })
+		end
 	end
 end
 
@@ -1474,10 +1514,28 @@ end)
 -- Explosões e impactos
 ------------------------------------------------------------------------
 
+-- Cor de fogo (laranja ou vermelho-alaranjado): usa os efeitos de fogo do pacote
+local function ehCorDeFogo(cor: Color3?): boolean
+	return cor ~= nil and cor.R > 0.85 and cor.G > 0.2 and cor.G < 0.7 and cor.B < 0.35
+end
+
 function Vfx.explosao(dados)
 	local pos, raio, cor = dados.pos, dados.raio or 6, dados.cor or FOGO
 	local forte = dados.forte == true
 	local leve = dados.leve == true
+	-- explosão do pacote de VFX: arcana ou de fogo do Mago, de fogo (laranja) e, nas outras
+	-- cores, a mesma explosão tingida na cor do ataque. As partículas feitas por código só
+	-- aparecem se o efeito do pacote não existir.
+	local pronta = if dados.magia == "dardoArcano" then "ExplosaoArcana"
+		elseif dados.magia == "bolaFogo" then "ExplosaoFogo"
+		else "ExplosaoChamas"
+	local tingir = if pronta == "ExplosaoChamas" and not ehCorDeFogo(cor) then cor else nil
+	if Vfx.temPrefab(pronta) then
+		Sons.tocar("explosao", { pos = pos, volume = if leve then 0.5 elseif forte then 1.15 else 0.9, tom = if leve then 1.3 else 1, alcance = 220 })
+		Vfx.prefab(pronta, CFrame.new(pos), nil, raio / 12, if tingir then { cor = tingir } else nil)
+		Vfx.tremerEm(pos, if forte then 0.8 else 0.3, 0.15)
+		return
+	end
 	if not VfxKit.custom("Explosao", CFrame.new(pos), raio / 6) then
 		local e = raio / 6
 		soltar(pos, "clarao", { cor = cor, escala = e * 1.5, quantidade = 1 })
@@ -1492,13 +1550,6 @@ function Vfx.explosao(dados)
 		end
 	end
 	Sons.tocar("explosao", { pos = pos, volume = if leve then 0.5 elseif forte then 1.15 else 0.9, tom = if leve then 1.3 else 1, alcance = 220 })
-	-- magias do Mago: explosão pronta do pacote de VFX (arcana roxa ou de fogo)
-	local pronta = if dados.magia == "dardoArcano" then "ExplosaoArcana" elseif dados.magia == "bolaFogo" then "ExplosaoFogo" else nil
-	if pronta and Vfx.temPrefab(pronta) then
-		Vfx.prefab(pronta, CFrame.new(pos), nil, raio / 12)
-		Vfx.tremerEm(pos, if forte then 0.8 else 0.3, 0.15)
-		return
-	end
 	local nucleo = parte(Vector3.one * 1.5, CFrame.new(pos), cor:Lerp(BRANCO, 0.5), 0, Enum.PartType.Ball)
 	animar(nucleo, if leve then 0.22 else 0.35, { Size = Vector3.one * raio * 2, Transparency = 1, Color = cor })
 	Debris:AddItem(nucleo, 0.4)
@@ -1650,6 +1701,11 @@ local function zigueZague(de: Vector3, ate: Vector3, cor: Color3, espessura: num
 end
 
 function Vfx.raio(dados)
+	if Vfx.temPrefab("RaioCorrente") then
+		zigueZague(dados.de, dados.ate, Color3.fromRGB(215, 160, 255), 0.35, 2.5, 5)
+		Vfx.prefab("RaioCorrente", CFrame.new(dados.ate), nil, 1.3)
+		return
+	end
 	zigueZague(dados.de, dados.ate, Color3.fromRGB(255, 245, 140), 0.35, 2.5, 5)
 	clarao(dados.ate, Color3.fromRGB(255, 240, 120), 12, 0.2, 3)
 end
@@ -1953,9 +2009,6 @@ end
 
 function Vfx.dano(dados)
 	local critico = dados.critico
-	if dados.impacto and not dados.dot then
-		impactoDeGolpe(dados.impacto, dados.cor or Color3.fromRGB(255, 200, 140), critico == true)
-	end
 	-- som do golpe (dano contínuo de fogo/sangramento não faz barulho a cada tique)
 	if dados.impacto and not dados.dot then
 		local autorSom = dados.autor
@@ -1975,6 +2028,9 @@ function Vfx.dano(dados)
 	local cor = dados.cor or (if critico then Color3.fromRGB(255, 214, 70) else Color3.fromRGB(255, 250, 240))
 	textoFlutuante(dados.pos, if critico then dados.valor .. "!" else tostring(dados.valor), cor, if critico then 46 else 30, { pop = if critico then 2.2 else 1.5 })
 	local autor = dados.autor
+	if dados.espinhos and Vfx.temPrefab("Espinhos") then
+		Vfx.prefab("Espinhos", CFrame.new(dados.impacto or dados.pos), nil, 1.4)
+	end
 	local doAssassino = typeof(autor) == "Instance" and autor:GetAttribute("Classe") == "assassino"
 	if dados.sangue and dados.impacto then
 		if dados.sangue == "gota" and Vfx.temPrefab("SangueGota") then
@@ -2005,18 +2061,115 @@ function Vfx.dano(dados)
 			else CFrame.new(dados.impacto)
 		Vfx.prefab(nomeImpacto, onde, nil, if critico then 0.45 else 0.3)
 	end
-	if dados.impacto and not impactoPronto then
-		particulas(dados.impacto, {
-			cor = if critico then Color3.fromRGB(255, 230, 120) else Color3.fromRGB(255, 240, 220),
-			cor2 = dados.cor or Color3.fromRGB(255, 160, 80),
-			quantidade = if critico then 14 else 7,
-			tamanho = if critico then 0.6 else 0.4,
-			velocidade = if critico then 24 else 16,
-			vida = 0.3,
-		})
-		if critico then
-			Vfx.tremerEm(dados.impacto, 0.5, 0.1)
+	-- os outros golpes (Mago, cartas, aliados): impacto do pacote na cor do ataque, de fogo
+	-- quando o golpe é de fogo. Dano contínuo (queimando, sangrando) não tem impacto: o efeito
+	-- fica no corpo do inimigo.
+	if dados.impacto and not impactoPronto and not dados.dot and not dados.espinhos then
+		local deFogo = dados.fogo == true or ehCorDeFogo(dados.cor)
+		local nome = if deFogo then "ImpactoCorteFogo" else "ImpactoCorte"
+		if Vfx.temPrefab(nome) then
+			impactoPronto = true
+			Vfx.prefab(nome, CFrame.new(dados.impacto + Vector3.new(0, 1, 0)), nil, if critico then 1 else 0.6,
+				if not deFogo and dados.cor then { cor = dados.cor } else nil)
 		end
+	end
+	if dados.impacto and not impactoPronto and not dados.dot then
+		impactoDeGolpe(dados.impacto, dados.cor or Color3.fromRGB(255, 200, 140), critico == true)
+	end
+	if dados.impacto and critico then
+		Vfx.tremerEm(dados.impacto, 0.5, 0.1)
+	end
+end
+
+-- Maldição das Almas: estouro verde no jogador atingido (a névoa e o selo ficam no corpo
+-- enquanto durar: Animacoes; a tela verde: Hud)
+function Vfx.maldicao(dados)
+	local raiz = raizDoJogador(dados.jogador)
+	if not raiz then
+		return
+	end
+	Vfx.prefab("RugidoRei", CFrame.new(raiz.Position), nil, 0.35)
+	Sons.tocar("passoSombrio", { pos = raiz.Position, tom = 0.6, volume = 1.2 })
+	textoFlutuante(raiz.Position + Vector3.new(0, 4, 0), "AMALDIÇOADO!", Color3.fromRGB(120, 255, 140), 34, { pop = 1.8 })
+end
+
+-- Maldição do Alto (Skullbane): o selo verde segue a pessoa no chão e a alma desce do alto em
+-- cima dele; o servidor avisa quando o selo trava (maldicaoTrava) e, quando a alma chega, o chão
+-- racha e ela estoura
+local maldicoesAtivas = {}
+function Vfx.maldicaoCeu(dados)
+	local raio, duracao = dados.raio or 5, dados.duracao or 1.4
+	local forte = dados.forte == true
+	local raizAlvo = raizDoJogador(dados.jogador)
+	local estado = { centro = dados.pos, travado = false }
+	maldicoesAtivas[dados.id or 0] = estado
+	local function centroAtual(): Vector3
+		if not estado.travado and raizAlvo and raizAlvo.Parent then
+			estado.centro = chaoAbaixo(raizAlvo.Position)
+		end
+		return estado.centro
+	end
+	Vfx.prefab("MaldicaoMarca", function()
+		return CFrame.new(centroAtual() + Vector3.new(0, 0.3, 0))
+	end, duracao, raio / 4.5)
+	if forte then
+		-- a forte tem um segundo selo por dentro, mais claro
+		Vfx.prefab("MaldicaoMarca", function()
+			return CFrame.new(centroAtual() + Vector3.new(0, 0.4, 0))
+		end, duracao, raio / 7, { cor = Color3.fromRGB(190, 255, 200) })
+	end
+	local alma = ancora(dados.pos + Vector3.new(0, 28, 0))
+	Vfx.prefab("ProjetilVazio", function()
+		return if alma.Parent then alma.WorldCFrame else nil
+	end, duracao + 0.1, if forte then 0.75 else 0.45, { cor = Color3.fromRGB(90, 255, 120) })
+	Sons.tocar("cargaCheia", { pos = dados.pos, tom = if forte then 0.4 else 0.5, volume = if forte then 1.4 else 1.1, alcance = 200 })
+	local inicio = os.clock()
+	task.spawn(function()
+		while alma.Parent and os.clock() - inicio < duracao do
+			local s = (os.clock() - inicio) / duracao
+			local centro = centroAtual()
+			alma.WorldPosition = (centro + Vector3.new(0, 28, 0)):Lerp(centro + Vector3.new(0, 1, 0), s * s)
+			task.wait()
+		end
+		alma:Destroy()
+		maldicoesAtivas[dados.id or 0] = nil
+		local centro = estado.centro
+		local k = if forte then 1.5 else 1
+		Vfx.prefab("TumuloRei", CFrame.new(centro), nil, k)
+		Vfx.prefab("RugidoRei", CFrame.new(centro + Vector3.new(0, 1, 0)), nil, 0.3 * k)
+		Sons.tocar("passoSombrio", { pos = centro, tom = 0.5, volume = 1.3 })
+		Vfx.tremerEm(centro, 1.2 * k, 0.2)
+	end)
+end
+
+-- O selo travou: para de seguir e pisca (é a hora do dash)
+function Vfx.maldicaoTrava(dados)
+	local estado = maldicoesAtivas[dados.id or 0]
+	if estado then
+		estado.travado = true
+		estado.centro = dados.pos
+	end
+	Vfx.prefab("MaldicaoMarca", CFrame.new(dados.pos + Vector3.new(0, 0.5, 0)), dados.resta or 0.35, 1.1, { cor = Color3.fromRGB(230, 255, 230) })
+	Sons.tocar("cargaCheia", { pos = dados.pos, tom = 1.3, volume = 0.9, alcance = 150 })
+end
+
+-- Caveiras saindo do Skullbane: estouro verde no peito dele
+function Vfx.caveiras(dados)
+	Vfx.prefab("RugidoRei", CFrame.new(dados.pos), nil, 0.22)
+	Sons.tocar("passoSombrio", { pos = dados.pos, tom = 0.65, volume = 1.2, alcance = 200 })
+end
+
+-- Tentou dar dash, correr ou usar habilidade amaldiçoado: aviso rápido (no máximo 2 por segundo)
+local ultimoAvisoMaldicao = 0
+function Vfx.maldicaoBloqueou()
+	if os.clock() - ultimoAvisoMaldicao < 0.5 then
+		return
+	end
+	ultimoAvisoMaldicao = os.clock()
+	local raiz = raizDoJogador(jogador)
+	Sons.tocar("semMana", { volume = 0.8 })
+	if raiz then
+		textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "☠ Amaldiçoado", Color3.fromRGB(120, 255, 140), 24)
 	end
 end
 
@@ -2045,7 +2198,11 @@ function Vfx.cura(dados)
 	local raiz = raizDoJogador(dados.jogador)
 	if raiz then
 		textoFlutuante(raiz.Position + Vector3.new(0, 3, 0), "+" .. dados.valor, Color3.fromRGB(110, 255, 140), 28, { pop = 1.3 })
-		particulas(raiz.Position, { cor = Color3.fromRGB(150, 255, 170), quantidade = 8, velocidade = 6, vida = 0.8, espalhar = Vector2.new(30, 30) })
+		if Vfx.temPrefab("CuraJogador") then
+			Vfx.prefab("CuraJogador", CFrame.new(raiz.Position - Vector3.new(0, 1.5, 0)), nil, 1.4)
+		else
+			particulas(raiz.Position, { cor = Color3.fromRGB(150, 255, 170), quantidade = 8, velocidade = 6, vida = 0.8, espalhar = Vector2.new(30, 30) })
+		end
 	end
 end
 
@@ -2095,7 +2252,12 @@ function Vfx.segundaChance(dados)
 	local raiz = raizDoJogador(dados.jogador)
 	Sons.tocar("reviver", { pos = raiz and raiz.Position })
 	if raiz then
-		pilarDeLuz(raiz, Color3.fromRGB(255, 220, 110), 50, 6)
+		if Vfx.temPrefab("SegundaChance") then
+			Vfx.prefab("SegundaChance", CFrame.new(raiz.Position), nil, 4)
+			Vfx.prefab("CuraJogador", CFrame.new(raiz.Position - Vector3.new(0, 1.5, 0)), nil, 2)
+		else
+			pilarDeLuz(raiz, Color3.fromRGB(255, 220, 110), 50, 6)
+		end
 		textoFlutuante(raiz.Position + Vector3.new(0, 4, 0), "SEGUNDA CHANCE!", Color3.fromRGB(255, 220, 110), 40, { pop = 2 })
 	end
 end
@@ -2117,6 +2279,12 @@ function Vfx.bloqueio(dados)
 		local tronco = (raiz.Parent :: Model):FindFirstChild("UpperTorso") or raiz
 		Vfx.prefab("BarreiraArcanaQuebra", CFrame.new((tronco :: BasePart).Position), nil, 1.9)
 		textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "BLOQUEADO", Color3.fromRGB(190, 110, 255), 30)
+		return
+	end
+	if raiz and Vfx.temPrefab("EscudoAbencoadoQuebra") then
+		local tronco = (raiz.Parent :: Model):FindFirstChild("UpperTorso") or raiz
+		Vfx.prefab("EscudoAbencoadoQuebra", CFrame.new((tronco :: BasePart).Position), nil, 1.9)
+		textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "BLOQUEADO", Color3.fromRGB(255, 214, 120), 30)
 		return
 	end
 	if raiz then
@@ -2180,6 +2348,18 @@ function Vfx.esquiva(dados)
 			end
 		end)
 		return
+	end
+	local jogadorDados = dados.jogador
+	if dados.classe == "cavaleiro" and typeof(jogadorDados) == "Instance" and jogadorDados:GetAttribute("InvestidaBrutal") == true
+		and Vfx.temPrefab("RastroChoque") then
+		for i = 0, 3 do
+			task.delay(i * 0.08, function()
+				if raiz.Parent then
+					local chao = chaoAbaixo(raiz.Position)
+					Vfx.prefab("RastroChoque", CFrame.lookAt(chao, chao + raiz.CFrame.LookVector), nil, 0.35)
+				end
+			end)
+		end
 	end
 	if dados.classe == "cavaleiro" and Vfx.temPrefab("Rolamento") then
 		-- rolamento do Cavaleiro: só o efeito pronto (vento e fumaça no chão) e o baque ao levantar
@@ -2256,13 +2436,22 @@ end
 
 -- Carga cheia: clarão dourado na ponta da arma
 function Vfx.cargaCheia(dados)
-	if not VfxKit.custom("CargaCheia", CFrame.new(dados.pos)) then
-		local ouro = Color3.fromRGB(255, 214, 90)
-		soltar(dados.pos, "clarao", { cor = ouro, quantidade = 1, escala = 0.7 })
-		soltar(dados.pos, "anel", { cor = ouro, quantidade = 1, escala = 0.5, extra = { Orientation = Enum.ParticleOrientation.FacingCamera } })
-		soltar(dados.pos, "brasas", { cor = ouro, quantidade = 14, escala = 0.7 })
-	end
 	Sons.tocar("cargaCheia", { pos = dados.pos, volume = if dados.local_ then 1 else 0.5 })
+	-- Cavaleiro: o estouro dourado do pacote já sai do vento da carga (Vfx.ventoCarga)
+	if dados.classe == "cavaleiro" and Vfx.temPrefab("CargaCheia") then
+		if dados.local_ then
+			Vfx.tremer(0.35, 0.1)
+		end
+		return
+	end
+	-- Mago: o mesmo estouro do pacote, roxo, na ponta do cajado
+	if dados.classe == "mago" and Vfx.temPrefab("CargaCheia") then
+		Vfx.prefab("CargaCheia", CFrame.new(dados.pos), nil, 0.45, { cor = Color3.fromRGB(190, 110, 255), taxa = 0.5 })
+		if dados.local_ then
+			Vfx.tremer(0.3, 0.1)
+		end
+		return
+	end
 	if dados.classe == "assassino" and Vfx.temPrefab("CargaCheiaAssassino") then
 		Vfx.prefab("CargaCheiaAssassino", CFrame.new(dados.pos), nil, 0.6)
 		if dados.local_ then
@@ -2277,7 +2466,12 @@ function Vfx.cargaCheia(dados)
 		end
 		return
 	end
+	-- reserva (sem o efeito do pacote): clarão e bola feitos por código
 	local ouro = Color3.fromRGB(255, 214, 90)
+	if not VfxKit.custom("CargaCheia", CFrame.new(dados.pos)) then
+		soltar(dados.pos, "clarao", { cor = ouro, quantidade = 1, escala = 0.7 })
+		soltar(dados.pos, "brasas", { cor = ouro, quantidade = 14, escala = 0.7 })
+	end
 	local bola = parte(Vector3.one * 0.6, CFrame.new(dados.pos), ouro:Lerp(BRANCO, 0.4), 0.1, Enum.PartType.Ball, Enum.Material.Neon)
 	animar(bola, 0.25, { Size = Vector3.one * 4, Transparency = 1 })
 	Debris:AddItem(bola, 0.3)
@@ -2398,6 +2592,21 @@ end
 -- Chão em chamas deixado pelo Meteoro
 function Vfx.zonaFogo(dados)
 	Sons.tocar("bolaFogo", { pos = dados.pos, tom = 0.7, volume = 0.5 })
+	if prefabDe("ChaoArcano") then
+		-- chamas do pacote espalhadas pela área (o Meteoro é do Mago: roxas) e o círculo marcando
+		local centro = dados.pos + Vector3.new(0, 0.1, 0)
+		local base = disco(centro, dados.raio * 2, Color3.fromRGB(150, 80, 220), 0.6)
+		sumir({ base }, 0.4, dados.duracao)
+		local pontos = { centro }
+		for i = 1, 6 do
+			local angulo = i / 6 * math.pi * 2
+			table.insert(pontos, centro + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * dados.raio * 0.6)
+		end
+		for _, ponto in pontos do
+			Vfx.prefab("ChaoArcano", CFrame.new(ponto), dados.duracao, dados.raio / 6)
+		end
+		return
+	end
 	local centro = dados.pos + Vector3.new(0, 0.1, 0)
 	local diametro = dados.raio * 2
 	local base = disco(centro, diametro, FOGO, 0.45)
@@ -2512,9 +2721,14 @@ function Vfx.escudoGanho(dados)
 		return
 	end
 	Sons.tocar("escudo", { pos = raiz.Position, tom = 1.4, volume = 0.5 })
-	local bolha = parte(Vector3.one * 2, raiz.CFrame, dados.cor:Lerp(BRANCO, 0.4), 0.3, Enum.PartType.Ball, Enum.Material.ForceField)
-	animar(bolha, 0.5, { Size = Vector3.one * 7, Transparency = 1 })
-	Debris:AddItem(bolha, 0.55)
+	if Vfx.temPrefab("SegundaChance") then
+		-- luz sagrada ao ganhar o escudo (a bolha dourada fica em volta enquanto ele durar)
+		Vfx.prefab("SegundaChance", CFrame.new(raiz.Position), nil, 2.2)
+	else
+		local bolha = parte(Vector3.one * 2, raiz.CFrame, dados.cor:Lerp(BRANCO, 0.4), 0.3, Enum.PartType.Ball, Enum.Material.ForceField)
+		animar(bolha, 0.5, { Size = Vector3.one * 7, Transparency = 1 })
+		Debris:AddItem(bolha, 0.55)
+	end
 	textoFlutuante(raiz.Position + Vector3.new(0, 3.5, 0), "🛡️ ESCUDO", dados.cor:Lerp(BRANCO, 0.4), 26)
 end
 
@@ -2862,12 +3076,24 @@ function Vfx.meteoro(dados)
 	local inicio = alvo + Vector3.new(-16, 55, -16)
 	local rocha = parte(Vector3.one * 3.2, CFrame.new(inicio), Color3.fromRGB(60, 40, 35), 0, Enum.PartType.Ball, Enum.Material.Basalt)
 	local brasa = parte(Vector3.one * 4.2, CFrame.new(inicio), FOGO, 0.45, Enum.PartType.Ball)
+	-- rocha envolta pelo efeito do pacote: bola de fogo (chefe) ou orbe roxo (Mago)
+	local envolta = if dados.arcano then "ProjetilVazio" else "BolaDeFogo"
+	local doPacote = prefabDe(envolta) ~= nil
+	if doPacote then
+		brasa.Transparency = 1
+		Vfx.prefab(envolta, function()
+			return if rocha.Parent then CFrame.new(rocha.Position) else nil
+		end, dados.duracao + 0.05, if dados.arcano then 0.5 else 1.3)
+	end
 	local fogo = Instance.new("Fire")
 	fogo.Size = 10
 	fogo.Heat = 0
+	fogo.Enabled = not doPacote
 	fogo.Parent = rocha
-	VfxKit.continuo(rocha, "fogo", 70, { cor = FOGO, escala = 1.4 })
-	VfxKit.continuo(rocha, "fumaca", 30, { cor = Color3.fromRGB(60, 50, 50), escala = 1.2, extra = { Speed = NumberRange.new(1, 3) } })
+	if not doPacote then
+		VfxKit.continuo(rocha, "fogo", 70, { cor = FOGO, escala = 1.4 })
+		VfxKit.continuo(rocha, "fumaca", 30, { cor = Color3.fromRGB(60, 50, 50), escala = 1.2, extra = { Speed = NumberRange.new(1, 3) } })
+	end
 	emissorEm(rocha, {
 		Color = ColorSequence.new(Color3.fromRGB(255, 220, 120), FOGO),
 		LightEmission = 1,
@@ -2877,7 +3103,15 @@ function Vfx.meteoro(dados)
 		SpreadAngle = Vector2.new(180, 180),
 		Rate = 50,
 	})
-	rastro(rocha, FOGO, 3, 0.5)
+	if doPacote then
+		for _, objeto in rocha:GetChildren() do
+			if objeto:IsA("ParticleEmitter") then
+				objeto.Enabled = false
+			end
+		end
+	else
+		rastro(rocha, FOGO, 3, 0.5)
+	end
 	luzEm(rocha, FOGO, 30, 4)
 	local destino = alvo + Vector3.new(0, 1.5, 0)
 	animar(rocha, dados.duracao, { CFrame = CFrame.new(destino) * CFrame.Angles(6, 4, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
@@ -2896,7 +3130,12 @@ function Vfx.meteoro(dados)
 			Vfx.tremerEm(alvo, 2, 0.4)
 			return
 		end
-		if not VfxKit.custom("Meteoro", CFrame.new(alvo), (dados.raio or 10) / 10) then
+		if Vfx.temPrefab("ExplosaoChamas") then
+			-- meteoro do chefe: explosão de fogo do pacote e as pedras da cratera
+			Vfx.prefab("ExplosaoChamas", CFrame.new(alvo + Vector3.new(0, 1, 0)), nil, (dados.raio or 10) / 9)
+			Sons.tocar("explosao", { pos = alvo, volume = 1.1, alcance = 220 })
+			Vfx.tremerEm(alvo, 2, 0.4)
+		elseif not VfxKit.custom("Meteoro", CFrame.new(alvo), (dados.raio or 10) / 10) then
 			soltar(alvo + Vector3.new(0, 1, 0), "fogo", { cor = FOGO, quantidade = 30, escala = 1.6 })
 			soltar(alvo + Vector3.new(0, 0.5, 0), "fumaca", { cor = Color3.fromRGB(60, 50, 48), quantidade = 18, escala = 1.6 })
 			soltar(alvo + Vector3.new(0, 0.3, 0), "poeira", { cor = Color3.fromRGB(140, 115, 95), quantidade = 24, escala = 1.5 })
@@ -3132,7 +3371,12 @@ function Vfx.supremo(dados)
 		return
 	end
 	Sons.tocar("supremo", { pos = raiz.Position, alcance = 220 })
-	if not VfxKit.custom("Supremo", raiz.CFrame) then
+	if dados.nome == "Tempestade Arcana" and Vfx.temPrefab("ExplosaoArcana") then
+		Vfx.prefab("ExplosaoArcana", CFrame.new(raiz.Position), nil, 1.1)
+	end
+	local supremoDoPacote = Vfx.temPrefab("Julgamento") or Vfx.temPrefab("ExplosaoArcana")
+		or Vfx.temPrefab("SaraivadaInicio") or Vfx.temPrefab("InvestidaFim")
+	if not supremoDoPacote and not VfxKit.custom("Supremo", raiz.CFrame) then
 		soltar(raiz.Position, "clarao", { cor = dados.cor, quantidade = 1, escala = 1.6 })
 		soltar(raiz.Position - Vector3.new(0, 2.6, 0), "anel", { cor = dados.cor, quantidade = 1, escala = 1.3 })
 		soltar(raiz.Position - Vector3.new(0, 2.5, 0), "circulo", { cor = dados.cor, quantidade = 1, escala = 1.6, extra = { Lifetime = NumberRange.new(1.2, 1.2) } })

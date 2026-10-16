@@ -5,6 +5,9 @@
     "Workspace": {
       "$properties": {
         "StreamingEnabled": false
+      },
+      "Mapa": {
+        "$path": "mapas"
       }
     },
     "Lighting": {
@@ -14,23 +17,42 @@
         },
         "Ambient": {
           "Color3": [
-            0.35,
-            0.35,
-            0.4
+            0.376,
+            0.376,
+            0.463
           ]
         },
         "OutdoorAmbient": {
           "Color3": [
-            0.5,
-            0.5,
-            0.55
+            0.486,
+            0.502,
+            0.588
           ]
         },
         "Brightness": {
-          "Float32": 2.2
+          "Float32": 3.4
         },
-        "TimeOfDay": "14:30:00",
-        "GlobalShadows": true
+        "TimeOfDay": "16:18:00",
+        "GlobalShadows": true,
+        "ColorShift_Top": {
+          "Color3": [
+            1.0,
+            0.871,
+            0.69
+          ]
+        },
+        "EnvironmentDiffuseScale": {
+          "Float32": 0.35
+        },
+        "EnvironmentSpecularScale": {
+          "Float32": 0.2
+        },
+        "ShadowSoftness": {
+          "Float32": 0.12
+        }
+      },
+      "Ceu": {
+        "$path": "ceu/Ceu.rbxmx"
       }
     },
     "Players": {
@@ -52,6 +74,9 @@
     "ServerStorage": {
       "ModelosArmas": {
         "$path": "modelos"
+      },
+      "PacoteCenario": {
+        "$path": "cenario"
       }
     },
     "ServerScriptService": {
@@ -61,10 +86,16 @@
     },
     "StarterPlayer": {
       "$properties": {
-        "GameSettingsAvatar": { "Enum": 1 },
+        "GameSettingsAvatar": {
+          "Enum": 1
+        },
         "EnableMouseLockOption": false,
-        "AvatarJointUpgrade": { "Enum": 1 },
-        "AvatarJointUpgrade_SerializedRollout": { "Enum": 1 }
+        "AvatarJointUpgrade": {
+          "Enum": 1
+        },
+        "AvatarJointUpgrade_SerializedRollout": {
+          "Enum": 1
+        }
       },
       "StarterPlayerScripts": {
         "Client": {

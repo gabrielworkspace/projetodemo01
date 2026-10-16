@@ -47,6 +47,67 @@ local function camada(nome: string, pai: Instance): Frame
 	return criar("Frame", { Name = nome, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = pai })
 end
 
+-- versão do jogo no canto de baixo (ReplicatedStorage > Versao, gravada pelo build.py):
+-- serve para conferir se o jogo publicado está na mesma versão do Studio
+task.spawn(function()
+	local valor = game:GetService("ReplicatedStorage"):WaitForChild("Versao", 15)
+	UI.texto({
+		Name = "Versao",
+		Text = if valor and valor:IsA("StringValue") then valor.Value else "versão ?",
+		TextScaled = false,
+		TextSize = 13,
+		FontFace = fontes.texto,
+		TextColor3 = Color3.fromRGB(235, 225, 205),
+		TextTransparency = 0.35,
+		TextStrokeTransparency = 0.6,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -10, 1, -6),
+		Size = UDim2.fromOffset(260, 16),
+		ZIndex = 50,
+		Parent = topo,
+	})
+end)
+
+-- Maldição das Almas: a tela fica verde e aparece o aviso do que está bloqueado
+do
+	local Lighting = game:GetService("Lighting")
+	local cor = Instance.new("ColorCorrectionEffect")
+	cor.Name = "Maldicao"
+	cor.TintColor = Color3.new(1, 1, 1)
+	cor.Saturation = 0
+	cor.Enabled = false
+	cor.Parent = Lighting
+	local aviso = UI.texto({
+		Name = "AvisoMaldicao",
+		Text = "☠ AMALDIÇOADO: sem dash, corrida e habilidades",
+		TextColor3 = Color3.fromRGB(150, 255, 160),
+		TextStrokeTransparency = 0.3,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0.2),
+		Size = UDim2.fromScale(0.5, 0.04),
+		Visible = false,
+		ZIndex = 40,
+		Parent = topo,
+	})
+	local function atualizar()
+		local ativo = jogador:GetAttribute("Amaldicoado") == true
+		aviso.Visible = ativo
+		if ativo then
+			cor.Enabled = true
+			animar(cor, 0.35, { TintColor = Color3.fromRGB(150, 255, 165), Saturation = -0.35, Contrast = 0.12 })
+		else
+			animar(cor, 0.6, { TintColor = Color3.new(1, 1, 1), Saturation = 0, Contrast = 0 })
+			task.delay(0.65, function()
+				if jogador:GetAttribute("Amaldicoado") ~= true then
+					cor.Enabled = false
+				end
+			end)
+		end
+	end
+	jogador:GetAttributeChangedSignal("Amaldicoado"):Connect(atualizar)
+end
+
 local telaLobby = camada("Lobby", gui)
 local telaPartida = camada("Partida", gui)
 telaPartida.Visible = false
@@ -60,16 +121,16 @@ local function ficha(pai: Instance, icone: string, posicao: UDim2, largura: numb
 	local painel = UI.painel({
 		AnchorPoint = Vector2.new(1, 0),
 		Position = posicao,
-		Size = UDim2.fromOffset(largura, 44),
+		Size = UDim2.fromOffset(largura, 34),
 		Parent = pai,
 		SemCantos = true,
 		Transparencia = 0.12,
 	})
 	UI.escalavel(painel)
-	UI.medalhao({ Parent = painel, Icone = icone, Position = UDim2.fromOffset(4, 2), Size = UDim2.fromOffset(40, 40), Cor = cores.painelClaro })
+	UI.medalhao({ Parent = painel, Icone = icone, Position = UDim2.fromOffset(3, 2), Size = UDim2.fromOffset(30, 30), Cor = cores.painelClaro })
 	local texto = UI.texto({
-		Position = UDim2.fromOffset(52, 7),
-		Size = UDim2.new(1, -60, 0, 30),
+		Position = UDim2.fromOffset(40, 6),
+		Size = UDim2.new(1, -48, 0, 22),
 		FontFace = fontes.numero,
 		Text = "0",
 		TextColor3 = cores.ouroClaro,
@@ -93,52 +154,123 @@ end
 -- Lobby
 ------------------------------------------------------------------------
 
-local perfilCard = UI.painel({ Position = UDim2.fromOffset(16, 64), Size = UDim2.fromOffset(310, 98), Parent = telaLobby })
-UI.escalavel(perfilCard)
-local foto = criar("ImageLabel", {
-	Position = UDim2.fromOffset(14, 15),
-	Size = UDim2.fromOffset(68, 68),
-	BackgroundColor3 = cores.fundo,
-	Image = UI.fotoJogador(jogador.UserId),
-	Parent = perfilCard,
+------------------------------------------------------------------------
+-- Quadro do jogador (estilo RPG, como no Warcraft): retrato redondo com aro dourado e o selo da
+-- classe, e as barras empilhadas ao lado (vida, supremo e mana), com um enfeite dourado embaixo.
+-- Fica no canto de cima, no lobby e na partida (no lobby só a vida aparece).
+------------------------------------------------------------------------
+
+local VERMELHO_VIDA = Color3.fromRGB(214, 44, 36)
+local ROXO_SUPREMO = Color3.fromRGB(150, 78, 214)
+local AZUL_MANA = Color3.fromRGB(62, 96, 232)
+local OURO_ESCURO = Color3.fromRGB(150, 118, 60)
+local FUNDO_BARRA = Color3.fromRGB(22, 18, 26)
+
+local quadroJogador = criar("Frame", {
+	Name = "QuadroJogador",
+	Position = UDim2.fromOffset(14, 58),
+	Size = UDim2.fromOffset(300, 96),
+	BackgroundTransparency = 1,
+	Parent = gui,
 })
-UI.redondo(foto)
-local aroFoto = UI.borda(foto, cores.ouro, 3)
-local nomeJogador = UI.texto({
-	Position = UDim2.fromOffset(94, 12),
-	Size = UDim2.fromOffset(204, 28),
+UI.escalavel(quadroJogador)
+
+-- barras escalonadas (cada uma um pouco mais curta), começando por baixo do aro do retrato
+local function barraDoQuadro(y: number, largura: number, altura: number, cor: Color3)
+	local barra = UI.barra({
+		Parent = quadroJogador,
+		Position = UDim2.fromOffset(74, y),
+		Size = UDim2.fromOffset(largura, altura),
+		Cor = cor,
+		CorClara = cor:Lerp(cores.branco, 0.3),
+		Fundo = FUNDO_BARRA,
+		Borda = OURO_ESCURO,
+		EspessuraBorda = 1.5,
+		Raio = 3,
+	})
+	barra.quadro.ZIndex = 1
+	return barra
+end
+local barraVida = barraDoQuadro(24, 222, 20, VERMELHO_VIDA)
+local barraSupremo = barraDoQuadro(47, 206, 10, ROXO_SUPREMO)
+barraSupremo.rotulo.Visible = false
+barraSupremo.definir(0)
+barraSupremo.quadro.Visible = false -- (só na partida)
+local barraMana = barraDoQuadro(60, 192, 10, AZUL_MANA)
+barraMana.rotulo.Visible = false
+barraMana.quadro.Visible = false
+
+-- enfeite dourado embaixo das barras (linha que some para a direita, com losangos)
+local enfeite = criar("Frame", {
+	Position = UDim2.fromOffset(84, 77),
+	Size = UDim2.fromOffset(196, 2),
+	BackgroundColor3 = cores.ouro,
+	BorderSizePixel = 0,
+	Parent = quadroJogador,
+})
+criar("UIGradient", { Transparency = NumberSequence.new(0, 1), Parent = enfeite })
+UI.losango(quadroJogador, UDim2.fromOffset(84, 78), 9)
+UI.losango(quadroJogador, UDim2.fromOffset(98, 78), 5)
+UI.losango(quadroJogador, UDim2.fromOffset(108, 78), 4)
+
+local nomeQuadro = UI.texto({
+	Position = UDim2.fromOffset(92, 3),
+	Size = UDim2.fromOffset(124, 18),
 	FontFace = fontes.cabecalho,
 	Text = jogador.DisplayName,
+	TextColor3 = cores.ouroClaro,
 	TextXAlignment = Enum.TextXAlignment.Left,
-	Parent = perfilCard,
+	Parent = quadroJogador,
 })
-UI.contorno(nomeJogador, 1.5)
-local classeJogador = UI.texto({
-	Position = UDim2.fromOffset(94, 44),
-	Size = UDim2.fromOffset(204, 24),
-	FontFace = fontes.numero,
+UI.contorno(nomeQuadro, 1.5)
+local classeQuadro = UI.texto({
+	Position = UDim2.fromOffset(216, 5),
+	Size = UDim2.fromOffset(80, 15),
+	FontFace = fontes.forte,
 	Text = "",
-	TextXAlignment = Enum.TextXAlignment.Left,
-	Parent = perfilCard,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	Parent = quadroJogador,
 })
-UI.contorno(classeJogador, 1.5)
-local tituloClasse = UI.texto({
-	Position = UDim2.fromOffset(94, 70),
-	Size = UDim2.fromOffset(204, 18),
-	FontFace = fontes.texto,
-	Text = "",
-	TextColor3 = cores.textoSuave,
-	TextXAlignment = Enum.TextXAlignment.Left,
-	Parent = perfilCard,
-})
+UI.contorno(classeQuadro, 1.5)
 
-local _, textoOuroLobby = ficha(telaLobby, "💰", UDim2.new(1, -16, 0, 64), 190)
-local _, textoRecorde = ficha(telaLobby, "🏆", UDim2.new(1, -16, 0, 114), 190)
+-- retrato: aro dourado grosso (por cima do começo das barras), foto e o selo da classe
+local aroRetrato = criar("Frame", {
+	Position = UDim2.fromOffset(0, 4),
+	Size = UDim2.fromOffset(86, 86),
+	BackgroundColor3 = cores.branco,
+	ZIndex = 5,
+	Parent = quadroJogador,
+})
+UI.redondo(aroRetrato)
+UI.gradiente(aroRetrato, Color3.fromRGB(255, 234, 166), Color3.fromRGB(168, 118, 46), 45)
+UI.borda(aroRetrato, Color3.fromRGB(58, 38, 12), 1.5)
+local fotoQuadro = criar("ImageLabel", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(74, 74),
+	BackgroundColor3 = Color3.fromRGB(28, 24, 34),
+	Image = UI.fotoJogador(jogador.UserId),
+	Parent = aroRetrato,
+})
+UI.redondo(fotoQuadro)
+UI.borda(fotoQuadro, Color3.fromRGB(40, 28, 12), 2)
+local seloClasse = UI.medalhao({
+	Parent = aroRetrato,
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.86, 0.86),
+	Size = UDim2.fromOffset(30, 30),
+	Icone = "🛡️",
+	EspessuraBorda = 2,
+})
+local gradienteSelo = seloClasse:FindFirstChildOfClass("UIGradient")
+
+local _, textoOuroLobby = ficha(telaLobby, "💰", UDim2.new(1, -16, 0, 60), 150)
+local _, textoRecorde = ficha(telaLobby, "🏆", UDim2.new(1, -16, 0, 100), 150)
 
 local doca = criar("Frame", {
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -22),
-	Size = UDim2.fromOffset(760, 62),
+	Position = UDim2.new(0.5, 0, 1, -16),
+	Size = UDim2.fromOffset(620, 44),
 	BackgroundTransparency = 1,
 	Parent = telaLobby,
 })
@@ -146,12 +278,12 @@ UI.escalavel(doca)
 criar("UIListLayout", {
 	FillDirection = Enum.FillDirection.Horizontal,
 	HorizontalAlignment = Enum.HorizontalAlignment.Center,
-	Padding = UDim.new(0, 14),
+	Padding = UDim.new(0, 10),
 	SortOrder = Enum.SortOrder.LayoutOrder,
 	Parent = doca,
 })
 for ordem, info in { { "classe", "⚔️ CLASSE", "ouro" }, { "loja", "🛒 LOJA", "escuro" }, { "ajuda", "📜 COMO JOGAR", "escuro" }, { "teclas", "⚙️ TECLAS", "escuro" } } do
-	local botao = UI.botao({ Parent = doca, Texto = info[2], Estilo = info[3], Size = UDim2.fromOffset(170, 58), LayoutOrder = ordem, TamanhoTexto = 24 })
+	local botao = UI.botao({ Parent = doca, Texto = info[2], Estilo = info[3], Size = UDim2.fromOffset(140, 42), LayoutOrder = ordem, TamanhoTexto = 19 })
 	botao.Activated:Connect(function()
 		if Hud.aoAbrir then
 			Hud.aoAbrir(info[1])
@@ -236,7 +368,7 @@ end
 local painelChefe = criar("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 96),
-	Size = UDim2.fromOffset(660, 70),
+	Size = UDim2.fromOffset(560, 70),
 	BackgroundTransparency = 1,
 	Visible = false,
 	Parent = telaPartida,
@@ -248,17 +380,20 @@ local barraChefe = UI.barra({
 	Parent = painelChefe,
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 34),
-	Size = UDim2.fromOffset(620, 22),
+	Size = UDim2.fromOffset(520, 18),
 	Cor = Color3.fromRGB(196, 30, 44),
-	Raio = 5,
+	Fundo = FUNDO_BARRA,
+	Borda = OURO_ESCURO,
+	EspessuraBorda = 1.5,
+	Raio = 3,
 })
 local marcaFase = UI.losango(barraChefe.quadro, UDim2.fromScale(0.5, 0.5), 12, cores.ouro)
 marcaFase.ZIndex = 5
 -- Postura (como em Lies of P): cresce do meio para os lados; cheia, o chefe fica grogue
 local fundoPostura = criar("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 59),
-	Size = UDim2.fromOffset(620, 6),
+	Position = UDim2.new(0.5, 0, 0, 56),
+	Size = UDim2.fromOffset(520, 6),
 	BackgroundColor3 = Color3.fromRGB(20, 16, 12),
 	BackgroundTransparency = 0.3,
 	BorderSizePixel = 0,
@@ -275,22 +410,22 @@ local cheioPostura = criar("Frame", {
 	Parent = fundoPostura,
 })
 UI.cantos(cheioPostura, 3)
-local tituloChefe = UI.texto({ Position = UDim2.fromOffset(0, 68), Size = UDim2.new(1, 0, 0, 16), FontFace = fontes.cabecalho, Text = "", TextColor3 = cores.textoSuave, Parent = painelChefe })
+local tituloChefe = UI.texto({ Position = UDim2.fromOffset(0, 64), Size = UDim2.new(1, 0, 0, 16), FontFace = fontes.cabecalho, Text = "", TextColor3 = cores.textoSuave, Parent = painelChefe })
 
 -- Ouro e cartas da partida
-local _, textoOuroPartida = ficha(telaPartida, "💰", UDim2.new(1, -16, 0, 64), 170)
+local _, textoOuroPartida = ficha(telaPartida, "💰", UDim2.new(1, -16, 0, 60), 130)
 
 local faixaCartas = criar("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -16, 0, 116),
-	Size = UDim2.fromOffset(250, 140),
+	Position = UDim2.new(1, -16, 0, 102),
+	Size = UDim2.fromOffset(220, 120),
 	BackgroundTransparency = 1,
 	Parent = telaPartida,
 })
 UI.escalavel(faixaCartas)
 criar("UIGridLayout", {
-	CellSize = UDim2.fromOffset(40, 40),
-	CellPadding = UDim2.fromOffset(6, 6),
+	CellSize = UDim2.fromOffset(32, 32),
+	CellPadding = UDim2.fromOffset(5, 5),
 	HorizontalAlignment = Enum.HorizontalAlignment.Right,
 	StartCorner = Enum.StartCorner.TopRight,
 	SortOrder = Enum.SortOrder.LayoutOrder,
@@ -299,103 +434,88 @@ criar("UIGridLayout", {
 
 -- Quadros dos aliados
 local listaAliados = criar("Frame", {
-	Position = UDim2.fromOffset(16, 64),
-	Size = UDim2.fromOffset(240, 260),
+	Position = UDim2.fromOffset(18, 160),
+	Size = UDim2.fromOffset(200, 200),
 	BackgroundTransparency = 1,
 	Parent = telaPartida,
 })
 UI.escalavel(listaAliados)
-criar("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = listaAliados })
+criar("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = listaAliados })
 local quadrosAliados = {}
 
--- Barra de ações (computador)
-local barraAcoes = UI.painel({
+-- Barra de ações (computador): quadradinhos no estilo RPG, com a tecla no canto e a recarga
+-- escurecendo o ícone
+local TAMANHO_SLOT = 50
+local barraAcoes = criar("Frame", {
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -14),
-	Size = UDim2.fromOffset(560, 132),
-	Transparencia = 0.12,
+	Position = UDim2.new(0.5, 0, 1, -12),
+	Size = UDim2.fromOffset(4 * TAMANHO_SLOT + 3 * 6 + 20, TAMANHO_SLOT + 16),
+	BackgroundColor3 = cores.branco,
+	BackgroundTransparency = 0.08,
 	Parent = telaPartida,
 })
+UI.cantos(barraAcoes, 8)
+UI.gradiente(barraAcoes, Color3.fromRGB(48, 40, 58), Color3.fromRGB(14, 11, 18))
+UI.borda(barraAcoes, OURO_ESCURO, 2)
 UI.escalavel(barraAcoes)
+UI.losango(barraAcoes, UDim2.fromScale(0, 0.5), 14)
+UI.losango(barraAcoes, UDim2.fromScale(1, 0.5), 14)
 -- engrenagem ao lado da barra: abre o menu de teclas no meio da partida
 local botaoTeclasPartida = UI.botao({
 	Parent = barraAcoes,
 	Texto = "⚙️",
 	Estilo = "escuro",
-	Position = UDim2.new(1, 10, 0, 4),
-	Size = UDim2.fromOffset(46, 46),
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(1, 14, 0.5, 0),
+	Size = UDim2.fromOffset(32, 32),
 })
 botaoTeclasPartida.Activated:Connect(function()
 	if Hud.aoAbrir then
 		Hud.aoAbrir("teclas")
 	end
 end)
-local medalhaoClasse = UI.medalhao({ Parent = barraAcoes, Icone = "🛡️", Position = UDim2.fromOffset(14, 24), Size = UDim2.fromOffset(80, 80), EspessuraBorda = 3 })
-local barraVida = UI.barra({ Parent = barraAcoes, Position = UDim2.fromOffset(106, 14), Size = UDim2.fromOffset(440, 26) })
-local barraCarga = UI.barra({
-	Parent = barraAcoes,
-	Position = UDim2.fromOffset(106, 46),
-	Size = UDim2.fromOffset(440, 10),
-	Cor = Color3.fromRGB(230, 170, 40),
-	CorClara = Color3.fromRGB(255, 236, 150),
-	Fundo = Color3.fromRGB(30, 24, 12),
-	Raio = 4,
-})
-barraCarga.rotulo.Visible = false
-barraCarga.definir(0)
--- Mana (só aparece para o Mago), logo acima do painel
-local barraMana = UI.barra({
-	Parent = barraAcoes,
-	Position = UDim2.fromOffset(106, -20),
-	Size = UDim2.fromOffset(440, 16),
-	Cor = Color3.fromRGB(70, 140, 255),
-	CorClara = Color3.fromRGB(160, 210, 255),
-	Fundo = Color3.fromRGB(12, 18, 36),
-	Raio = 5,
-})
-barraMana.quadro.Visible = false
-
 local linhaSlots = criar("Frame", {
-	Position = UDim2.fromOffset(106, 64),
-	Size = UDim2.fromOffset(440, 58),
+	Position = UDim2.fromOffset(10, 8),
+	Size = UDim2.new(1, -20, 0, TAMANHO_SLOT),
 	BackgroundTransparency = 1,
 	Parent = barraAcoes,
 })
 criar("UIListLayout", {
 	FillDirection = Enum.FillDirection.Horizontal,
-	Padding = UDim.new(0, 14),
+	Padding = UDim.new(0, 6),
 	SortOrder = Enum.SortOrder.LayoutOrder,
 	Parent = linhaSlots,
 })
 
 local function criarSlot(ordem: number, tecla: string)
 	local slot = criar("Frame", {
-		Size = UDim2.fromOffset(98, 56),
+		Size = UDim2.fromOffset(TAMANHO_SLOT, TAMANHO_SLOT),
 		BackgroundColor3 = cores.branco,
 		LayoutOrder = ordem,
 		Parent = linhaSlots,
 	})
-	UI.cantos(slot, 8)
-	UI.gradiente(slot, cores.painelClaro, cores.fundo)
+	UI.cantos(slot, 6)
+	UI.gradiente(slot, Color3.fromRGB(72, 62, 88), Color3.fromRGB(18, 14, 24))
 	local aro = UI.borda(slot, cores.bronze, 2)
-	local icone = UI.texto({ Position = UDim2.fromOffset(6, 6), Size = UDim2.fromOffset(44, 44), Text = "", Parent = slot })
+	local icone = UI.texto({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.55),
+		Size = UDim2.fromScale(0.62, 0.62),
+		Text = "",
+		Parent = slot,
+	})
+	-- tecla no canto de cima, como nos RPGs
 	local nome = UI.texto({
-		Position = UDim2.fromOffset(52, 8),
-		Size = UDim2.fromOffset(42, 24),
+		Position = UDim2.fromOffset(3, 1),
+		Size = UDim2.fromOffset(26, 14),
 		FontFace = fontes.numero,
 		Text = tecla,
 		TextColor3 = cores.ouroClaro,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 5,
 		Parent = slot,
 	})
 	UI.contorno(nome, 1.5)
-	local rotulo = UI.texto({
-		Position = UDim2.fromOffset(50, 32),
-		Size = UDim2.fromOffset(46, 16),
-		FontFace = fontes.texto,
-		Text = "",
-		TextColor3 = cores.textoSuave,
-		Parent = slot,
-	})
 	local sombra = criar("Frame", {
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
@@ -406,10 +526,11 @@ local function criarSlot(ordem: number, tecla: string)
 		ZIndex = 3,
 		Parent = slot,
 	})
-	UI.cantos(sombra, 8)
+	UI.cantos(sombra, 6)
 	local segundos = UI.texto({ Size = UDim2.fromScale(1, 1), FontFace = fontes.numero, Text = "", ZIndex = 4, Parent = slot })
+	UI.limiteTexto(segundos, 22)
 	UI.contorno(segundos, 2)
-	return { quadro = slot, icone = icone, rotulo = rotulo, sombra = sombra, segundos = segundos, aro = aro, tecla = nome }
+	return { quadro = slot, icone = icone, sombra = sombra, segundos = segundos, aro = aro, tecla = nome }
 end
 
 -- mostra nos quadradinhos a tecla que o jogador escolheu para cada ação
@@ -426,46 +547,11 @@ local slots = {
 	esquiva = criarSlot(3, "Q"),
 	supremo = criarSlot(4, "R"),
 }
-slots.ataque.rotulo.Text = "Ataque"
-slots.habilidade.rotulo.Text = "Habilid."
-slots.esquiva.rotulo.Text = "Esquiva"
 slots.esquiva.icone.Text = "💨"
-slots.supremo.rotulo.Text = "Supremo"
 slotsPorAcao = { ataque = slots.ataque, habilidade = slots.habilidade, esquiva = slots.esquiva, supremo = slots.supremo }
 atualizarTeclasNosSlots()
 
--- Versão celular: vida no topo e botões grandes à direita
-local vidaCelular = UI.painel({
-	Position = UDim2.fromOffset(16, 64),
-	Size = UDim2.fromOffset(280, 82),
-	Transparencia = 0.15,
-	SemCantos = true,
-	Visible = false,
-	Parent = telaPartida,
-})
-UI.escalavel(vidaCelular)
-local barraVidaCelular = UI.barra({ Parent = vidaCelular, Position = UDim2.fromOffset(12, 12), Size = UDim2.fromOffset(256, 24) })
-local barraCargaCelular = UI.barra({
-	Parent = vidaCelular,
-	Position = UDim2.fromOffset(12, 42),
-	Size = UDim2.fromOffset(256, 10),
-	Cor = Color3.fromRGB(230, 170, 40),
-	Fundo = Color3.fromRGB(30, 24, 12),
-	Raio = 4,
-})
-barraCargaCelular.rotulo.Visible = false
-local barraManaCelular = UI.barra({
-	Parent = vidaCelular,
-	Position = UDim2.fromOffset(12, 58),
-	Size = UDim2.fromOffset(256, 12),
-	Cor = Color3.fromRGB(70, 140, 255),
-	Fundo = Color3.fromRGB(12, 18, 36),
-	Raio = 4,
-})
-barraManaCelular.rotulo.Visible = false
-barraManaCelular.quadro.Visible = false
-barraCargaCelular.definir(0)
-
+-- Versão celular: o quadro do jogador (no topo) mostra vida, supremo e mana; botões grandes à direita
 local areaToque = criar("Frame", {
 	AnchorPoint = Vector2.new(1, 1),
 	Position = UDim2.new(1, -150, 1, -16),
@@ -617,22 +703,22 @@ local escuro = criar("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 =
 
 local function atualizarPerfil()
 	local perfil = Estado.perfil
-	local classe = Classes.obter(perfil.classe)
 	textoOuroLobby.Text = formatarNumero(perfil.ouro or 0)
 	textoRecorde.Text = "Sala " .. (perfil.recorde or 0)
-	classeJogador.Text = classe.icone .. " " .. classe.nome
-	classeJogador.TextColor3 = classe.cor:Lerp(cores.branco, 0.25)
-	tituloClasse.Text = classe.titulo
-	aroFoto.Color = classe.cor
 end
 
 local function atualizarClasseNaBarra()
 	local id = if Estado.stats then Estado.stats.classe else Estado.perfil.classe
 	local classe = Classes.obter(id)
-	local icone = medalhaoClasse:FindFirstChild("Icone") :: TextLabel?
+	local icone = seloClasse:FindFirstChild("Icone") :: TextLabel?
 	if icone then
 		icone.Text = classe.icone
 	end
+	if gradienteSelo then
+		gradienteSelo.Color = ColorSequence.new(classe.cor:Lerp(cores.branco, 0.15), classe.cor:Lerp(cores.fundo, 0.55))
+	end
+	classeQuadro.Text = classe.nome
+	classeQuadro.TextColor3 = classe.cor:Lerp(cores.branco, 0.3)
 	slots.ataque.icone.Text = classe.ataque.icone
 	slots.habilidade.icone.Text = classe.habilidade.icone
 	slots.supremo.icone.Text = classe.supremo.icone
@@ -640,7 +726,6 @@ local function atualizarClasseNaBarra()
 	toque.habilidade.rotulo.Text = classe.habilidade.icone
 	toque.supremo.rotulo.Text = classe.supremo.icone
 	toque.defesa.botao.Visible = classe.id == "cavaleiro"
-	barraVida.cor(classe.cor:Lerp(cores.vida, 0.65))
 end
 
 local function atualizarCartas()
@@ -686,27 +771,39 @@ local function montarAliados()
 	for ordem, aliado in Estado.aliados do
 		if aliado.userId ~= jogador.UserId then
 			local classe = Classes.obter(aliado.classe)
-			local quadro = UI.painel({ Size = UDim2.fromOffset(240, 58), LayoutOrder = ordem, Parent = listaAliados, SemCantos = true, Transparencia = 0.15 })
+			-- quadro pequeno do aliado (mesmo estilo do quadro do jogador)
+			local quadro = criar("Frame", { Size = UDim2.fromOffset(200, 42), BackgroundTransparency = 1, LayoutOrder = ordem, Parent = listaAliados })
+			local barra = UI.barra({
+				Parent = quadro,
+				Position = UDim2.fromOffset(30, 21),
+				Size = UDim2.fromOffset(150, 12),
+				Cor = VERMELHO_VIDA,
+				Fundo = FUNDO_BARRA,
+				Borda = OURO_ESCURO,
+				EspessuraBorda = 1.5,
+				Raio = 3,
+			})
+			barra.rotulo.Visible = false
 			local retrato = criar("ImageLabel", {
-				Position = UDim2.fromOffset(8, 7),
-				Size = UDim2.fromOffset(44, 44),
-				BackgroundColor3 = cores.fundo,
+				Position = UDim2.fromOffset(0, 2),
+				Size = UDim2.fromOffset(38, 38),
+				BackgroundColor3 = Color3.fromRGB(28, 24, 34),
 				Image = UI.fotoJogador(aliado.userId),
+				ZIndex = 5,
 				Parent = quadro,
 			})
 			UI.redondo(retrato)
-			UI.borda(retrato, classe.cor, 2)
+			UI.borda(retrato, cores.ouro, 2)
 			local nome = UI.texto({
-				Position = UDim2.fromOffset(60, 6),
-				Size = UDim2.fromOffset(170, 20),
+				Position = UDim2.fromOffset(44, 2),
+				Size = UDim2.fromOffset(150, 16),
 				FontFace = fontes.forte,
 				Text = classe.icone .. " " .. aliado.nome,
+				TextColor3 = classe.cor:Lerp(cores.branco, 0.45),
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Parent = quadro,
 			})
 			UI.contorno(nome, 1.5)
-			local barra = UI.barra({ Parent = quadro, Position = UDim2.fromOffset(60, 32), Size = UDim2.fromOffset(170, 14), Raio = 4 })
-			barra.rotulo.Visible = false
 			quadrosAliados[aliado.userId] = { quadro = quadro, barra = barra, nome = nome, retrato = retrato, texto = classe.icone .. " " .. aliado.nome }
 		end
 	end
@@ -721,7 +818,10 @@ function Hud.modo(modo: string)
 	telaPartida.Visible = modo == "partida"
 	areaToque.Visible = modo == "partida" and celular
 	barraAcoes.Visible = not celular
-	vidaCelular.Visible = celular
+	barraSupremo.quadro.Visible = modo == "partida"
+	if modo ~= "partida" then
+		barraMana.quadro.Visible = false
+	end
 	painelChefe.Visible = false
 	painelCaido.Visible = false
 	textoEspectador.Visible = false
@@ -1151,6 +1251,7 @@ function Hud.iniciar()
 		end
 	end)
 	atualizarPerfil()
+	atualizarClasseNaBarra()
 
 	local pulsoVida = 0
 	local manaExibida = 0
@@ -1169,7 +1270,6 @@ function Hud.iniciar()
 			local fracao = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
 			local texto = math.ceil(math.max(0, humanoid.Health)) .. " / " .. math.floor(humanoid.MaxHealth)
 			barraVida.definir(fracao, texto)
-			barraVidaCelular.definir(fracao, texto)
 			-- vida baixa: bordas vermelhas pulsando
 			if Estado.modo == "partida" and fracao < 0.3 and fracao > 0 and not Estado.caido then
 				pulsoVida += dt * 5
@@ -1185,23 +1285,18 @@ function Hud.iniciar()
 		-- mana: a barra corre suave até o valor do servidor; pisca vermelha quando falta
 		local temMana = Estado.manaMax > 0
 		barraMana.quadro.Visible = temMana
-		barraManaCelular.quadro.Visible = temMana
 		if temMana then
 			manaExibida += (Estado.mana - manaExibida) * math.min(1, dt * 12)
-			local fracaoMana = math.clamp(manaExibida / Estado.manaMax, 0, 1)
-			local textoMana = "💧 " .. math.floor(manaExibida) .. " / " .. math.floor(Estado.manaMax)
-			barraMana.definir(fracaoMana, textoMana)
-			barraManaCelular.definir(fracaoMana)
+			barraMana.definir(math.clamp(manaExibida / Estado.manaMax, 0, 1))
 			local alerta = math.max(0, semManaAte - os.clock()) / 0.4
-			local corFundo = Color3.fromRGB(12, 18, 36):Lerp(Color3.fromRGB(150, 20, 30), alerta)
-			barraMana.quadro.BackgroundColor3 = corFundo
-			barraManaCelular.quadro.BackgroundColor3 = corFundo
+			barraMana.quadro.BackgroundColor3 = FUNDO_BARRA:Lerp(Color3.fromRGB(150, 20, 30), alerta)
 		end
 
+		-- supremo: a barra roxa enche com a carga e brilha quando está pronto
 		local carga = math.clamp(Estado.carga / math.max(Estado.cargaMax, 1), 0, 1)
-		barraCarga.definir(carga)
-		barraCargaCelular.definir(carga)
+		barraSupremo.definir(carga)
 		local pronto = carga >= 1
+		barraSupremo.cor(if pronto then ROXO_SUPREMO:Lerp(cores.ouroClaro, 0.25 + 0.2 * math.sin(os.clock() * 6)) else ROXO_SUPREMO)
 		slots.supremo.aro.Color = if pronto then cores.ouroClaro else cores.bronze
 		slots.supremo.aro.Thickness = if pronto then 3 + math.sin(os.clock() * 6) else 2
 		toque.supremo.sombra.Visible = not pronto
