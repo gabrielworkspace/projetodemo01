@@ -24,6 +24,24 @@ Config.MAX_JOGADORES_POR_PARTIDA = 4
 Config.CONTAGEM_PORTAL = 10 -- segundos em cima do portal até a partida começar
 Config.CONTAGEM_PORTAL_CHEIO = 3 -- contagem quando o grupo já está completo
 Config.SALAS_POR_ANDAR = 5 -- a cada 5 salas vem um chefe e o elevador
+
+-- Salas de exploração (temas com "exploracao = true", hoje o Calabouço): salas bem maiores em
+-- três áreas. Os inimigos de cada área aparecem quando alguém chega perto dela. Sacadas (escada
+-- de mão ou de pedra), uma torre com pedras flutuantes e baús guardam relíquias
+-- (shared/Reliquias.luau); armadilhas protegem o caminho.
+Config.EXPLORACAO = {
+	largura = { 150, 160 },
+	comprimento = { 200, 220 },
+	altura = 32, -- paredes mais altas (a torre chega a 22)
+	inimigosMult = 1.2, -- mais inimigos que numa sala comum (a sala é maior)
+	distanciaArea = 14, -- a área acorda quando alguém passa a menos disto do começo dela
+	miniChefeNasSalas = { 2, 4 }, -- posição no andar (1 a 4) com mini-chefe guardando o relicário
+	-- chance de cada baú dar relíquia (senão dá ouro e cura); veja Reliquias.BAUS
+	chanceReliquia = { chao = 0.15, alto = 0.45, torre = 1, relicario = 1, chefe = 1 },
+	danoEspinhos = 14, -- armadilhas: multiplicado pelo dano dos inimigos da sala
+	danoFogo = 10,
+	queimaFogo = 4, -- dano por segundo do fogo por 3 s
+}
 Config.CHANCE_SALA_TESOURO = 0.15
 Config.TEMPO_ESCOLHER_CARTA = 20
 Config.TEMPO_ELEVADOR = 25
@@ -74,7 +92,7 @@ Config.OURO_MANTIDO_AO_MORRER = 0.25
 
 -- Versão do jogo: aparece no canto da tela junto com a data e a hora do build (o build.py
 -- grava ReplicatedStorage > Versao). Suba o número quando publicar uma atualização grande.
-Config.VERSAO = "0.14"
+Config.VERSAO = "0.15"
 
 -- Inimigos ficam mais fortes a cada sala
 Config.VIDA_INIMIGO_POR_SALA = 0.14
@@ -170,13 +188,20 @@ Config.TEMAS = {
 		nome = "Calabouço",
 		inimigos = { gosma = 4, esqueleto = 4, esqueletoArqueiro = 2.5, rato = 2, acolito = 1.3, guardiao = 0.9, portaEstandarte = 0.8 },
 		chefe = "skullbane", -- (o Rei Esqueleto continua no jogo: troque aqui para voltar a ele)
-		chao = { material = Enum.Material.Cobblestone, cor = Color3.fromRGB(98, 94, 100) },
-		parede = { material = Enum.Material.Brick, cor = Color3.fromRGB(84, 74, 76) },
-		detalhe = { material = Enum.Material.Slate, cor = Color3.fromRGB(58, 52, 58) },
-		luz = Color3.fromRGB(255, 165, 85),
-		ambiente = Color3.fromRGB(62, 52, 62),
-		nevoa = Color3.fromRGB(34, 24, 30),
-		tinta = Color3.fromRGB(255, 236, 220),
+		-- mesmo estilo do lobby: peças lisas com cores vivas de fantasia, fogo do pacote de VFX
+		estilo = "fantasia",
+		-- salas de combate viram salas de exploração: grandes, com sacadas, torre, baús de
+		-- relíquias, armadilhas e mini-chefe (Masmorra.luau e Config.EXPLORACAO)
+		exploracao = true,
+		chao = { material = Enum.Material.SmoothPlastic, cor = Color3.fromRGB(206, 186, 156) },
+		parede = { material = Enum.Material.SmoothPlastic, cor = Color3.fromRGB(136, 120, 172) },
+		detalhe = { material = Enum.Material.SmoothPlastic, cor = Color3.fromRGB(214, 204, 232) },
+		luz = Color3.fromRGB(255, 172, 96),
+		ambiente = Color3.fromRGB(104, 92, 128),
+		nevoa = Color3.fromRGB(70, 56, 96),
+		tinta = Color3.fromRGB(255, 244, 236),
+		brilho = 1.1, -- Lighting.Brightness (padrão 0,6): o estilo claro pede mais luz
+		densidade = 0.28, -- névoa (padrão 0,4): dá para ver a sala grande de ponta a ponta
 		particulas = "poeira",
 		lava = false,
 	},

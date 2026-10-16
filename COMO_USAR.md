@@ -72,6 +72,29 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 - **Cadência dos ataques:** depois de cada golpe é preciso esperar ele terminar para atacar de novo (clicar sem parar não adianta). Um clique feito pouco antes da hora fica guardado e sai no momento certo. A **barrinha embaixo do seu personagem** (e a sombra no quadradinho do Ataque) mostra quando o próximo ataque fica pronto; ela pisca quando libera. Mago e Arqueiro são os mais lentos. Os tempos ficam em `cadencia` dentro de `ataque` em Classes.luau.
 - **Peso dos golpes:** os personagens se preparam antes de cada ataque (erguem a espada, puxam a flecha, juntam a magia) e andam mais devagar enquanto atacam. O golpe só acerta no fim da preparação. Para deixar tudo mais rápido ou mais lento, mude `Config.PREPARO_GOLPE` (1 = sem atraso extra; padrão 1,7). A velocidade ao atacar é `Config.VELOCIDADE_ATACANDO`. O ajuste de cada classe fica em `preparo` dentro de `ataque` em Classes.luau.
 - **Salas maiores:** as salas de combate são bem mais largas (105 a 140 studs), com mais pilares, poças de lava e enfeites. A sala do chefe tem 150x150. As ondas têm mais inimigos e mais inimigos vivos ao mesmo tempo.
+- **Calabouço de exploração (1º andar, salas 1 a 4 até o Skullbane):** o andar tem o mesmo estilo do lobby, com peças lisas, cores vivas de fantasia e nenhum neon de enfeite. Tochas e braseiros usam o fogo do pacote de VFX (`LaminaFogo`). As salas de combate viraram **salas de exploração** de cerca de 155x210 studs:
+  - **Três áreas** separadas por muros em ruínas. Os inimigos de cada área só aparecem quando alguém chega perto dela, então dá para avançar com calma. Um **tapete** com colunas e tochas leva da entrada até a porta.
+  - **Para subir:** há duas **sacadas** nas paredes, uma com **escada de mão** e outra com **escadaria de pedra**, cada uma com um **Baú Esquecido**. Há também uma **torre de vigia** que se sobe **pulando** (barra de espaço) por cinco pedras flutuantes em espiral. O **Baú da Atalaia** do topo é o que dá as melhores relíquias fora do mini-chefe.
+  - **Baús no chão** (Baú Antigo) ficam encostados nas paredes, sempre com uma placa de espinhos na frente. Há também uma **estátua** de herói no meio da sala.
+  - **Armadilhas:** **espinhos** (a placa esquenta e as pontas aparecem; logo depois sobem e deixam lento) e **respiradouros de fogo** (soltam fagulhas e depois um jato de chamas que queima). Elas só ferem os jogadores. Escapa quem **pula por cima**, sai a tempo ou dá a **esquiva** na hora. O caminho do tapete não tem armadilhas.
+  - **Mini-chefe:** nas salas 2 e 4 do andar, ao chegar na última área, o **Carcereiro Esmeralda** sobe do chão. É um Ceifador Esmeralda gigante (★ Carcereiro): 5x a vida de elite, mais dano e mais armadura. Ele guarda o **Relicário** acorrentado, que só abre quando ele cai.
+  - **Tesouro do chefe:** quando o Skullbane cai, aparece no meio da sala o **Tesouro do Senhor da Guerra**, que dá relíquia Épica ou Lendária para cada um. Se ninguém abrir em 15 segundos, ele abre sozinho.
+  - Os números ficam em `Config.EXPLORACAO`: tamanho, altura, inimigos, salas com mini-chefe, chance de relíquia por baú e dano das armadilhas. Para voltar às salas antigas, tire `exploracao = true` do tema em `Config.TEMAS`.
+- **Relíquias:** ficam com você até o fim da partida, aparecem embaixo das cartas no canto da tela (parar o mouse em cima mostra o que fazem) e cada uma só vem uma vez.
+  - Cada baú aberto dá **uma relíquia sorteada para cada jogador** do grupo (ou uma poção de +30% de vida) e ouro para todos.
+  - Quanto mais difícil de chegar no baú, mais rara a relíquia:
+
+    | Baú | Comum | Rara | Épica | Lendária | Chance de relíquia |
+    |---|---|---|---|---|---|
+    | Antigo (chão) | 70% | 27% | 3% | 0% | 15% |
+    | Esquecido (sacada) | 20% | 55% | 22% | 3% | 45% |
+    | Atalaia (torre) | 0% | 45% | 45% | 10% | 100% |
+    | Relicário (mini-chefe) | 0% | 15% | 60% | 25% | 100% |
+    | Tesouro do chefe | 0% | 0% | 65% | 35% | 100% |
+
+  - **Contra as maldições do Skullbane:** Amuleto de Osso (-25% no tempo da maldição), Lanterna das Almas (-20% e crítico), Selo Esmeralda (-50% e dano), Coração Purificado (-75% e vida) e a lendária **Coroa do Rei Caído**, que deixa **imune** às maldições. As resistências se somam até 90%, e aparece "RESISTIU x%" ou "IMUNE!" na hora.
+  - **Outras relíquias:** Anel de Pedra, Botas de Couro Velho e Capa da Sombra (estas duas protegem das armadilhas), Frasco de Ervas, Manopla do Carcereiro, Olho do Ceifador, Tomo Proibido e o lendário Cálice Eterno (imune a armadilhas).
+  - Todas ficam em `src/shared/Reliquias.luau` (nome, ícone, raridade, efeitos e chances de cada baú).
 - **Inimigos de apoio** (a partir da 2ª sala de cada andar). Vale matar esses primeiro:
   - **Acólito** (manto verde): fica atrás do grupo e **cura** os aliados com um feixe verde.
   - **Guardião** (armadura de pedra e escudo de runas): dá **escudos azuis** aos aliados. O escudo absorve o dano antes da vida e aparece como uma bolha e uma barra azul.
@@ -224,6 +247,8 @@ O jogo que as pessoas jogam (fora do Studio) é a **última versão publicada**.
 | `src/shared/Config.luau` | Balanceamento geral, temas e inimigos de cada andar |
 | `src/shared/Classes.luau` | Números das quatro classes |
 | `src/shared/Cartas.luau` | Cartas e seus efeitos |
+| `src/shared/Reliquias.luau` | Relíquias dos baús e a raridade de cada tipo de baú |
+| `src/server/Armadilhas.luau` | Ritmo e dano dos espinhos e dos jatos de fogo |
 | `src/server/Inimigos.luau` | Vida, dano e ataques de inimigos e chefes |
 | `src/server/Combate.luau` | Combos, habilidades, supremos, esquiva, escudo, mana, sangramento, dano |
 | `src/shared/Teclas.luau` | Ações e teclas padrão (menu ⚙️ Teclas) |
@@ -236,7 +261,7 @@ O jogo que as pessoas jogam (fora do Studio) é a **última versão publicada**.
 | `chefes/Skullbane.rbxmx` | Modelo 3D do Skullbane (vai para ReplicatedStorage > ModelosChefes); `Skullbane.glb` é o original |
 | `modelos/EspadaCavaleiro.rbxmx` | Espada do Cavaleiro (vai para ServerStorage > ModelosArmas; o cabo fica no -Z) |
 | `pacotes/` | Pacotes baixados guardados sem scripts (insira no Studio com Insert from File) |
-| `src/server/Masmorra.luau` | Construção e decoração das salas |
+| `src/server/Masmorra.luau` | Construção e decoração das salas (e a sala de exploração: sacadas, torre, ruínas, baús, armadilhas) |
 | `src/server/Lobby.luau` | Acampamento, altares, portal, mercador |
 | `src/client/Modelos.luau` | **Aparência dos inimigos** (peças, cores, armas) |
 | `src/client/VisualInimigos.luau` | Animações dos inimigos |

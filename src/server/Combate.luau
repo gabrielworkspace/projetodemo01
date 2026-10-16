@@ -8,6 +8,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
 local Cartas = require(Shared:WaitForChild("Cartas"))
+local Reliquias = require(Shared:WaitForChild("Reliquias"))
 
 local servidor = script.Parent
 local Remotos = require(servidor.Remotos)
@@ -82,6 +83,15 @@ end
 function Combate.calcularStats(estado)
 	local classe = Classes.obter(estado.classe)
 	local soma = somarEfeitos(estado.cartas)
+	-- relíquias achadas na exploração somam por cima das cartas
+	for id in estado.reliquias or {} do
+		local r = Reliquias.porId[id]
+		if r then
+			for efeito, valor in r.efeitos do
+				soma[efeito] = (soma[efeito] or 0) + valor
+			end
+		end
+	end
 	local function e(nome: string): number
 		return soma[nome] or 0
 	end
@@ -142,6 +152,10 @@ function Combate.calcularStats(estado)
 		contraAtaque = e("contraAtaque") > 0,
 		execucao = e("execucao") > 0,
 		milCortes = e("milCortes") > 0,
+		-- Relíquias
+		resistMaldicao = math.min(e("resistMaldicao"), 0.9),
+		imuneMaldicao = e("imuneMaldicao") > 0,
+		resistArmadilha = math.min(e("resistArmadilha"), 1),
 	}
 	-- mana: começa cheia e nunca passa do máximo
 	estado.mana = math.min(estado.mana or estado.stats.manaMax, estado.stats.manaMax)
@@ -768,12 +782,23 @@ function Combate.danoAoJogador(run, estado, dano: number, fonte, opcoes)
 		estado.queimaDps = opcoes.queimar
 	end
 	if opcoes.maldicao then
-		-- Maldição das Almas: some a corrida na hora; o resto é bloqueado até passar
-		estado.amaldicoadoAte = math.max(estado.amaldicoadoAte or 0, agora + opcoes.maldicao)
-		estado.player:SetAttribute("Amaldicoado", true)
-		estado.player:SetAttribute("Correndo", false)
-		Combate.aplicarVelocidade(estado)
-		Vfx.partida(run, "maldicao", { jogador = estado.player, duracao = opcoes.maldicao })
+		local stats = estado.stats
+		if stats.imuneMaldicao then
+			-- relíquia lendária: a maldição não pega
+			Vfx.partida(run, "dano", { pos = raiz.Position + Vector3.new(0, 4, 0), valor = "IMUNE!", cor = Color3.fromRGB(255, 205, 90) })
+		else
+			-- Maldição das Almas: some a corrida na hora; o resto é bloqueado até passar.
+			-- Relíquias de resistência encurtam o tempo.
+			local duracao = opcoes.maldicao * (1 - (stats.resistMaldicao or 0))
+			estado.amaldicoadoAte = math.max(estado.amaldicoadoAte or 0, agora + duracao)
+			estado.player:SetAttribute("Amaldicoado", true)
+			estado.player:SetAttribute("Correndo", false)
+			Combate.aplicarVelocidade(estado)
+			Vfx.partida(run, "maldicao", { jogador = estado.player, duracao = duracao })
+			if (stats.resistMaldicao or 0) > 0 then
+				Vfx.partida(run, "dano", { pos = raiz.Position + Vector3.new(0, 4, 0), valor = string.format("RESISTIU %d%%", math.floor(stats.resistMaldicao * 100 + 0.5)), cor = Color3.fromRGB(140, 255, 170) })
+			end
+		end
 	end
 end
 

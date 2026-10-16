@@ -354,6 +354,9 @@ Inimigos.ELITES = {
 	["Gélido"] = { cor = Color3.fromRGB(120, 210, 255), gelido = true },
 	Explosivo = { cor = Color3.fromRGB(255, 120, 40), explosivo = true },
 	Gigante = { cor = Color3.fromRGB(255, 80, 80), escala = 1.45, vida = 2.5, dano = 1.3 },
+	-- mini-chefe das salas de exploração (nunca sorteado como elite comum): o Ceifador
+	-- Esmeralda gigante que guarda o relicário
+	Carcereiro = { cor = Color3.fromRGB(110, 255, 160), escala = 1.75, vida = 5, dano = 1.5, armadura = 0.15, recarga = 0.8 },
 }
 Inimigos.LISTA_ELITES = { "Blindado", "Veloz", "Gélido", "Explosivo", "Gigante" }
 

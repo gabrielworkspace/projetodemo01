@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Classes = require(Shared:WaitForChild("Classes"))
 local Cartas = require(Shared:WaitForChild("Cartas"))
+local Reliquias = require(Shared:WaitForChild("Reliquias"))
 local Teclas = require(Shared:WaitForChild("Teclas"))
 
 local modulos = script.Parent
@@ -432,6 +433,37 @@ criar("UIGridLayout", {
 	Parent = faixaCartas,
 })
 
+-- Relíquias achadas nos baús (embaixo das cartas): parar o mouse em cima mostra o que fazem
+local faixaReliquias = criar("Frame", {
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -16, 0, 230),
+	Size = UDim2.fromOffset(220, 80),
+	BackgroundTransparency = 1,
+	Parent = telaPartida,
+})
+UI.escalavel(faixaReliquias)
+criar("UIGridLayout", {
+	CellSize = UDim2.fromOffset(34, 34),
+	CellPadding = UDim2.fromOffset(5, 5),
+	HorizontalAlignment = Enum.HorizontalAlignment.Right,
+	StartCorner = Enum.StartCorner.TopRight,
+	SortOrder = Enum.SortOrder.LayoutOrder,
+	Parent = faixaReliquias,
+})
+local dicaReliquia = UI.texto({
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -16, 0, 314),
+	Size = UDim2.fromOffset(260, 40),
+	FontFace = fontes.forte,
+	Text = "",
+	TextWrapped = true,
+	TextXAlignment = Enum.TextXAlignment.Right,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	Visible = false,
+	Parent = telaPartida,
+})
+UI.contorno(dicaReliquia, 1.5, 0)
+
 -- Quadros dos aliados
 local listaAliados = criar("Frame", {
 	Position = UDim2.fromOffset(18, 160),
@@ -728,6 +760,40 @@ local function atualizarClasseNaBarra()
 	toque.defesa.botao.Visible = classe.id == "cavaleiro"
 end
 
+function Hud.reliquias(lista)
+	for _, filho in faixaReliquias:GetChildren() do
+		if filho:IsA("Frame") then
+			filho:Destroy()
+		end
+	end
+	dicaReliquia.Visible = false
+	local tem = {}
+	for _, id in lista or {} do
+		tem[id] = true
+	end
+	for ordem, reliquia in Reliquias.lista do
+		if tem[reliquia.id] then
+			local cor = Config.RARIDADES[reliquia.raridade].cor
+			local m = UI.medalhao({
+				Parent = faixaReliquias,
+				Icone = reliquia.icone,
+				Cor = cor:Lerp(cores.painelClaro, 0.55),
+				Borda = cor,
+				EspessuraBorda = 2.5,
+				LayoutOrder = ordem,
+			})
+			m.MouseEnter:Connect(function()
+				dicaReliquia.Text = reliquia.nome .. ": " .. reliquia.descricao
+				dicaReliquia.TextColor3 = cor:Lerp(Color3.new(1, 1, 1), 0.35)
+				dicaReliquia.Visible = true
+			end)
+			m.MouseLeave:Connect(function()
+				dicaReliquia.Visible = false
+			end)
+		end
+	end
+end
+
 local function atualizarCartas()
 	for _, filho in faixaCartas:GetChildren() do
 		if filho:IsA("Frame") then
@@ -927,6 +993,17 @@ local function mostrarTitulo(titulo: string, sub: string, cor: Color3, duracao: 
 	task.delay(duracao, function()
 		animar(cartaoTitulo, 0.6, { GroupTransparency = 1 })
 	end)
+end
+
+-- Achou uma relíquia: cartão grande com o nome na cor da raridade e o que ela faz
+function Hud.reliquia(dados)
+	local reliquia = Reliquias.porId[dados.id]
+	if not reliquia then
+		return
+	end
+	Hud.reliquias(dados.lista)
+	local raridade = Config.RARIDADES[reliquia.raridade]
+	mostrarTitulo(reliquia.icone .. " " .. reliquia.nome, "Relíquia " .. raridade.nome .. " · " .. reliquia.descricao, raridade.cor, 3.2)
 end
 
 function Hud.sala(dados)

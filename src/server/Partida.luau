@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Cartas = require(Shared:WaitForChild("Cartas"))
+local Reliquias = require(Shared:WaitForChild("Reliquias"))
 
 local servidor = script.Parent
 local Remotos = require(servidor.Remotos)
@@ -16,6 +17,7 @@ local Masmorra = require(servidor.Masmorra)
 local Combate = require(servidor.Combate)
 local Projeteis = require(servidor.Projeteis)
 local Inimigos = require(servidor.Inimigos)
+local Armadilhas = require(servidor.Armadilhas)
 
 local Partida = {}
 
@@ -84,8 +86,7 @@ end
 function Run:invocar(tipo: string, posicao: Vector3, elite: string?, imediato: boolean?)
 	local sala = self.sala
 	if imediato then
-		Inimigos.criar(self, tipo, posicao, self.mult, elite)
-		return
+		return Inimigos.criar(self, tipo, posicao, self.mult, elite)
 	end
 	self.inimigosPendentes += 1
 	Vfx.partida(self, "portal", { pos = posicao, duracao = 0.9, elite = elite ~= nil })
@@ -95,6 +96,7 @@ function Run:invocar(tipo: string, posicao: Vector3, elite: string?, imediato: b
 			Inimigos.criar(self, tipo, posicao, self.mult, elite)
 		end
 	end)
+	return nil
 end
 
 function Run:aoMorrerInimigo(inimigo, estadoMatador)
@@ -313,7 +315,10 @@ local function prepararSala(run, numero: number, tipo: string)
 	run.usarSegundoEspaco = not run.usarSegundoEspaco
 	local origem = run.origemBase + (if run.usarSegundoEspaco then Vector3.new(0, 0, 400) else Vector3.zero)
 
-	local sala = Masmorra.construir(origem, numero, tipo, run.rng)
+	-- mini-chefe guardando o relicário em algumas salas de exploração do andar
+	local posicaoNoAndar = (numero - 1) % Config.SALAS_POR_ANDAR + 1
+	local miniChefe = table.find(Config.EXPLORACAO.miniChefeNasSalas, posicaoNoAndar) ~= nil
+	local sala = Masmorra.construir(origem, numero, tipo, run.rng, { miniChefe = miniChefe })
 	sala.modelo.Parent = run.pasta
 	run.sala = sala
 	run.numeroSala = numero
@@ -353,6 +358,8 @@ local function prepararSala(run, numero: number, tipo: string)
 			nevoa = tema.nevoa,
 			luz = tema.luz,
 			tinta = tema.tinta,
+			brilho = tema.brilho,
+			densidade = tema.densidade,
 		},
 	})
 end
@@ -399,9 +406,205 @@ local function sortearElite(run, numero: number): string?
 	return nil
 end
 
+------------------------------------------------------------------------
+-- Relíquias e baús
+------------------------------------------------------------------------
+
+local function listaDeReliquias(estado)
+	local lista = {}
+	for id in estado.reliquias do
+		table.insert(lista, id)
+	end
+	return lista
+end
+
+-- Sorteia uma relíquia que o jogador ainda não tem; a raridade depende do tipo do baú
+-- (Reliquias.BAUS). Sem nenhuma da raridade sorteada sobrando, tenta as de cima e depois as de baixo.
+local function sortearReliquia(run, estado, tipoBau: string): string?
+	local chances = Reliquias.BAUS[tipoBau] or Reliquias.BAUS.chao
+	local ordem = Config.ORDEM_RARIDADES
+	local total = 0
+	for _, raridade in ordem do
+		total += chances[raridade] or 0
+	end
+	local sorteio = run.rng:NextNumber() * total
+	local escolhida = ordem[1]
+	for _, raridade in ordem do
+		sorteio -= chances[raridade] or 0
+		if sorteio <= 0 then
+			escolhida = raridade
+			break
+		end
+	end
+	local inicio = table.find(ordem, escolhida) or 1
+	local tentativas = {}
+	for i = inicio, #ordem do
+		table.insert(tentativas, ordem[i])
+	end
+	for i = inicio - 1, 1, -1 do
+		table.insert(tentativas, ordem[i])
+	end
+	for _, raridade in tentativas do
+		local opcoes = {}
+		for _, reliquia in Reliquias.lista do
+			if reliquia.raridade == raridade and not estado.reliquias[reliquia.id] then
+				table.insert(opcoes, reliquia.id)
+			end
+		end
+		if #opcoes > 0 then
+			return opcoes[run.rng:NextInteger(1, #opcoes)]
+		end
+	end
+	return nil
+end
+
+local function darReliquia(run, estado, id: string)
+	local reliquia = Reliquias.porId[id]
+	estado.reliquias[id] = true
+	Combate.calcularStats(estado)
+	Combate.aplicarStats(estado, false)
+	Combate.enviarStats(estado)
+	local cor = Config.RARIDADES[reliquia.raridade].cor
+	run:enviar(estado.player, "reliquia", { id = id, lista = listaDeReliquias(estado) })
+	Vfx.partida(run, "carta", { jogador = estado.player, cor = cor, raridade = reliquia.raridade })
+	if reliquia.raridade == "Lendaria" then
+		run:anunciar("🌟 " .. estado.player.DisplayName .. " achou uma relíquia LENDÁRIA: " .. reliquia.nome .. "!", COR_OURO)
+	elseif reliquia.raridade == "Epica" then
+		run:anunciar("💜 " .. estado.player.DisplayName .. " achou " .. reliquia.nome .. "!", Config.RARIDADES.Epica.cor)
+	end
+end
+
+-- Abre um baú: cada jogador do grupo sorteia a própria relíquia (ou ganha uma poção de cura)
+-- e todos ganham ouro
+local function abrirBau(run, bau, player: Player?)
+	if bau.aberto or bau.travado then
+		return
+	end
+	Masmorra.abrirBauReliquia(bau)
+	local chance = Config.EXPLORACAO.chanceReliquia[bau.tipo] or 0.3
+	local base = (15 + run.numeroSala * 4) * (if bau.tipo == "chao" then 1 else 1.6)
+	Vfx.partida(run, "moedas", { pos = bau.base.Position + Vector3.new(0, 2, 0), quantidade = if bau.tipo == "chao" then 10 else 20 })
+	local nomeBau = if Reliquias.BAUS[bau.tipo] then Reliquias.BAUS[bau.tipo].nome else "Baú"
+	run:anunciar("🗝️ " .. (if player then player.DisplayName else "O grupo") .. " abriu o " .. nomeBau .. "!", COR_OURO)
+	for _, estado in run.jogadores do
+		darOuro(run, estado, base)
+		local id = if run.rng:NextNumber() < chance then sortearReliquia(run, estado, bau.tipo) else nil
+		if id then
+			darReliquia(run, estado, id)
+		else
+			local personagem = estado.player.Character
+			local humanoid = personagem and personagem:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.Health > 0 and estado.vivo and not estado.caido then
+				humanoid.Health = math.min(humanoid.MaxHealth, humanoid.Health + humanoid.MaxHealth * 0.3)
+			end
+			run:enviar(estado.player, "aviso", { texto = "🧪 Só uma poção desta vez: +30% de vida e ouro" })
+		end
+	end
+end
+
+local function ligarBau(run, bau)
+	bau.prompt.Triggered:Connect(function(player)
+		local estado = run.jogadores[player]
+		if estado and estado.vivo and not estado.caido then
+			abrirBau(run, bau, player)
+		end
+	end)
+end
+
+-- Sala de exploração: três áreas que acordam conforme o grupo avança, baús espalhados (no chão,
+-- nas sacadas e na torre), armadilhas e, em algumas salas, o mini-chefe guardando o relicário.
+-- Retorna true quando todas as áreas foram limpas, false se o grupo inteiro caiu.
+local function salaDeExploracao(run): boolean
+	local sala = run.sala
+	local numero = run.numeroSala
+	local jogadores = run:quantidadeJogadores()
+	local info = Config.EXPLORACAO
+	run.inimigosPendentes = 0
+	for _, bau in sala.baus do
+		ligarBau(run, bau)
+	end
+	Armadilhas.iniciar(run, sala)
+	run:anunciar("🗺️ Explore: suba nas sacadas e na torre atrás de relíquias!", COR_OURO)
+	run:enviarTodos("aviso", { texto = "Cuidado com as armadilhas! Os inimigos acordam conforme você avança." })
+
+	local total = math.min(math.floor((7 + numero * 1.1 + (jogadores - 1) * Config.INIMIGOS_POR_JOGADOR_EXTRA) * info.inimigosMult), 48)
+	local maximoVivos = math.min(8 + numero // 3 + (jogadores - 1) * Config.VIVOS_POR_JOGADOR_EXTRA, 18)
+	local porArea = { math.floor(total * 0.3 + 0.5), math.floor(total * 0.35 + 0.5) }
+	porArea[3] = math.max(2, total - porArea[1] - porArea[2])
+	local acordada = { false, false, false }
+	local terminou = { false, false, false }
+	local miniChefe = nil
+
+	local function acordar(indice: number)
+		acordada[indice] = true
+		if indice > 1 then
+			run:enviarTodos("aviso", { texto = "⚔️ Inimigos à frente!" })
+		end
+		task.spawn(function()
+			if indice == 3 and sala.miniChefe and sala.posMiniChefe then
+				run:anunciar("💀 MINI-CHEFE: o Carcereiro Esmeralda guarda o relicário!", Color3.fromRGB(110, 255, 160))
+				miniChefe = run:invocar("ceifadorEsmeralda", sala.posMiniChefe, "Carcereiro", true)
+				task.wait(1.4)
+			end
+			local criados = 0
+			while run.ativa and run.sala == sala and criados < porArea[indice] do
+				if run:quantidadeInimigos() + run.inimigosPendentes < maximoVivos then
+					local tipoInimigo = sortearDaTabela(run.rng, tabelaDaSala(sala.tema.inimigos, numero))
+					local grupo = Inimigos.TIPOS[tipoInimigo].grupo or 1
+					local base = Masmorra.posicaoNaArea(sala, run.rng, indice)
+					for g = 1, grupo do
+						local pos = if g == 1 then base else base + Vector3.new(run.rng:NextNumber(-3, 3), 0, run.rng:NextNumber(-3, 3))
+						run:invocar(tipoInimigo, pos, if g == 1 then sortearElite(run, numero) else nil)
+					end
+					criados += grupo
+					task.wait(0.35)
+				else
+					task.wait(0.3)
+				end
+			end
+			terminou[indice] = true
+		end)
+	end
+
+	task.wait(1.5)
+	acordar(1)
+	while run.ativa do
+		if run:jogadoresAtivos() == 0 then
+			return false
+		end
+		-- a próxima área acorda quando alguém chega perto dela
+		for indice = 2, 3 do
+			if not acordada[indice] then
+				local limite = sala.areas[indice].inicio - info.distanciaArea
+				for _, estado in run.jogadores do
+					local personagem = estado.player.Character
+					local raiz = personagem and personagem:FindFirstChild("HumanoidRootPart")
+					if estado.vivo and raiz and raiz:IsA("BasePart") and (raiz.Position - sala.origem).Z > limite then
+						acordar(indice)
+						break
+					end
+				end
+			end
+		end
+		if miniChefe and not miniChefe.vivo then
+			miniChefe = nil
+			Masmorra.destravarRelicario(sala)
+			run:anunciar("🔓 O Carcereiro caiu! O relicário se abriu.", COR_OURO)
+		end
+		if terminou[1] and terminou[2] and terminou[3] and run.inimigosPendentes == 0 and run:quantidadeInimigos() == 0 then
+			return true
+		end
+		task.wait(0.25)
+	end
+	return false
+end
+
 -- Retorna true se a sala foi limpa, false se o grupo inteiro caiu
 local function salaDeCombate(run, tipo: string): boolean
 	local sala = run.sala
+	if sala.exploracao then
+		return salaDeExploracao(run)
+	end
 	local numero = run.numeroSala
 	local jogadores = run:quantidadeJogadores()
 	run.inimigosPendentes = 0
@@ -720,8 +923,13 @@ local function loopDaPartida(run)
 			break
 		end
 
+		local bauDoChefe = nil
 		if tipo == "chefe" then
 			run:anunciar("🏆 CHEFE DERROTADO!", COR_OURO)
+			-- o tesouro do chefe: relíquia épica ou lendária para cada um
+			bauDoChefe = Masmorra.criarBauReliquia(run.sala, run.sala.origem + Vector3.new(0, 0, 6), "chefe")
+			ligarBau(run, bauDoChefe)
+			run:enviarTodos("aviso", { texto = "👑 Abra o tesouro do chefe no meio da sala!" })
 		elseif tipo == "combate" then
 			run:anunciar("✨ Sala limpa!", COR_VERDE)
 		end
@@ -734,6 +942,15 @@ local function loopDaPartida(run)
 		end
 
 		if tipo == "chefe" then
+			-- dá um tempo para alguém abrir o tesouro; se ninguém abrir, ele abre sozinho
+			local limite = os.clock() + 15
+			while run.ativa and bauDoChefe and not bauDoChefe.aberto and os.clock() < limite do
+				task.wait(0.25)
+			end
+			if bauDoChefe and run.ativa then
+				abrirBau(run, bauDoChefe, nil)
+				task.wait(1.5)
+			end
 			elevador(run)
 			if run:quantidadeJogadores() == 0 then
 				break
@@ -785,6 +1002,7 @@ function Partida.iniciar(lista: { Player })
 				perfil = perfil,
 				classe = perfil.Classe,
 				cartas = {},
+				reliquias = {}, -- [id] = true (achadas nos baús; shared/Reliquias.luau)
 				vivo = false, -- todos "renascem" na primeira sala
 				caido = false,
 				ouro = 0,
