@@ -71,14 +71,22 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
   - **Guardião** (armadura de pedra e escudo de runas): dá **escudos azuis** aos aliados. O escudo absorve o dano antes da vida e aparece como uma bolha e uma barra azul.
   - **Porta-Estandarte** (estandarte e corneta): dá um **grito de guerra**. Os aliados ficam com uma aura vermelha e andam e atacam mais rápido por alguns segundos.
 - **Temas e chefes:** Calabouço (Skullbane), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas). O Rei Esqueleto continua no jogo: para voltar a ele, troque `chefe = "skullbane"` por `chefe = "reiEsqueleto"` no Calabouço, em `src/shared/Config.luau`.
-- **Skullbane, o Senhor da Guerra Caído** (1º chefe, modelo 3D próprio):
-  - **Entrada:** a câmera desce para o chão na frente dele enquanto ele sobe de uma tumba verde e ruge. Ele fica imune até terminar de subir.
-  - **Aura:** está sempre envolto por uma aura verde: chamas e brasas em volta do corpo, contorno brilhante, chamas espectrais nos olhos, na coroa, nos chifres e na lâmina, névoa nos pés e um círculo de runas girando no chão.
-  - **Fissura de Almas:** bate a lâmina no chão e uma linha de explosões verdes corre até o alvo. Saia da faixa marcada!
-  - **Corte Devastador:** golpe pesado de cima. Se você desviar, a lâmina **fica presa no chão** por 1,6s: ele fica **VULNERÁVEL** e leva 35% a mais de dano (números amarelos).
-  - Ele também tem um giro com três cortes, uma sequência de três golpes, um salto esmagador, uma investida e invoca esqueletos.
-  - **2ª fase:** a aura dobra. Ele solta três fissuras em leque, anéis verdes, uma espiral de almas e uma chuva de almas, e chama um Guardião Rúnico.
-  - **Morte:** ele cai de joelhos, as almas escapam pelas rachaduras e ele explode numa coluna de luz verde.
+- **Skullbane, o Senhor da Guerra Caído** (1º chefe, modelo 3D próprio). Todos os efeitos dele vêm do pacote de VFX (pasta `vfx/`); os que eram de outra cor são tingidos de verde pelo jogo:
+  - **Despertar:** a tumba racha duas vezes (TumuloRei) e ele sobe curvado, de cabeça baixa. Os olhos acendem (close da câmera) e as chamas espectrais se acendem uma a uma: coroa, chifres, lâmina. Então ele ruge (RugidoRei + onda SaltoRei) e a aura acende. A câmera faz quatro tomadas (de baixo, close no rosto, afasta no rugido, volta para você) e ele fica imune até acabar.
+  - **Aura:** energia verde subindo em volta do corpo (CargaAura), anel de energia no chão (LevitacaoMago), névoa nos pés (NevoaRei) e chamas nos olhos, coroa, chifres e lâmina. O corpo mantém as cores do modelo: as luzes ficam baixas e fracas para não pintar ele de verde.
+  - **Movimento:** passos pesados, com o corpo descendo a cada pé, poeira e tremor. Ele vira e anda com suavidade, sem trancos. Entre um ataque e outro, anda e **rodeia você encarando**.
+  - **Carregando o golpe:** abaixa, ergue a lâmina torcendo para trás e treme de força. Um anel de energia gira na lâmina e a aura cresce; ao soltar, a lâmina brilha.
+  - **Fissura de Almas:** bate a lâmina no chão e uma linha de estouros verdes (ImpactoFlecha) corre até o alvo, terminando numa pancada (GolpeRei). Saia da faixa marcada!
+  - **Corte Devastador:** golpe pesado de cima, com meia-lua verde e pancada no chão. Se você desviar, a lâmina **fica presa no chão** por 1,6s. Ele dá puxões para soltar, saem faíscas da ponta e ele fica **VULNERÁVEL**: leva 35% a mais de dano (números amarelos).
+  - **Giro:** prepara torcendo o corpo e gira quase três voltas, com uma tempestade de cortes verde (Redemoinho) e o anel do Rei no chão.
+  - **Salto:** agacha juntando escuridão, sai com uma lufada no chão, deixa rastro no ar e cai com a pancada do Rei.
+  - **Investida:** rastro verde na corrida e explosão no fim.
+  - **2ª fase:** ele ruge, a tumba racha, um redemoinho verde sobe dos pés e a energia junta em volta dele. No fim, um impacto de luz e uma onda de choque. A aura fica dobrada. Ataques novos:
+    - três fissuras em leque e anéis que explodem em verde;
+    - espiral de almas (orbes verdes);
+    - chuva de almas: portais verdes no céu e raios que caem;
+    - ele também chama um Guardião Rúnico.
+  - **Morte:** cai de joelhos com almas estourando pelo corpo e um raio verde desce do céu sobre ele.
 - **Segunda fase dos chefes:** com metade da vida, o chefe para e se **transforma** (cerca de 3 segundos, sem levar dano). A sala muda de cor, sobem pilares de luz e a energia é sugada para ele. No fim, ele solta uma onda que empurra todo mundo para longe: saia de perto! Na 2ª fase, ele fica mais rápido e ganha ataques novos:
   - **Espiral:** ondas de projéteis girando em todas as direções.
   - **Anéis de perigo:** anéis no chão que explodem. Fique dentro ou fora da faixa marcada.

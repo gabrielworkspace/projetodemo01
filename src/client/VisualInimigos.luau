@@ -12,7 +12,6 @@ local Modelos = require(script.Parent.Modelos)
 local Sons = require(script.Parent.Sons)
 local UI = require(script.Parent.UI)
 local Vfx = require(script.Parent.Vfx)
-local VfxKit = require(script.Parent.VfxKit)
 
 local VisualInimigos = {}
 
@@ -194,14 +193,17 @@ end
 
 -- Toca um efeito pronto (ReplicatedStorage.EfeitosVFX) seguindo uma âncora do modelo; para sozinho
 -- quando a âncora some (morte ou fim da sala). Devolve a função que para o efeito.
-local function tocarPronto(ancora: BasePart, nome: string, escala: number): (() -> ())?
+local function tocarPronto(ancora: BasePart, nome: string, escala: number, opcoes: any?): (() -> ())?
 	return Vfx.prefab(nome, function()
 		return if ancora.Parent then ancora.CFrame else nil
-	end, 0, escala)
+	end, 0, escala, opcoes)
 end
 
--- Entrada de chefe com câmera: a câmera desce para o chão na frente dele, olhando para cima
--- enquanto ele sobe da tumba e ruge, e depois volta para o jogador
+-- Despertar do chefe com câmera, em quatro tomadas:
+--   1. de baixo, longe, enquanto ele sobe da tumba (a câmera se aproxima devagar)
+--   2. close no rosto quando os olhos acendem
+--   3. afasta rápido no rugido (com tremor)
+--   4. volta suave para o jogador
 local function cinematicaDeEntrada(v)
 	local camera = workspace.CurrentCamera
 	local personagem = Players.LocalPlayer.Character
@@ -209,21 +211,27 @@ local function cinematicaDeEntrada(v)
 	if not camera or not minha or (minha.Position - v.raiz.Position).Magnitude > 220 then
 		return
 	end
-	local duracao = (v.rig.subida or 2) + 1.1
-	local volta = 0.55
+	local subida = v.rig.subida or 2
 	local altura = (v.rig.altura or 8) * v.escala
 	local chao = v.raiz.Position - Vector3.new(0, v.alturaRaiz, 0)
 	local frente = v.raiz.CFrame.LookVector
 	local lado = v.raiz.CFrame.RightVector
-	local olhar = chao + Vector3.new(0, altura * 0.62, 0)
-	local de = chao + frente * altura * 1.9 + lado * altura * 0.5 + Vector3.new(0, 2.5, 0)
-	local para = chao + frente * altura * 1.25 + lado * altura * 0.18 + Vector3.new(0, altura * 0.22, 0)
+	local rosto = chao + Vector3.new(0, altura * 0.78, 0) + frente * altura * 0.1
+	local peito = chao + Vector3.new(0, altura * 0.6, 0)
+	local tomadas = {
+		-- { até (s), posição da câmera, para onde olha }
+		{ subida - 0.35, chao + frente * altura * 2 + lado * altura * 0.55 + Vector3.new(0, 2, 0), peito },
+		{ subida + 0.6, rosto + frente * altura * 0.6 + lado * altura * 0.12 - Vector3.new(0, altura * 0.04, 0), rosto },
+		{ subida + 1.9, chao + frente * altura * 1.5 - lado * altura * 0.35 + Vector3.new(0, altura * 0.25, 0), peito },
+	}
+	local volta = 0.7
 	local original = camera.CFrame
 	local tipoAntes = camera.CameraType
 	camera.CameraType = Enum.CameraType.Scriptable
 	local inicio = os.clock()
 	local nome = "CinematicaChefe"
 	local terminou = false
+	local anterior = CFrame.lookAt(tomadas[1][2] + frente * altura * 0.6 - Vector3.new(0, 1, 0), peito)
 	local function terminar()
 		if terminou then
 			return
@@ -236,19 +244,117 @@ local function cinematicaDeEntrada(v)
 	end
 	RunService:BindToRenderStep(nome, Enum.RenderPriority.Camera.Value, function()
 		local t = os.clock() - inicio
-		if t < duracao then
-			local s = math.clamp(t / duracao, 0, 1)
+		local comeco = 0
+		local de = anterior
+		for i, tomada in tomadas do
+			local alvo = CFrame.lookAt(tomada[2], tomada[3])
+			if t < tomada[1] then
+				local duracao = tomada[1] - comeco
+				-- a 1ª tomada vai devagar; as outras chegam rápido e seguram
+				local rapidez = if i == 1 then 1 else 0.35
+				local s = math.clamp((t - comeco) / (duracao * rapidez), 0, 1)
+				s = s * s * (3 - 2 * s)
+				camera.CFrame = de:Lerp(alvo, s)
+				return
+			end
+			comeco = tomada[1]
+			de = alvo
+		end
+		if t < comeco + volta then
+			local s = (t - comeco) / volta
 			s = s * s * (3 - 2 * s)
-			camera.CFrame = CFrame.lookAt(de:Lerp(para, s), olhar + Vector3.new(0, s * altura * 0.1, 0))
-		elseif t < duracao + volta then
-			local s = (t - duracao) / volta
-			s = s * s * (3 - 2 * s)
-			camera.CFrame = CFrame.lookAt(para, olhar):Lerp(original, s)
+			camera.CFrame = de:Lerp(original, s)
 		else
 			terminar()
 		end
 	end)
-	task.delay(duracao + volta + 1, terminar) -- segurança: a câmera sempre volta
+	task.delay(tomadas[#tomadas][1] + volta + 1, terminar) -- segurança: a câmera sempre volta
+end
+
+-- Efeitos prontos ligados às ações do chefe (rig.efeitosAcao): "inicio" toca quando a ação
+-- começa (com "enquanto" = até a ação acabar), "fim" toca quando ela termina e "repetir" toca
+-- de tempos em tempos enquanto durar. Cada efeito nasce numa âncora do modelo (rig.ancoras).
+local function iniciarEfeito(v, spec): (() -> ())?
+	local ancora = v.ancoras and v.ancoras[spec.ancora or "centro"]
+	if not ancora or not ancora.Parent then
+		return nil
+	end
+	local escala = (spec.escala or 1) * v.escala
+	local opcoes = { cor = spec.cor, inteiro = spec.inteiro }
+	local giro = spec.giro or CFrame.identity
+	local function onde(): CFrame
+		local pos = ancora.Position
+		if spec.virado then
+			return CFrame.lookAt(pos, pos + v.raiz.CFrame.LookVector) * giro
+		end
+		return CFrame.new(pos) * giro
+	end
+	if spec.fixo then
+		Vfx.prefab(spec.nome, onde(), spec.duracao, escala, opcoes)
+		return nil
+	end
+	return Vfx.prefab(spec.nome, function()
+		return if ancora.Parent then onde() else nil
+	end, if spec.enquanto then 0 else spec.duracao, escala, opcoes)
+end
+
+local function trocarEfeitosDeAcao(v, anterior: string, nova: string)
+	local efeitos = v.rig.efeitosAcao
+	if not efeitos or anterior == nova then
+		return -- a mesma ação de novo (ex.: cada corte do giro) não repete os efeitos
+	end
+	for _, parar in v.efeitosAtivos or {} do
+		parar()
+	end
+	v.efeitosAtivos = {}
+	local antes = efeitos[anterior]
+	if antes and antes.fim then
+		for _, spec in antes.fim do
+			iniciarEfeito(v, spec)
+		end
+	end
+	local agora = efeitos[nova]
+	v.proximaRepeticao = 0
+	if agora and agora.inicio then
+		for _, spec in agora.inicio do
+			local parar = iniciarEfeito(v, spec)
+			if parar and spec.enquanto then
+				table.insert(v.efeitosAtivos, parar)
+			end
+		end
+	end
+end
+
+-- Despertar: a tumba racha, a névoa sobe, os olhos acendem e ele ruge (efeitos do pacote)
+local function despertar(v)
+	local rig = v.rig
+	local fx = v.escalaFx
+	local subida = rig.subida or 2
+	local chao = v.raiz.Position - Vector3.new(0, v.alturaRaiz, 0)
+	Vfx.prefab(rig.entrada.tumulo, CFrame.new(chao), nil, fx)
+	Vfx.tremerEm(chao, 1.2, subida)
+	Sons.tocar("pouso", { pos = chao, tom = 0.4, volume = 1.4, alcance = 250 })
+	task.delay(subida * 0.5, function()
+		Vfx.prefab(rig.entrada.tumulo, CFrame.new(chao), nil, fx * 1.3)
+		Vfx.tremerEm(chao, 1.6, 0.6)
+	end)
+	task.delay(subida - 0.3, function()
+		-- os olhos acendem
+		if v.ancoras and v.ancoras.rosto and v.ancoras.rosto.Parent then
+			Vfx.prefab("CargaCheiaArqueiro", CFrame.new(v.ancoras.rosto.Position), nil, 1.6, { cor = rig.corAura })
+			Sons.tocar("cargaCheia", { pos = v.ancoras.rosto.Position, tom = 0.6, volume = 1.2, alcance = 250 })
+		end
+	end)
+	task.delay(subida + 0.6, function()
+		-- rugido: onda de choque no chão e a aura acende
+		if v.ancoraCorpo and v.ancoraCorpo.Parent then
+			Vfx.prefab(rig.entrada.rugido, CFrame.new(v.ancoraCorpo.Position), nil, 0.3 * fx)
+			Vfx.prefab("SaltoRei", CFrame.new(chao + Vector3.new(0, 0.2, 0)), nil, 0.8 * fx)
+			Vfx.tremerEm(v.ancoraCorpo.Position, 3.5, 1)
+			Sons.tocar("supremo", { pos = v.ancoraCorpo.Position, tom = 0.5, volume = 1.3, alcance = 300 })
+		end
+	end)
+	task.spawn(cinematicaDeEntrada, v)
 end
 
 local function criarVisual(modelo: Model)
@@ -332,14 +438,14 @@ local function criarVisual(modelo: Model)
 			malha.Massless = true
 			local cf = CFrame.new((definicao.centroX or 0) * tamanho.X, tamanho.Y / 2, 0) * CFrame.Angles(0, math.rad(definicao.giro or 0), 0)
 			adicionar(malha, definicao.osso, cf, { modelo3d = true })
-			if not destaque and rig.aura then
+			if not destaque then
+				-- invisível: só aparece no piscar branco ao levar dano (o corpo mantém as cores)
 				destaque = Instance.new("Highlight")
 				destaque.Adornee = malha
 				destaque.DepthMode = Enum.HighlightDepthMode.Occluded
-				destaque.FillColor = rig.aura.cor
-				destaque.FillTransparency = 0.9
-				destaque.OutlineColor = rig.aura.cor:Lerp(BRANCO, 0.25)
-				destaque.OutlineTransparency = 0.35
+				destaque.FillColor = BRANCO
+				destaque.FillTransparency = 1
+				destaque.OutlineTransparency = 1
 				destaque.Parent = malha
 			end
 		end
@@ -373,62 +479,10 @@ local function criarVisual(modelo: Model)
 		local pivoCorpo = rig.ossos.corpo.pivo
 		ancoraCorpo = novaAncora("corpo", pivoCorpo + Vector3.new(0, (rig.altura or 2) * 0.5, 0))
 	end
-	-- Aura: chamas e brasas nascendo de uma caixa invisível do tamanho do corpo, fumaça escura e
-	-- um círculo de runas girando no chão
-	local aura = nil
-	if rig.aura then
-		local cor = rig.aura.cor
-		local volume = novaAncora("corpo", rig.aura.centro)
-		volume.Size = rig.aura.tamanho * escala
-		local chao = novaAncora("corpo", Vector3.new(0, 0.25, 0))
-		aura = {
-			chamas = VfxKit.continuo(volume, "fogo", 16, {
-				cor = cor,
-				escala = 1.3 * escala,
-				extra = {
-					Speed = NumberRange.new(1, 4),
-					Acceleration = Vector3.new(0, 12, 0),
-					Lifetime = NumberRange.new(0.6, 1.1),
-					Transparency = VfxKit.seq({ { 0, 0.45 }, { 0.3, 0.3 }, { 1, 1 } }),
-				},
-			}),
-			brasas = VfxKit.continuo(volume, "brasas", 30, { cor = cor, escala = 1.2 * escala, extra = { Acceleration = Vector3.new(0, 9, 0) } }),
-			fumaca = VfxKit.continuo(volume, "fumaca", 3, {
-				cor = cor:Lerp(Color3.new(0, 0, 0), 0.75),
-				escala = 1.6 * escala,
-				extra = { Acceleration = Vector3.new(0, 3, 0), Transparency = VfxKit.seq({ { 0, 1 }, { 0.3, 0.75 }, { 1, 1 } }) },
-			}),
-			circulo = VfxKit.continuo(chao, "circulo", 0.6, {
-				cor = cor,
-				escala = 2.3 * escala,
-				extra = { Lifetime = NumberRange.new(2.6, 2.6), RotSpeed = NumberRange.new(25, 25) },
-			}),
-		}
-	end
-	-- Lâmina: rastro verde ligado só durante os golpes, e o ponto da ponta (faíscas quando presa)
-	local trilhaLamina, pontaLamina = nil, nil
-	if rig.lamina then
-		local base, ponta = rig.lamina.base * escala, rig.lamina.ponta * escala
-		local meio = novaAncora("corpo", (rig.lamina.base + rig.lamina.ponta) / 2)
-		local a0 = Instance.new("Attachment")
-		a0.Position = base - (base + ponta) / 2
-		a0.Parent = meio
-		local a1 = Instance.new("Attachment")
-		a1.Position = ponta - (base + ponta) / 2
-		a1.Parent = meio
-		local cor = rig.aura and rig.aura.cor or BRANCO
-		trilhaLamina = Instance.new("Trail")
-		trilhaLamina.Attachment0 = a0
-		trilhaLamina.Attachment1 = a1
-		trilhaLamina.Color = ColorSequence.new(cor:Lerp(BRANCO, 0.5), cor)
-		trilhaLamina.Transparency = sequencia({ { 0, 0.2 }, { 1, 1 } })
-		trilhaLamina.Lifetime = 0.25
-		trilhaLamina.LightEmission = 1
-		trilhaLamina.LightInfluence = 0
-		trilhaLamina.Enabled = false
-		VfxKit.texturaFeixe(trilhaLamina :: any, "rastro")
-		trilhaLamina.Parent = meio
-		pontaLamina = a1
+	-- Âncoras com nome (lâmina, ponta, rosto, peito, chão...) onde nascem os efeitos das ações
+	local ancoras = { corpo = ancoraCorpo }
+	for nomeAncora, definicao in rig.ancoras or {} do
+		ancoras[nomeAncora] = novaAncora(definicao.osso, definicao.pos)
 	end
 	-- efeitos prontos dos pacotes (chamas, névoa...) presos em ossos; começam depois de montar
 	local ancorasProntas = {}
@@ -463,9 +517,8 @@ local function criarVisual(modelo: Model)
 		conexoes = {},
 		escalaFx = escala * (rig.escalaEfeitos or 1),
 		destaque = destaque,
-		aura = aura,
-		trilhaLamina = trilhaLamina,
-		pontaLamina = pontaLamina,
+		ancoras = ancoras,
+		efeitosAtivos = {},
 	}
 
 	if not v.chefe then
@@ -474,11 +527,25 @@ local function criarVisual(modelo: Model)
 
 	v.prontos = {}
 	for _, item in ancorasProntas do
-		item.parar = tocarPronto(item.ancora, item.def.nome, item.def.escala * escala)
+		local definicao = item.def
+		item.comecar = function()
+			if item.ancora.Parent and not item.parar then
+				item.parar = tocarPronto(item.ancora, definicao.nome, definicao.escala * escala, { cor = definicao.cor, inteiro = definicao.inteiro })
+			end
+		end
+		if definicao.soFase2 then
+			-- liga só quando a 2ª fase começa (atualizarEstados)
+		elseif definicao.atraso then
+			task.delay(definicao.atraso, item.comecar) -- acende aos poucos no despertar
+		else
+			item.comecar()
+		end
 		table.insert(v.prontos, item)
 	end
 	-- entrada de chefe: o chão racha onde ele vai subir e, quando termina de subir, ele ruge
-	if rig.entrada then
+	if rig.entrada and rig.cinematica then
+		despertar(v)
+	elseif rig.entrada then
 		local chao = raiz.Position - Vector3.new(0, v.alturaRaiz, 0)
 		Vfx.prefab(rig.entrada.tumulo, CFrame.new(chao), nil, v.escalaFx)
 		Vfx.tremerEm(chao, 1.5, rig.subida or 1)
@@ -486,14 +553,8 @@ local function criarVisual(modelo: Model)
 			if v.ancoraCorpo and v.ancoraCorpo.Parent then
 				Vfx.prefab(rig.entrada.rugido, CFrame.new(v.ancoraCorpo.Position), nil, 0.25 * v.escalaFx)
 				Vfx.tremerEm(v.ancoraCorpo.Position, 3, 0.6)
-				if rig.cinematica then
-					Sons.tocar("supremo", { pos = v.ancoraCorpo.Position, tom = 0.5, volume = 1.3, alcance = 300 })
-				end
 			end
 		end)
-		if rig.cinematica then
-			task.spawn(cinematicaDeEntrada, v)
-		end
 	end
 
 	-- Elite: aura colorida
@@ -555,8 +616,10 @@ end
 
 local function atualizarAcao(v)
 	local texto = v.modelo:GetAttribute("Acao") or ""
+	local anterior = v.acao
 	v.acao = string.match(texto, "^([^|]*)") or ""
 	v.acaoInicio = os.clock()
+	trocarEfeitosDeAcao(v, anterior, v.acao)
 	if v.acao == "golpe" then
 		v.golpes = (v.golpes or 0) + 1 -- golpes seguidos alternam o lado
 	end
@@ -688,16 +751,11 @@ local function atualizarEstados(v)
 
 	if modelo:GetAttribute("Furioso") == true and not v.furioso then
 		v.furioso = true
-		if v.aura then
-			-- 2ª fase: a aura dobra e o contorno acende
-			v.aura.chamas.Rate *= 2.2
-			v.aura.brasas.Rate *= 2.5
-			v.aura.fumaca.Rate *= 2
-			v.aura.circulo.Rate *= 1.6
-		end
-		if v.destaque then
-			v.destaque.FillTransparency = 0.8
-			v.destaque.OutlineTransparency = 0.1
+		-- 2ª fase: liga os efeitos extras (aura mais forte)
+		for _, item in v.prontos do
+			if item.def.soFase2 and item.comecar then
+				item.comecar()
+			end
 		end
 		for _, peca in v.pecas do
 			if peca.olho then
@@ -999,74 +1057,147 @@ local function poseRei(v, t: number, andar: number, alvos)
 end
 
 -- Skullbane (modelo 3D de uma peça): o corpo inteiro inclina, torce, agacha e gira pelo
--- quadril. Ergue a lâmina torcendo para trás, desce com tudo para a frente, crava a lâmina no
--- chão (preso) e luta para soltar; golpes seguidos alternam o lado.
+-- quadril, com peso. Cada ação tem antecipação (prepara), golpe rápido e recuperação.
+local function suaveEntre(a: number, b: number, x: number): number
+	local k = math.clamp((x - a) / (b - a), 0, 1)
+	return k * k * (3 - 2 * k)
+end
+
 local function poseSenhor(v, t: number, andar: number, alvos)
 	local e = v.escala
-	local s = math.sin(v.fase)
+	local f = v.fase
+	-- andar pesado: o corpo desce a cada passo, o peso vai de um lado para o outro e os ombros
+	-- torcem junto; parado, respira devagar e balança um pouco
+	local respiro = math.sin(t * 1.25)
 	local c = {
-		rx = -0.04 - 0.07 * andar + math.sin(t * 1.3) * 0.015,
-		ry = s * 0.06 * andar,
-		rz = s * 0.045 * andar + math.sin(t * 0.9) * 0.012,
-		oy = (math.abs(math.cos(v.fase)) * 0.45 - 0.15) * andar * e + math.sin(t * 1.3) * 0.12 * e,
+		rx = -0.03 - 0.11 * andar + respiro * 0.018,
+		ry = math.sin(f) * 0.09 * andar + math.sin(t * 0.55) * 0.03 * (1 - andar),
+		rz = math.sin(f) * 0.06 * andar + math.sin(t * 0.8) * 0.012,
+		oy = ((math.abs(math.cos(f)) - 0.65) * 0.7 * andar + respiro * 0.12) * e,
+		oz = -0.25 * andar * e,
 	}
 	local acao, at = v.acao, v.acaoT
 	local lado = if (v.golpes or 0) % 2 == 0 then -1 else 1
+
 	if acao == "preparar" then
-		-- lâmina (lado direito) vai para trás e para cima; treme de força
-		c.rx = 0.22
-		c.ry = -0.45
-		c.rz = math.sin(t * 40) * 0.012
-		c.oy = 0.3 * e
+		-- antecipação: abaixa um instante, depois ergue a lâmina torcendo para trás, tremendo
+		-- cada vez mais de força
+		local k = suaveEntre(0.12, 0.75, at)
+		c.rx = -0.12 + 0.42 * k
+		c.ry = -0.65 * k
+		c.rz = math.sin(t * 45) * 0.018 * k
+		c.oy = (-0.6 + 1.2 * k) * e
+		c.oz = 0.4 * k * e
 	elseif acao == "golpe" then
-		c.rx = -0.4
-		c.ry = 0.35 * lado
-		c.oz = -1.6 * e
-		c.oy = -0.8 * e
-		c.rapido = true
+		if at < 0.3 then
+			-- desce com tudo e passa do ponto
+			c.rx = -0.5
+			c.ry = 0.45 * lado
+			c.oz = -2 * e
+			c.oy = -1.1 * e
+			c.rapido = true
+		else
+			-- recupera devagar, ainda curvado
+			local k = suaveEntre(0.3, 1, at)
+			c.rx = -0.5 + 0.35 * k
+			c.ry = 0.45 * lado * (1 - k)
+			c.oz = -2 * e * (1 - k)
+			c.oy = -1.1 * e * (1 - k)
+		end
 	elseif acao == "preso" then
-		-- a lâmina cravada no chão: curvado, puxando o braço
-		c.rx = -0.5
-		c.ry = 0.3
-		c.oz = -1.4 * e
-		c.oy = -1.2 * e + math.abs(math.sin(t * 9)) * 0.15 * e
-		c.rz = math.sin(t * 9) * 0.035
+		-- a lâmina cravada no chão: curvado, dando puxões para soltar
+		local puxao = math.max(0, math.sin(t * 7)) ^ 4
+		c.rx = -0.55 + puxao * 0.12
+		c.ry = 0.35
+		c.oz = (-1.6 + puxao * 0.4) * e
+		c.oy = (-1.3 + puxao * 0.3) * e
+		c.rz = math.sin(t * 13) * 0.02
 	elseif acao == "prepararGiro" then
-		c.ry = -0.9
-		c.oy = -0.5 * e
-		c.rx = -0.1
+		local k = suaveEntre(0, 0.7, at)
+		c.ry = -1.1 * k
+		c.oy = -0.7 * k * e
+		c.rx = -0.12 * k
+		c.rz = math.sin(t * 40) * 0.012 * k
 	elseif acao == "giro" then
-		c.ry = at * 18
+		v.giroAcum = (v.giroAcum or 0) + (v.dt or 0) * 16
+		c.ry = v.giroAcum
 		c.direto = true
-		c.oy = -0.35 * e
-		c.rx = -0.12
+		c.oy = -0.45 * e
+		c.rx = -0.14
+		c.rz = 0.05
 	elseif acao == "conjurar" then
-		-- peito para cima, braços abertos (rugido / invocação / transformação)
-		c.rx = 0.18
-		c.oy = 0.6 * e
-		c.rz = math.sin(t * 30) * 0.012
+		-- peito para cima e treme: rugido, invocação, transformação
+		local k = suaveEntre(0, 0.5, at)
+		c.rx = 0.25 * k
+		c.oy = 0.8 * k * e
+		c.ry = math.sin(t * 2) * 0.05
+		c.rz = math.sin(t * 32) * 0.015 * k
 	elseif acao == "disparo" then
-		c.rx = -0.15
-		c.oz = -0.6 * e
+		c.rx = -0.2
+		c.oz = -0.8 * e
 		c.rapido = true
 	elseif acao == "prepararSalto" then
-		c.oy = -1.4 * e
-		c.rx = -0.25
+		local k = suaveEntre(0, 0.6, at)
+		c.oy = -1.9 * k * e
+		c.rx = -0.32 * k
+		c.rz = math.sin(t * 30) * 0.015 * k
 	elseif acao == "salto" then
-		c.rx = 0.15
+		-- estica para cima no impulso e se encolhe para cair com a lâmina
+		local k = suaveEntre(0.15, 0.6, at)
+		c.rx = 0.22 - 0.6 * k
+		c.oy = 0.5 * e
 	elseif acao == "prepararInvestida" then
-		c.rx = -0.32
-		c.ry = -0.2
-		c.oy = -0.7 * e
+		local k = suaveEntre(0, 0.6, at)
+		c.rx = -0.38 * k
+		c.ry = -0.28 * k
+		c.oy = -0.9 * k * e
+		c.rz = math.sin(t * 24) * 0.02 * k
 	elseif acao == "investida" then
-		c.rx = -0.4
-		c.rz = math.sin(t * 22) * 0.05
-		c.oy = math.abs(math.sin(t * 22)) * 0.4 * e
+		c.rx = -0.48
+		c.rz = math.sin(t * 22) * 0.06
+		c.oy = (math.abs(math.sin(t * 22)) * 0.5 - 0.3) * e
+		c.oz = -0.8 * e
+	end
+	-- fim do giro: volta para o ângulo equivalente mais perto (sem "desgirar")
+	if acao ~= "giro" and v.giroAcum then
+		local o = v.ossos.corpo
+		o.ry = math.atan2(math.sin(o.ry), math.cos(o.ry))
+		v.giroAcum = nil
+	end
+	-- pouso do salto: amortece
+	local desdePouso = t - (v.pouso or -10)
+	if desdePouso < 0.5 then
+		local k = 1 - desdePouso / 0.5
+		c.oy = (c.oy or 0) - 1.6 * k * e
+		c.rx = (c.rx or 0) - 0.25 * k
+	end
+
+	-- despertar (entrada): sobe curvado de cabeça baixa, endireita tremendo e ruge
+	local idade = t - v.nascimento
+	local subida = v.rig.subida or 2
+	if v.rig.cinematica and idade < subida + 2 then
+		if idade < subida then
+			local s = idade / subida
+			c.rx = -0.7 * (1 - s) - 0.15
+			c.ry = 0
+			c.rz = math.sin(t * 9) * 0.03 * (1 - s)
+			c.oz = 0
+		elseif idade < subida + 0.6 then
+			local s = (idade - subida) / 0.6
+			c.rx = -0.15 + 0.15 * s
+			c.rz = math.sin(t * 30) * 0.02
+		else
+			local s = suaveEntre(subida + 0.6, subida + 0.9, idade) * (1 - suaveEntre(subida + 1.6, subida + 2, idade))
+			c.rx = 0.38 * s
+			c.oy = 1 * s * e
+			c.ry = math.sin(t * 22) * 0.035 * s
+			c.rz = math.sin(t * 27) * 0.03 * s
+		end
 	end
 	if v.atordoado then
-		c.rx = -0.28
-		c.rz = math.sin(t * 3) * 0.06
-		c.oy = -0.6 * e
+		c.rx = -0.3
+		c.rz = math.sin(t * 3) * 0.07
+		c.oy = -0.7 * e
 	end
 	c.rx += v.impacto * 0.06
 	alvos.corpo = c
@@ -1088,6 +1219,17 @@ local POSES = {
 
 local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 	local raizCF = v.raiz.CFrame
+	if v.rig.suave then
+		-- chefe pesado: segue a caixa do servidor com suavidade (sem trancos ao virar ou parar)
+		local anterior = v.cfSuave or raizCF
+		-- quanto mais longe a caixa está, mais rápido alcança (na investida não fica para trás)
+		local distancia = (raizCF.Position - anterior.Position).Magnitude
+		local p = if distancia > 30 then raizCF.Position else anterior.Position:Lerp(raizCF.Position, math.min(1, dt * (10 + distancia * 3)))
+		local rotacao = anterior.Rotation:Lerp(raizCF.Rotation, math.min(1, dt * (v.rig.giroSuave or 5)))
+		v.cfSuave = CFrame.new(p) * rotacao
+		raizCF = v.cfSuave
+	end
+	v.dt = dt
 	local pos = raizCF.Position
 	local deslocamento = pos - v.ultimaPos
 	v.ultimaPos = pos
@@ -1109,23 +1251,31 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 	if v.salto then
 		local s = (agora - v.salto.inicio) / v.salto.duracao
 		if s >= 1 then
+			if v.cfSuave then
+				v.cfSuave = CFrame.new(v.salto.para) * v.cfSuave.Rotation -- já no ponto de chegada
+			end
 			v.salto = nil
+			v.pouso = agora
 		else
 			local p = v.salto.de:Lerp(v.salto.para, s) + Vector3.new(0, v.salto.altura * 4 * s * (1 - s), 0)
 			base = CFrame.new(p - Vector3.new(0, v.alturaRaiz, 0)) * raizCF.Rotation
 		end
 	end
 	-- rastro da lâmina nos golpes; presa no chão, solta faíscas verdes na ponta
-	if v.trilhaLamina then
-		local acao = v.acao
-		v.trilhaLamina.Enabled = acao == "golpe" or acao == "giro" or acao == "investida"
-		if acao == "preso" and v.pontaLamina and agora >= (v.proximaFaisca or 0) then
-			v.proximaFaisca = agora + 0.12
-			local cor = v.rig.aura and v.rig.aura.cor or BRANCO
-			VfxKit.soltar(v.pontaLamina.WorldPosition, "faiscas", { cor = cor, quantidade = 5, escala = 0.8 })
-			if math.random() < 0.3 then
-				VfxKit.soltar(v.pontaLamina.WorldPosition, "poeira", { cor = Color3.fromRGB(140, 125, 110), quantidade = 1, escala = 1 })
-			end
+	local efeitosAcao = v.rig.efeitosAcao and v.rig.efeitosAcao[v.acao]
+	if efeitosAcao and efeitosAcao.repetir and agora >= (v.proximaRepeticao or 0) then
+		v.proximaRepeticao = agora + efeitosAcao.repetir.intervalo
+		for _, spec in efeitosAcao.repetir.efeitos do
+			iniciarEfeito(v, spec)
+		end
+	end
+	-- passos pesados: poeira e tremor a cada pé no chão
+	if v.rig.passo and andar > 0.3 and not v.salto then
+		local lado = math.sin(v.fase) >= 0
+		if lado ~= v.ultimoPe then
+			v.ultimoPe = lado
+			iniciarEfeito(v, v.rig.passo)
+			Vfx.tremerEm(pos, 0.35 * andar, 0.12)
 		end
 	end
 	-- bolha do escudo de runas acompanha o inimigo, girando devagar
@@ -1155,12 +1305,12 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 		if alvo.direto then
 			o.rx, o.ry, o.rz = alvo.rx or 0, alvo.ry or 0, alvo.rz or 0
 		else
-			local k = math.min(1, dt * (if alvo.rapido then 30 else 12))
+			local k = math.min(1, dt * (if alvo.rapido then 30 else (v.rig.rigidez or 12)))
 			o.rx += ((alvo.rx or 0) - o.rx) * k
 			o.ry += ((alvo.ry or 0) - o.ry) * k
 			o.rz += ((alvo.rz or 0) - o.rz) * k
 		end
-		local k = math.min(1, dt * (if alvo.rapido then 30 else 12))
+		local k = math.min(1, dt * (if alvo.rapido then 30 else (v.rig.rigidez or 12)))
 		o.ox += ((alvo.ox or 0) - o.ox) * k
 		o.oy += ((alvo.oy or 0) - o.oy) * k
 		o.oz += ((alvo.oz or 0) - o.oz) * k
@@ -1189,8 +1339,8 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 			end
 		end
 		if v.destaque then
-			v.destaque.FillColor = v.rig.aura and v.rig.aura.cor or BRANCO
-			v.destaque.FillTransparency = v.flashTransparencia or 0.9
+			v.destaque.FillColor = BRANCO
+			v.destaque.FillTransparency = v.flashTransparencia or 1
 		end
 	end
 
@@ -1226,24 +1376,23 @@ end
 -- Morte: as peças se soltam e voam
 ------------------------------------------------------------------------
 
--- Morte de chefe com modelo 3D: ele cambaleia, cai de joelhos, as almas escapam pelas
--- rachaduras e ele explode numa coluna de luz verde, sumindo aos poucos
+-- Morte de chefe com modelo 3D: ele cambaleia e cai de joelhos, as almas estouram pelo corpo
+-- e um raio de luz verde desce do céu sobre ele, que some aos poucos. Só efeitos do pacote.
 local function morteDeModelo3D(v)
-	local cor = v.rig.aura and v.rig.aura.cor or BRANCO
+	local cor = v.rig.corAura or BRANCO
 	local corpo = v.ossos.corpo
 	local inicio = os.clock()
-	local queda = 2.2
+	local queda = 2.4
 	local mundo0 = corpo.mundo
 	local centro = v.ancoraCorpo and v.ancoraCorpo.Position or v.ultimaPos
+	local chao = v.ultimaPos - Vector3.new(0, v.alturaRaiz, 0)
 	local fx = v.escalaFx
+	for _, parar in v.efeitosAtivos or {} do
+		parar()
+	end
+	v.efeitosAtivos = {}
 	Sons.tocar("supremo", { pos = centro, tom = 0.45, volume = 1.3, alcance = 300 })
-	if v.aura then
-		v.aura.chamas.Rate *= 3
-		v.aura.brasas.Rate *= 4
-	end
-	if v.trilhaLamina then
-		v.trilhaLamina.Enabled = false
-	end
+	Vfx.prefab("RugidoRei", CFrame.new(centro), nil, 0.3 * fx)
 	task.spawn(function()
 		local proximaAlma = 0
 		while true do
@@ -1253,8 +1402,8 @@ local function morteDeModelo3D(v)
 			end
 			local s = t / queda
 			-- cambaleia e cai de joelhos para a frente
-			local tremor = math.sin(t * 38) * 0.02 * (1 - s)
-			local cf = mundo0 * CFrame.new(0, -s * s * 4.5 * v.escala, -s * 1.5 * v.escala) * CFrame.Angles(-0.35 * s * s + tremor, 0, math.sin(t * 6) * 0.05 * (1 - s))
+			local tremor = math.sin(t * 38) * 0.025 * (1 - s)
+			local cf = mundo0 * CFrame.new(0, -s * s * 4.5 * v.escala, -s * 1.5 * v.escala) * CFrame.Angles(-0.38 * s * s + tremor, 0, math.sin(t * 6) * 0.05 * (1 - s))
 			local partes, cframes = {}, {}
 			for _, peca in v.pecas do
 				if peca.parte.Parent then
@@ -1264,62 +1413,35 @@ local function morteDeModelo3D(v)
 			end
 			workspace:BulkMoveTo(partes, cframes, Enum.BulkMoveMode.FireCFrameChanged)
 			if t >= proximaAlma then
-				proximaAlma = t + 0.18
-				local ponto = (cf * CFrame.new((math.random() - 0.5) * 8 * v.escala, math.random() * 8 * v.escala, (math.random() - 0.5) * 3 * v.escala)).Position
-				VfxKit.soltar(ponto, "fogo", { cor = cor, quantidade = 3, escala = 1.2 })
-				VfxKit.soltar(ponto, "faiscas", { cor = cor, quantidade = 8, escala = 1 })
+				-- almas estourando pelo corpo
+				proximaAlma = t + 0.22
+				local ponto = (cf * CFrame.new((math.random() - 0.5) * 8 * v.escala, math.random() * 8 * v.escala, -1.5 * v.escala)).Position
+				Vfx.prefab("ImpactoFlecha", CFrame.new(ponto), nil, 1.2 + s)
 				Vfx.tremerEm(ponto, 0.6 + s * 1.5, 0.2)
-			end
-			if v.destaque then
-				v.destaque.FillTransparency = 0.9 - 0.6 * s
-				v.destaque.FillColor = cor
 			end
 			task.wait()
 		end
-		-- explosão final: coluna de luz, onda no chão e as almas subindo
-		local chao = centro - Vector3.new(0, v.alturaRaiz, 0)
-		Vfx.explosao({ pos = centro, raio = 6 * fx, cor = cor, forte = true })
-		VfxKit.soltar(centro, "clarao", { cor = cor, escala = 2 * fx, quantidade = 1 })
-		VfxKit.soltar(centro, "faiscas", { cor = cor, escala = 1.6 * fx, quantidade = 80 })
-		VfxKit.soltar(chao + Vector3.new(0, 0.4, 0), "onda", { cor = cor, escala = 1.8 * fx, quantidade = 1 })
-		VfxKit.soltar(chao + Vector3.new(0, 0.4, 0), "circulo", { cor = cor, escala = 2 * fx, quantidade = 1 })
-		VfxKit.soltar(centro, "brasas", { cor = cor, escala = 1.5 * fx, quantidade = 60, extra = { Acceleration = Vector3.new(0, 30, 0) } })
-		if v.rig.entrada then
-			Vfx.prefab(v.rig.entrada.tumulo, CFrame.new(chao), nil, fx)
-		end
-		local coluna = Instance.new("Part")
-		coluna.Shape = Enum.PartType.Cylinder
-		coluna.Material = Enum.Material.Neon
-		coluna.Color = cor
-		coluna.Anchored = true
-		coluna.CanCollide = false
-		coluna.CanQuery = false
-		coluna.CanTouch = false
-		coluna.CastShadow = false
-		coluna.Size = Vector3.new(1, 3 * fx, 3 * fx)
-		coluna.CFrame = CFrame.new(chao) * CFrame.Angles(0, 0, math.rad(90))
-		coluna.Parent = pasta
-		TweenService:Create(coluna, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Size = Vector3.new(90, 4 * fx, 4 * fx),
-			CFrame = CFrame.new(chao + Vector3.new(0, 45, 0)) * CFrame.Angles(0, 0, math.rad(90)),
-		}):Play()
-		task.delay(0.35, function()
-			TweenService:Create(coluna, TweenInfo.new(0.9), { Size = Vector3.new(90, 0.2, 0.2), Transparency = 1 }):Play()
-		end)
-		Debris:AddItem(coluna, 1.4)
+		-- final: raio verde do céu, explosão de luz, a tumba racha e a onda de choque
+		Vfx.prefab("JulgamentoRaio", CFrame.new(chao + Vector3.new(0, 12, 0)), nil, 0.9 * fx, { cor = cor, inteiro = true })
+		Vfx.prefab("Julgamento", CFrame.new(chao), nil, 0.55 * fx, { cor = cor })
+		Vfx.prefab("SaltoRei", CFrame.new(chao + Vector3.new(0, 0.2, 0)), nil, 0.9 * fx)
+		Vfx.prefab("TumuloRei", CFrame.new(chao), nil, fx)
+		Vfx.prefab("RugidoRei", CFrame.new(centro), nil, 0.35 * fx)
 		Sons.tocar("trovao", { pos = centro, tom = 0.7, volume = 1.2, alcance = 300 })
 		Vfx.tremerEm(centro, 4, 0.9)
 		for _, peca in v.pecas do
 			if peca.ancora then
 				peca.parte:Destroy()
 			else
-				TweenService:Create(peca.parte, TweenInfo.new(0.8), { Transparency = 1 }):Play()
+				TweenService:Create(peca.parte, TweenInfo.new(0.9), { Transparency = 1 }):Play()
 			end
 		end
 		if v.destaque then
-			TweenService:Create(v.destaque, TweenInfo.new(0.8), { FillTransparency = 1, OutlineTransparency = 1 }):Play()
+			v.destaque.FillColor = cor
+			v.destaque.FillTransparency = 0.4
+			TweenService:Create(v.destaque, TweenInfo.new(0.9), { FillTransparency = 1 }):Play()
 		end
-		Debris:AddItem(v.visual, 1)
+		Debris:AddItem(v.visual, 1.1)
 	end)
 end
 

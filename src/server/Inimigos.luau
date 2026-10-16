@@ -179,7 +179,8 @@ Inimigos.TIPOS = {
 		nome = "Skullbane", titulo = "O Senhor da Guerra Caído", chefe = true, pesado = true,
 		raiz = V(5, 6, 4), quadril = 5, raio = 4, alturaBarra = 11,
 		vida = 1500, dano = 24, velocidade = 11, ouro = 180, armadura = 0.1,
-		entrada = 4, -- sobe do chão e ruge antes de lutar (imune nesse tempo)
+		entrada = 5.4, -- desperta (sobe do chão, ruge, câmera) antes de lutar; imune nesse tempo
+		pausa = { 0.9, 1.9 }, -- entre um ataque e outro ele anda e rodeia o alvo
 		ataques = {
 			{ tipo = "invocar", recarga = 18, inicial = 9, preparo = 1.1, invocado = "esqueleto", quantidade = 3, maxVivos = 10 },
 			{ tipo = "fissura", alcance = 48, minimo = 10, preparo = 1, recarga = 8, inicial = 3, comprimento = 44, largura = 5, passos = 10, entre = 0.07, mult = 1.2 },
@@ -419,6 +420,10 @@ function Inimigos.criar(run, tipo: string, posicao: Vector3, mult, elite: string
 		lado = if math.random() < 0.5 then -1 else 1,
 		trocaLadoEm = agora + 2,
 	}
+	-- chefes que rodeiam o alvo viram pelo nosso código (sempre encarando quem perseguem)
+	if def.pausa then
+		humanoid.AutoRotate = false
+	end
 	-- entrada de chefe: sobe do chão e ruge, sem atacar nem levar dano
 	if def.entrada then
 		inimigo.ocupadoAte = agora + def.entrada
@@ -843,6 +848,8 @@ local function ataqueArea(run, inimigo, ataque, agora: number): boolean
 			Vfx.partida(run, "telegrafo", { forma = "circulo", pos = ponto, raio = raio, duracao = atraso, chefe = true })
 			if ataque.visual == "meteoro" then
 				Vfx.partida(run, "meteoro", { pos = ponto, duracao = atraso, raio = raio })
+			elseif ataque.visual == "alma" then
+				Vfx.partida(run, "portalAlma", { pos = ponto, duracao = atraso, raio = raio })
 			end
 			task.delay(atraso, function()
 				if not run.ativa then
@@ -1035,13 +1042,13 @@ local function ataqueAnel(run, inimigo, ataque, agora: number): boolean
 	for i = 1, aneis do
 		local raio = primeiro + (i - 1) * passo
 		local atraso = preparo + (i - 1) * entre
-		Vfx.partida(run, "anelPerigo", { pos = centro, raio = raio, largura = largura, duracao = atraso, cor = corDoEfeito(ataque.efeito) })
+		Vfx.partida(run, "anelPerigo", { pos = centro, raio = raio, largura = largura, duracao = atraso, cor = corDoEfeito(ataque.efeito), tipo = inimigo.tipo })
 		task.delay(atraso, function()
 			if not inimigo.vivo or not run.ativa then
 				return
 			end
 			definirAcao(inimigo, "giro")
-			Vfx.partida(run, "anelExplode", { pos = centro, raio = raio, largura = largura, cor = corDoEfeito(ataque.efeito) })
+			Vfx.partida(run, "anelExplode", { pos = centro, raio = raio, largura = largura, cor = corDoEfeito(ataque.efeito), tipo = inimigo.tipo })
 			for _, info in jogadoresAtingiveis(run) do
 				local distancia = planar(info.raiz.Position - centro).Magnitude
 				if math.abs(distancia - raio) <= largura then
@@ -1364,11 +1371,17 @@ local function decidir(run, inimigo, agora: number)
 	end
 	local alvoPos = info.raiz.Position
 
+	-- chefes com "pausa": depois de cada ataque andam um pouco antes do próximo
+	local podeAtacar = agora >= (inimigo.ataqueLivreEm or 0)
 	for _, ataque in inimigo.ataques do
-		if agora >= (inimigo.prontoEm[ataque] or 0) and distancia <= (ataque.alcance or 999) * inimigo.escala and distancia >= (ataque.minimo or 0) then
+		if podeAtacar and agora >= (inimigo.prontoEm[ataque] or 0) and distancia <= (ataque.alcance or 999) * inimigo.escala and distancia >= (ataque.minimo or 0) then
 			if executarAtaque(run, inimigo, ataque, info.estado, alvoPos, agora) then
 				local apressado = if inspirado and ataque.tipo ~= "grito" then 0.7 else 1
 				inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult * apressado
+				if def.pausa then
+					local pausa = def.pausa[1] + math.random() * (def.pausa[2] - def.pausa[1])
+					inimigo.ataqueLivreEm = inimigo.ocupadoAte + pausa * (if inimigo.fase2 then 0.7 else 1)
+				end
 				return
 			else
 				inimigo.prontoEm[ataque] = agora + 2
@@ -1387,6 +1400,20 @@ local function decidir(run, inimigo, agora: number)
 		end
 		if distancia > alcanceGolpe * 0.75 then
 			mover(run, inimigo, alvoPos)
+			if def.pausa then
+				olharPara(inimigo, alvoPos)
+			end
+		elseif def.pausa and not podeAtacar then
+			-- esperando o próximo ataque: rodeia o alvo devagar, encarando
+			if agora >= inimigo.trocaLadoEm then
+				inimigo.lado = -inimigo.lado
+				inimigo.trocaLadoEm = agora + 1.5 + math.random() * 1.5
+			end
+			local pos = inimigo.raiz.Position
+			local paraAlvo = unidade(alvoPos - pos, Vector3.new(0, 0, 1))
+			inimigo.humanoid.WalkSpeed = velocidade * 0.55
+			mover(run, inimigo, pos + Vector3.new(-paraAlvo.Z, 0, paraAlvo.X) * inimigo.lado * 6)
+			olharPara(inimigo, alvoPos)
 		else
 			parar(inimigo)
 			olharPara(inimigo, alvoPos)

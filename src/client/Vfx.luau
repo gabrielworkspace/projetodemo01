@@ -314,8 +314,30 @@ end
 --[[ Toca um efeito pronto. "onde" é um CFrame fixo ou uma função que devolve o CFrame a cada
 	quadro (para acompanhar algo; devolver nil termina o efeito). "duracao" 0 = até alguém parar.
 	"escala" aumenta o tamanho das partículas (para combinar com o alcance do golpe).
+	opcoes (opcional):
+	  cor = Color3     -> tinge o efeito (troca a cor e mantém o claro/escuro de cada parte;
+	                      branco, cinza e preto continuam iguais)
+	  inteiro = true   -> a escala também afasta os pontos de emissão e aumenta a aceleração
+	                      (o efeito inteiro fica maior, não só as partículas)
 	Devolve a função que para o efeito, ou nil se ele não existe. ]]
-function Vfx.prefab(nome: string, onde: any, duracao: number?, escala: number?): (() -> ())?
+local function tingir(original: Color3, alvo: Color3): Color3
+	local _, s0, v0 = original:ToHSV()
+	if s0 < 0.18 then
+		return original -- branco, cinza e preto ficam como estão
+	end
+	local h, s = alvo:ToHSV()
+	return Color3.fromHSV(h, math.min(1, s * (0.6 + 0.4 * s0)), v0)
+end
+
+local function tingirSequencia(sequencia: ColorSequence, alvo: Color3): ColorSequence
+	local chaves = {}
+	for _, chave in sequencia.Keypoints do
+		table.insert(chaves, ColorSequenceKeypoint.new(chave.Time, tingir(chave.Value, alvo)))
+	end
+	return ColorSequence.new(chaves)
+end
+
+function Vfx.prefab(nome: string, onde: any, duracao: number?, escala: number?, opcoes: any?): (() -> ())?
 	local modelo = prefabDe(nome)
 	if not modelo then
 		return nil
@@ -328,6 +350,29 @@ function Vfx.prefab(nome: string, onde: any, duracao: number?, escala: number?):
 	local copia = modelo:Clone()
 	local todos = copia:GetDescendants()
 	table.insert(todos, copia)
+	local cor = opcoes and opcoes.cor
+	local inteiro = opcoes and opcoes.inteiro and escala and escala ~= 1
+	if cor or inteiro then
+		for _, objeto in todos do
+			if cor then
+				if objeto:IsA("ParticleEmitter") or objeto:IsA("Beam") or objeto:IsA("Trail") then
+					(objeto :: any).Color = tingirSequencia((objeto :: any).Color, cor)
+				elseif objeto:IsA("PointLight") or objeto:IsA("SpotLight") then
+					(objeto :: any).Color = tingir((objeto :: any).Color, cor)
+				end
+			end
+			if inteiro then
+				if objeto:IsA("Attachment") then
+					objeto.Position *= escala :: number
+				elseif objeto:IsA("ParticleEmitter") then
+					objeto.Acceleration *= escala :: number
+				elseif objeto:IsA("BasePart") and objeto ~= copia and copia:IsA("BasePart") then
+					local relativo = copia.CFrame:ToObjectSpace(objeto.CFrame)
+					objeto.CFrame = copia.CFrame * (relativo.Rotation + relativo.Position * (escala :: number))
+				end
+			end
+		end
+	end
 
 	-- peças de dentro (ex.: rachadura no chão) acompanham a peça principal na mesma posição relativa
 	local filhas = {}
@@ -730,7 +775,9 @@ end
 
 local EFEITOS_CHEFE = {
 	reiEsqueleto = { giro = "GiroRei", golpe = "GolpeRei", salto = "SaltoRei", invocacao = "TumuloRei", furia = "RugidoFuria" },
-	skullbane = { giro = "GiroRei", golpe = "GolpeRei", salto = "SaltoRei", invocacao = "TumuloRei", furia = "RugidoRei", escala = 1.35 },
+	-- Skullbane: os mesmos efeitos verdes do Rei, maiores, mais os cortes do Cavaleiro tingidos de
+	-- verde (cor) e efeitos próprios na 2ª fase, na fissura, nos anéis e na chuva de almas
+	skullbane = { giro = "GiroRei", golpe = "GolpeRei", salto = "SaltoRei", invocacao = "TumuloRei", furia = "RugidoRei", escala = 1.35, cor = Color3.fromRGB(90, 255, 120) },
 }
 
 -- Chão logo abaixo de um ponto (ignora jogadores, inimigos e efeitos)
@@ -771,6 +818,9 @@ function Vfx.golpeInimigo(dados)
 			-- giro com o espadão: anel de cortes em volta, rente ao chão
 			local chao = chaoAbaixo(dados.pos)
 			Vfx.prefab(efeitos.giro, CFrame.new(chao + Vector3.new(0, 1.5, 0)), nil, dados.alcance * 0.9 * (efeitos.escala or 1))
+			if efeitos.cor then
+				Vfx.prefab("CorteGiratorio", CFrame.lookAt(chao + Vector3.new(0, 4, 0), chao + Vector3.new(0, 4, 0) + dados.dir), nil, dados.alcance / 3.2, { cor = efeitos.cor })
+			end
 			Sons.tocar("giro", { pos = dados.pos, tom = 0.7, volume = 1.2 })
 			Vfx.tremerEm(dados.pos, 1.2, 0.15)
 			return
@@ -778,6 +828,11 @@ function Vfx.golpeInimigo(dados)
 			-- golpe de cima: onda de choque onde a lâmina bate no chão
 			local chao = chaoAbaixo(dados.pos + dados.dir * dados.alcance * 0.6)
 			Vfx.prefab(efeitos.golpe, CFrame.new(chao + Vector3.new(0, 0.2, 0)), nil, 0.55 * (efeitos.escala or 1))
+			if efeitos.cor then
+				-- meia-lua verde onde a lâmina passa (corte do Cavaleiro tingido)
+				local altura = dados.pos + Vector3.new(0, 3, 0) + dados.dir * dados.alcance * 0.35
+				Vfx.prefab("CorteCavaleiro", CFrame.lookAt(altura, altura + dados.dir) * CFrame.Angles(0, 0, math.rad(70)), nil, dados.alcance / 4, { cor = efeitos.cor })
+			end
 			Sons.tocar("espadaPesada", { pos = chao, tom = 0.6, volume = 1.3 })
 			Vfx.tremerEm(chao, 1.8, 0.25)
 			return
@@ -1194,6 +1249,7 @@ local PROJETIL_PRONTO = {
 	flechaGrande = { "FlechaVento", 1.3, corpo = true, fogo = "FlechaFogo" },
 	flechaCarregada = { "FlechaCarregada", 0.6, corpo = true, fogo = "FlechaCarregadaFogo" },
 	fantasma = { "FlechaCarregada", 0.8, corpo = true },
+	alma = { "ProjetilVazio", 0.3, cor = Color3.fromRGB(90, 255, 120) }, -- almas do Skullbane (orbe do vazio tingido de verde)
 }
 local TIPOS_FLECHA = { flecha = true, flechaGrande = true, flechaCarregada = true, fantasma = true }
 
@@ -1278,7 +1334,7 @@ function Vfx.projeteis(dados)
 			Vfx.prefab(nomePronto, function()
 				local p = projeteis[id]
 				return if p then CFrame.lookAt(p.pos, p.pos + p.dir) else nil
-			end, 0, pronto[2] * (info.tamanho or 1))
+			end, 0, pronto[2] * (info.tamanho or 1), if pronto.cor then { cor = pronto.cor } else nil)
 		end
 	end
 end
@@ -1489,16 +1545,11 @@ end
 function Vfx.impactoArea(dados)
 	local pos, raio = dados.pos, dados.raio
 	if dados.visual == "alma" then
-		-- chuva de almas: coluna de luz verde caindo do céu, estouro e fogo verde no chão
+		-- chuva de almas: raio verde do céu (efeito do Julgamento tingido) e estouro verde no chão
 		local verde = Color3.fromRGB(90, 255, 120)
-		local coluna = parte(Vector3.new(60, raio * 0.9, raio * 0.9), CFrame.new(pos + Vector3.new(0, 30, 0)) * CFrame.Angles(0, 0, math.rad(90)), verde, 0.15, Enum.PartType.Cylinder)
-		animar(coluna, 0.35, { Size = Vector3.new(60, 0.2, 0.2), Transparency = 1 })
-		Debris:AddItem(coluna, 0.4)
-		soltar(pos + Vector3.new(0, 0.5, 0), "clarao", { cor = verde, escala = raio / 4, quantidade = 1 })
-		soltar(pos + Vector3.new(0, 0.5, 0), "fogo", { cor = verde, escala = raio / 5, quantidade = 14 })
-		soltar(pos + Vector3.new(0, 0.5, 0), "faiscas", { cor = verde, escala = raio / 5, quantidade = 24 })
-		soltar(pos + Vector3.new(0, 0.3, 0), "onda", { cor = verde, escala = raio / 6, quantidade = 1 })
-		soltar(pos + Vector3.new(0, 0.5, 0), "fumaca", { cor = Color3.fromRGB(20, 50, 30), escala = raio / 6, quantidade = 6 })
+		Vfx.prefab("JulgamentoRaio", CFrame.new(pos + Vector3.new(0, 12, 0)), nil, raio / 7, { cor = verde })
+		Vfx.prefab("ImpactoFlecha", CFrame.new(pos + Vector3.new(0, 0.5, 0)), nil, raio / 3, { inteiro = true })
+		Vfx.prefab("GiroRei", CFrame.new(pos + Vector3.new(0, 0.5, 0)), nil, raio * 0.7)
 		Sons.tocar("explosao", { pos = pos, volume = 0.7, tom = 1.3, alcance = 200 })
 		Vfx.tremerEm(pos, 1.2, 0.2)
 	elseif dados.visual == "gelo" then
@@ -3638,28 +3689,20 @@ end
 -- com lascas de pedra subindo
 ------------------------------------------------------------------------
 
+-- Portal verde no céu sobre cada ponto da chuva de almas (aviso; o raio cai no fim)
+function Vfx.portalAlma(dados)
+	if prefabDe("PortalChuva") then
+		Vfx.prefab("PortalChuva", CFrame.new(dados.pos + Vector3.new(0, 20, 0)) * CFrame.Angles(-math.pi / 2, 0, 0), dados.duracao, dados.raio * 0.5)
+	end
+end
+
 function Vfx.fissura(dados)
 	local pos, raio = dados.pos, dados.raio or 3
-	local cor = dados.cor or Color3.fromRGB(90, 255, 120)
-	local chao = pos + Vector3.new(0, 0.2, 0)
-	-- rachadura brilhando no chão
-	local fenda = parte(Vector3.new(raio * 1.6, 0.12, 0.7), CFrame.new(chao) * CFrame.Angles(0, math.random() * math.pi, 0), cor, 0.1)
-	sumir({ fenda }, 0.5, 0.35)
-	-- lascas de pedra que saltam
-	for _ = 1, 3 do
-		local lasca = parte(Vector3.new(0.7, 1.6, 0.7) * (0.6 + math.random() * 0.6), CFrame.new(chao) * CFrame.Angles(math.random() - 0.5, math.random() * 3, math.random() - 0.5), Color3.fromRGB(70, 66, 72), 0, nil, Enum.Material.Slate)
-		local destino = chao + Vector3.new((math.random() - 0.5) * raio, 1.5 + math.random() * 2.5, (math.random() - 0.5) * raio)
-		animar(lasca, 0.18, { CFrame = CFrame.new(destino) * CFrame.Angles(math.random() * 3, math.random() * 3, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		sumir({ lasca }, 0.4, 0.3)
-	end
-	soltar(pos + Vector3.new(0, 0.6, 0), "fogo", { cor = cor, quantidade = if dados.forte then 10 else 5, escala = raio / 3 })
-	soltar(pos + Vector3.new(0, 0.6, 0), "faiscas", { cor = cor, quantidade = 8, escala = raio / 3.5 })
-	soltar(pos + Vector3.new(0, 0.3, 0), "poeira", { cor = Color3.fromRGB(130, 120, 110), quantidade = 2, escala = raio / 3 })
+	-- estouro verde do pacote em cada ponto da linha; o último é a pancada do Rei
+	Vfx.prefab("ImpactoFlecha", CFrame.new(pos + Vector3.new(0, 0.6, 0)), nil, raio / 2.4, { inteiro = true })
 	if dados.forte then
-		soltar(pos + Vector3.new(0, 0.6, 0), "clarao", { cor = cor, quantidade = 1, escala = raio / 2 })
-		soltar(pos + Vector3.new(0, 0.3, 0), "onda", { cor = cor, quantidade = 1, escala = raio / 3 })
+		Vfx.prefab("GolpeRei", CFrame.new(pos + Vector3.new(0, 0.2, 0)), nil, raio / 6)
 	end
-	clarao(pos + Vector3.new(0, 1, 0), cor, raio * 4, 0.25, 2)
 	Sons.tocar("explosao", { pos = pos, volume = if dados.forte then 0.7 else 0.35, tom = 1.5, alcance = 160 })
 	Vfx.tremerEm(pos, if dados.forte then 1.2 else 0.5, 0.12)
 end
@@ -3667,8 +3710,6 @@ end
 ------------------------------------------------------------------------
 -- Chefes: transformação da 2ª fase e anéis de perigo
 ------------------------------------------------------------------------
-
-local Lighting = game:GetService("Lighting")
 
 -- Tira a cor da 2ª fase da sala (chamado ao trocar de sala ou voltar ao acampamento)
 function Vfx.limparFase2()
@@ -3683,6 +3724,49 @@ function Vfx.fase2(dados)
 	local cor = dados.cor or Color3.fromRGB(255, 70, 50)
 	local duracao = dados.duracao or 2.8
 	local centro = dados.pos
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	if efeitos and efeitos.cor and raiz then
+		-- transformação só com efeitos do pacote: ruge, a tumba racha, um redemoinho verde sobe
+		-- dos pés e a energia junta em volta dele; no fim, explosão de luz e onda de choque
+		Vfx.limparFase2()
+		local cc = Instance.new("ColorCorrectionEffect")
+		cc.Name = "Fase2Chefe"
+		cc.Parent = Lighting
+		TweenService:Create(cc, TweenInfo.new(duracao, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			TintColor = cor:Lerp(BRANCO, 0.75),
+			Contrast = 0.12,
+			Saturation = 0.1,
+		}):Play()
+		local chao = centro + Vector3.new(0, 0.3, 0)
+		Vfx.prefab("RugidoRei", CFrame.new(raiz.Position), nil, 0.8)
+		Vfx.prefab("TumuloRei", CFrame.new(chao), nil, 3.2)
+		Vfx.prefab("LancamentoTornado", CFrame.new(chao), duracao, 1.4, { cor = cor })
+		Vfx.prefab("CargaAura", function()
+			return if raiz.Parent then CFrame.new(raiz.Position + Vector3.new(0, 0.5, 0)) else nil
+		end, duracao, 4.2, { cor = cor, inteiro = true })
+		Vfx.prefab("CargaCavaleiro", function()
+			return if raiz.Parent then CFrame.new(raiz.Position + Vector3.new(0, 5, 0)) else nil
+		end, duracao, 4, { cor = cor, inteiro = true })
+		Sons.tocar("tempestade", { pos = raiz.Position, alcance = 260, tom = 0.8 })
+		Sons.tocar("carregar", { pos = raiz.Position, alcance = 200, tom = 0.45, volume = 1.5 })
+		local inicio = os.clock()
+		task.spawn(function()
+			while os.clock() - inicio < duracao and raiz.Parent do
+				local t = (os.clock() - inicio) / duracao
+				local minha = raizDoJogador(jogador)
+				if minha and (minha.Position - raiz.Position).Magnitude < 120 then
+					Vfx.tremer(0.3 + 1.4 * t, 0.35)
+				end
+				task.wait(0.3)
+			end
+			if raiz.Parent then
+				Vfx.prefab("Julgamento", CFrame.new(chao), nil, 1.4, { cor = cor })
+				Vfx.prefab(efeitos.salto, CFrame.new(chao), nil, 2.4)
+				Vfx.prefab("RugidoRei", CFrame.new(raiz.Position), nil, 1)
+			end
+		end)
+		return
+	end
 
 	-- a sala muda de cor e fica assim durante a 2ª fase
 	Vfx.limparFase2()
@@ -3690,7 +3774,7 @@ function Vfx.fase2(dados)
 	cc.Name = "Fase2Chefe"
 	cc.Parent = Lighting
 	TweenService:Create(cc, TweenInfo.new(duracao, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-		TintColor = cor:Lerp(BRANCO, 0.55),
+		TintColor = cor:Lerp(BRANCO, 0.72),
 		Contrast = 0.15,
 		Saturation = 0.15,
 	}):Play()
@@ -3773,6 +3857,20 @@ end
 function Vfx.anelExplode(dados)
 	local centro = dados.pos
 	local cor = dados.cor or VERMELHO
+	local efeitos = EFEITOS_CHEFE[dados.tipo or ""]
+	if efeitos and efeitos.cor then
+		-- estouros verdes do pacote em volta do anel
+		local pontos = math.clamp(math.floor(dados.raio * 0.45), 8, 18)
+		for i = 1, pontos do
+			local angulo = i / pontos * math.pi * 2
+			local p = centro + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * dados.raio + Vector3.new(0, 0.6, 0)
+			Vfx.prefab("ImpactoFlecha", CFrame.new(p), nil, dados.largura / 2.6, { inteiro = true })
+		end
+		Vfx.prefab(efeitos.giro, CFrame.new(centro + Vector3.new(0, 0.5, 0)), nil, dados.raio * 0.9)
+		Sons.tocar("explosao", { pos = centro, volume = 0.6, tom = 1.2, alcance = 220 })
+		Vfx.tremerEm(centro, 0.8, 0.15)
+		return
+	end
 	local pontos = math.clamp(math.floor(dados.raio * 0.9), 10, 40)
 	for i = 1, pontos do
 		local angulo = i / pontos * math.pi * 2
