@@ -769,7 +769,7 @@ end
 -- Teclas: escolha a tecla de cada ação
 ------------------------------------------------------------------------
 
-local menuTeclas = novoMenu("Teclas", 780, 712)
+local menuTeclas = novoMenu("Teclas", 780, 784)
 local painelTeclas = UI.painel({ Size = UDim2.fromScale(1, 1), Parent = menuTeclas.conteudo })
 botaoFechar(menuTeclas)
 UI.titulo(painelTeclas, "⚙️ TECLAS", 16, 380, 52)
@@ -860,10 +860,10 @@ for i, acao in Teclas.ACOES do
 end
 
 UI.texto({
-	Position = UDim2.fromOffset(30, 570),
+	Position = UDim2.fromOffset(30, 642),
 	Size = UDim2.new(1, -60, 0, 40),
 	FontFace = fontes.texto,
-	Text = "🎮 Controle: R2 atacar  •  X habilidade  •  B esquiva  •  Y supremo  •  L2 escudo  •  L3 correr\nW A S D, Espaço, Esc e Tab ficam para andar, pular e os menus do Roblox.",
+	Text = "🎮 Controle: R2 atacar  •  X habilidade  •  B esquiva  •  Y supremo  •  L2 escudo  •  L3 correr  •  R3 travar mira\nW A S D, Espaço, Esc e Tab ficam para andar, pular e os menus do Roblox.",
 	TextColor3 = cores.textoSuave,
 	TextWrapped = true,
 	Parent = painelTeclas,

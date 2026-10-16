@@ -14,6 +14,7 @@ Teclas.ACOES = {
 	{ id = "supremo", nome = "Supremo", detalhe = "Com a barra dourada cheia", icone = "⚡" },
 	{ id = "defender", nome = "Defender", detalhe = "Cavaleiro: segure para erguer o escudo", icone = "🛡️" },
 	{ id = "correr", nome = "Correr", detalhe = "Segure para uma corrida leve", icone = "🏃" },
+	{ id = "travarMira", nome = "Travar a mira", detalhe = "Liga e desliga: câmera no ombro, mira no centro", icone = "🎯" },
 }
 
 Teclas.PADRAO = {
@@ -23,6 +24,7 @@ Teclas.PADRAO = {
 	supremo = { "R" },
 	defender = { "F", "MouseButton2" },
 	correr = { "LeftShift" },
+	travarMira = { "LeftAlt" },
 }
 
 -- Botões do controle (não mudam)
@@ -33,6 +35,7 @@ Teclas.CONTROLE = {
 	supremo = Enum.KeyCode.ButtonY,
 	defender = Enum.KeyCode.ButtonL2,
 	correr = Enum.KeyCode.ButtonL3,
+	travarMira = Enum.KeyCode.ButtonR3,
 }
 
 -- Teclas que já fazem outra coisa no Roblox (andar, pular, chat, menu)

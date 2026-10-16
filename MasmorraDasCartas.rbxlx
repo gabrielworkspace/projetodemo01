@@ -598,6 +598,7 @@ Teclas.ACOES = {
 	{ id = "supremo", nome = "Supremo", detalhe = "Com a barra dourada cheia", icone = "⚡" },
 	{ id = "defender", nome = "Defender", detalhe = "Cavaleiro: segure para erguer o escudo", icone = "🛡️" },
 	{ id = "correr", nome = "Correr", detalhe = "Segure para uma corrida leve", icone = "🏃" },
+	{ id = "travarMira", nome = "Travar a mira", detalhe = "Liga e desliga: câmera no ombro, mira no centro", icone = "🎯" },
 }
 
 Teclas.PADRAO = {
@@ -607,6 +608,7 @@ Teclas.PADRAO = {
 	supremo = { "R" },
 	defender = { "F", "MouseButton2" },
 	correr = { "LeftShift" },
+	travarMira = { "LeftAlt" },
 }
 
 -- Botões do controle (não mudam)
@@ -617,6 +619,7 @@ Teclas.CONTROLE = {
 	supremo = Enum.KeyCode.ButtonY,
 	defender = Enum.KeyCode.ButtonL2,
 	correr = Enum.KeyCode.ButtonL3,
+	travarMira = Enum.KeyCode.ButtonR3,
 }
 
 -- Teclas que já fazem outra coisa no Roblox (andar, pular, chat, menu)
@@ -54171,6 +54174,13 @@ local function direcaoDaMira(): Vector3
 	if not raiz then
 		return direcaoAtual
 	end
+	-- mira travada: o ataque vai para onde a câmera olha
+	if Estado.travaMira then
+		local olhar = planar(workspace.CurrentCamera.CFrame.LookVector)
+		if olhar.Magnitude > 0.1 then
+			return olhar.Unit
+		end
+	end
 	if UserInputService.MouseEnabled and not UI.ehCelular() and UserInputService:GetLastInputType() ~= Enum.UserInputType.Gamepad1 then
 		local camera = workspace.CurrentCamera
 		local mouse = UserInputService:GetMouseLocation()
@@ -54558,6 +54568,21 @@ local function correr(ativo: boolean)
 end
 Controles.correr = correr
 
+-- Trava da mira (liga e desliga): o mouse fica preso no centro da tela, a câmera vai para
+-- trás do ombro direito e o personagem sempre olha para onde a câmera aponta
+local function travarMira(ativo: boolean)
+	Estado.travaMira = ativo
+	local _, humanoid = personagem()
+	if humanoid then
+		humanoid.CameraOffset = if ativo then Vector3.new(1.75, 0.3, 0) else Vector3.zero
+	end
+	if not ativo then
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	end
+	Estado.avisar("travaMira")
+end
+Controles.travarMira = travarMira
+
 Controles.atacar = tentarAtacar
 Controles.habilidade = usarHabilidade
 Controles.supremo = usarSupremo
@@ -54635,6 +54660,8 @@ function Controles.iniciar()
 			defender(true)
 		elseif acao == "correr" then
 			correr(true)
+		elseif acao == "travarMira" then
+			travarMira(not Estado.travaMira)
 		end
 	end)
 	-- soltar a tecla: termina o ataque segurado (solta o golpe carregado) e abaixa o escudo
@@ -54646,6 +54673,23 @@ function Controles.iniciar()
 			defender(false)
 		elseif acao == "correr" then
 			correr(false)
+		end
+	end)
+
+	-- mira travada: segura o mouse no centro (o Roblox solta ele a cada quadro) e solta
+	-- quando um menu abre ou o personagem cai
+	RunService:BindToRenderStep("TravaDaMira", Enum.RenderPriority.Camera.Value + 2, function()
+		if not Estado.travaMira then
+			return
+		end
+		local _, humanoidAtual = personagem()
+		if Estado.menusAbertos > 0 or Estado.caido or Estado.morto then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			return
+		end
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+		if humanoidAtual and humanoidAtual.CameraOffset.Magnitude < 0.1 then
+			humanoidAtual.CameraOffset = Vector3.new(1.75, 0.3, 0) -- (renasceu com a trava ligada)
 		end
 	end)
 
@@ -54700,6 +54744,13 @@ function Controles.iniciar()
 			if segurandoAtaque and agora >= esquivandoAte then
 				direcaoAtual = direcaoDaMira()
 			end
+		elseif Estado.travaMira and humanoid.Health > 0 and not Estado.caido then
+			-- mira travada: o corpo acompanha a câmera
+			humanoid.AutoRotate = false
+			local olhar = planar(workspace.CurrentCamera.CFrame.LookVector)
+			if olhar.Magnitude > 0.1 then
+				raiz.CFrame = CFrame.lookAt(raiz.Position, raiz.Position + olhar.Unit)
+			end
 		elseif not humanoid.AutoRotate then
 			humanoid.AutoRotate = true
 		end
@@ -54734,6 +54785,7 @@ local Estado = {
 	ataqueFim = 0, -- quando o próximo ataque fica liberado (cadência do golpe)
 	ataqueTotal = 1,
 	correndo = false,
+	travaMira = false, -- mira travada no centro da tela (câmera no ombro)
 	caido = false,
 	morto = false,
 	sala = nil,
@@ -55819,7 +55871,45 @@ local function atualizarChefe()
 	end
 end
 
+-- Mira no centro da tela quando a mira está travada (Alt)
+local telaMira = criar("ScreenGui", {
+	Name = "MiraTravada",
+	IgnoreGuiInset = true, -- o centro certo da tela, onde o mouse fica preso
+	ResetOnSpawn = false,
+	DisplayOrder = 5,
+	Enabled = false,
+	Parent = jogador:WaitForChild("PlayerGui"),
+})
+local centroMira = criar("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(22, 22),
+	BackgroundTransparency = 1,
+	Parent = telaMira,
+})
+UI.redondo(centroMira)
+UI.borda(centroMira, cores.branco, 2, 0.15)
+local pontoMira = criar("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(4, 4),
+	BackgroundColor3 = cores.branco,
+	BorderSizePixel = 0,
+	Parent = centroMira,
+})
+UI.redondo(pontoMira)
+
 function Hud.iniciar()
+	Estado.Mudou:Connect(function(chave)
+		if chave == "travaMira" then
+			telaMira.Enabled = Estado.travaMira
+			Hud.aviso(if Estado.travaMira then "🎯 Mira travada (Alt para soltar)" else "🎯 Mira solta")
+		end
+	end)
+	RunService.RenderStepped:Connect(function()
+		-- some com menus abertos ou caído (o mouse fica solto nesses casos)
+		telaMira.Enabled = Estado.travaMira and Estado.menusAbertos == 0 and not Estado.caido and not Estado.morto
+	end)
 	Estado.Mudou:Connect(function(chave)
 		if chave == "perfil" then
 			atualizarPerfil()
@@ -56949,7 +57039,7 @@ end
 -- Teclas: escolha a tecla de cada ação
 ------------------------------------------------------------------------
 
-local menuTeclas = novoMenu("Teclas", 780, 712)
+local menuTeclas = novoMenu("Teclas", 780, 784)
 local painelTeclas = UI.painel({ Size = UDim2.fromScale(1, 1), Parent = menuTeclas.conteudo })
 botaoFechar(menuTeclas)
 UI.titulo(painelTeclas, "⚙️ TECLAS", 16, 380, 52)
@@ -57040,10 +57130,10 @@ for i, acao in Teclas.ACOES do
 end
 
 UI.texto({
-	Position = UDim2.fromOffset(30, 570),
+	Position = UDim2.fromOffset(30, 642),
 	Size = UDim2.new(1, -60, 0, 40),
 	FontFace = fontes.texto,
-	Text = "🎮 Controle: R2 atacar  •  X habilidade  •  B esquiva  •  Y supremo  •  L2 escudo  •  L3 correr\nW A S D, Espaço, Esc e Tab ficam para andar, pular e os menus do Roblox.",
+	Text = "🎮 Controle: R2 atacar  •  X habilidade  •  B esquiva  •  Y supremo  •  L2 escudo  •  L3 correr  •  R3 travar mira\nW A S D, Espaço, Esc e Tab ficam para andar, pular e os menus do Roblox.",
 	TextColor3 = cores.textoSuave,
 	TextWrapped = true,
 	Parent = painelTeclas,

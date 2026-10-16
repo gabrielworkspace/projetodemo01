@@ -71,6 +71,13 @@ local function direcaoDaMira(): Vector3
 	if not raiz then
 		return direcaoAtual
 	end
+	-- mira travada: o ataque vai para onde a câmera olha
+	if Estado.travaMira then
+		local olhar = planar(workspace.CurrentCamera.CFrame.LookVector)
+		if olhar.Magnitude > 0.1 then
+			return olhar.Unit
+		end
+	end
 	if UserInputService.MouseEnabled and not UI.ehCelular() and UserInputService:GetLastInputType() ~= Enum.UserInputType.Gamepad1 then
 		local camera = workspace.CurrentCamera
 		local mouse = UserInputService:GetMouseLocation()
@@ -458,6 +465,21 @@ local function correr(ativo: boolean)
 end
 Controles.correr = correr
 
+-- Trava da mira (liga e desliga): o mouse fica preso no centro da tela, a câmera vai para
+-- trás do ombro direito e o personagem sempre olha para onde a câmera aponta
+local function travarMira(ativo: boolean)
+	Estado.travaMira = ativo
+	local _, humanoid = personagem()
+	if humanoid then
+		humanoid.CameraOffset = if ativo then Vector3.new(1.75, 0.3, 0) else Vector3.zero
+	end
+	if not ativo then
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+	end
+	Estado.avisar("travaMira")
+end
+Controles.travarMira = travarMira
+
 Controles.atacar = tentarAtacar
 Controles.habilidade = usarHabilidade
 Controles.supremo = usarSupremo
@@ -535,6 +557,8 @@ function Controles.iniciar()
 			defender(true)
 		elseif acao == "correr" then
 			correr(true)
+		elseif acao == "travarMira" then
+			travarMira(not Estado.travaMira)
 		end
 	end)
 	-- soltar a tecla: termina o ataque segurado (solta o golpe carregado) e abaixa o escudo
@@ -546,6 +570,23 @@ function Controles.iniciar()
 			defender(false)
 		elseif acao == "correr" then
 			correr(false)
+		end
+	end)
+
+	-- mira travada: segura o mouse no centro (o Roblox solta ele a cada quadro) e solta
+	-- quando um menu abre ou o personagem cai
+	RunService:BindToRenderStep("TravaDaMira", Enum.RenderPriority.Camera.Value + 2, function()
+		if not Estado.travaMira then
+			return
+		end
+		local _, humanoidAtual = personagem()
+		if Estado.menusAbertos > 0 or Estado.caido or Estado.morto then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			return
+		end
+		UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+		if humanoidAtual and humanoidAtual.CameraOffset.Magnitude < 0.1 then
+			humanoidAtual.CameraOffset = Vector3.new(1.75, 0.3, 0) -- (renasceu com a trava ligada)
 		end
 	end)
 
@@ -599,6 +640,13 @@ function Controles.iniciar()
 			raiz.CFrame = CFrame.lookAt(raiz.Position, raiz.Position + direcaoAtual)
 			if segurandoAtaque and agora >= esquivandoAte then
 				direcaoAtual = direcaoDaMira()
+			end
+		elseif Estado.travaMira and humanoid.Health > 0 and not Estado.caido then
+			-- mira travada: o corpo acompanha a câmera
+			humanoid.AutoRotate = false
+			local olhar = planar(workspace.CurrentCamera.CFrame.LookVector)
+			if olhar.Magnitude > 0.1 then
+				raiz.CFrame = CFrame.lookAt(raiz.Position, raiz.Position + olhar.Unit)
 			end
 		elseif not humanoid.AutoRotate then
 			humanoid.AutoRotate = true

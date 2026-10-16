@@ -19,6 +19,7 @@ local Estado = {
 	ataqueFim = 0, -- quando o próximo ataque fica liberado (cadência do golpe)
 	ataqueTotal = 1,
 	correndo = false,
+	travaMira = false, -- mira travada no centro da tela (câmera no ombro)
 	caido = false,
 	morto = false,
 	sala = nil,

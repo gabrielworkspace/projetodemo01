@@ -1063,7 +1063,45 @@ local function atualizarChefe()
 	end
 end
 
+-- Mira no centro da tela quando a mira está travada (Alt)
+local telaMira = criar("ScreenGui", {
+	Name = "MiraTravada",
+	IgnoreGuiInset = true, -- o centro certo da tela, onde o mouse fica preso
+	ResetOnSpawn = false,
+	DisplayOrder = 5,
+	Enabled = false,
+	Parent = jogador:WaitForChild("PlayerGui"),
+})
+local centroMira = criar("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(22, 22),
+	BackgroundTransparency = 1,
+	Parent = telaMira,
+})
+UI.redondo(centroMira)
+UI.borda(centroMira, cores.branco, 2, 0.15)
+local pontoMira = criar("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(4, 4),
+	BackgroundColor3 = cores.branco,
+	BorderSizePixel = 0,
+	Parent = centroMira,
+})
+UI.redondo(pontoMira)
+
 function Hud.iniciar()
+	Estado.Mudou:Connect(function(chave)
+		if chave == "travaMira" then
+			telaMira.Enabled = Estado.travaMira
+			Hud.aviso(if Estado.travaMira then "🎯 Mira travada (Alt para soltar)" else "🎯 Mira solta")
+		end
+	end)
+	RunService.RenderStepped:Connect(function()
+		-- some com menus abertos ou caído (o mouse fica solto nesses casos)
+		telaMira.Enabled = Estado.travaMira and Estado.menusAbertos == 0 and not Estado.caido and not Estado.morto
+	end)
 	Estado.Mudou:Connect(function(chave)
 		if chave == "perfil" then
 			atualizarPerfil()

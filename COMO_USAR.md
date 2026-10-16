@@ -23,8 +23,9 @@ Tudo é criado por código quando o jogo começa (terreno, salas, monstros, inte
 | Supremo | R (com a barra dourada cheia) | Botão do topo | Y |
 | Defender com o escudo (Cavaleiro) | Segurar F ou o botão direito | Segurar 🛡️ | Segurar L2 |
 | Correr (corrida leve, 35% mais rápido) | Segurar Shift esquerdo | — | Apertar o analógico esquerdo (L3) |
+| Travar a mira (liga/desliga) | Alt esquerdo | — | Apertar o analógico direito (R3) |
 
-A corrida não vale enquanto você ataca, carrega o golpe ou defende. Correndo, o personagem inclina, os braços balançam ao contrário das pernas e a câmera abre um pouco. (O "Shift Lock" do Roblox fica desligado no jogo para o Shift poder ser usado na corrida.)
+A corrida não vale enquanto você ataca, carrega o golpe ou defende. Correndo, o personagem inclina, os braços balançam ao contrário das pernas e a câmera abre um pouco. O "Shift Lock" do Roblox fica desligado (o Shift é da corrida); no lugar dele, o **Alt trava a mira**: o mouse fica preso no centro da tela (aparece uma mira), a câmera vai para trás do ombro, o personagem olha sempre para onde a câmera aponta e os ataques saem nessa direção. Aperte Alt de novo para soltar. Abrir um menu solta o mouse sozinho.
 
 Essas são as teclas padrão. Para trocar, use o botão **⚙️ TECLAS** no acampamento ou a engrenagem ao lado da barra de ações durante a partida. Cada ação aceita uma tecla principal e uma alternativa (tecla ou botão do mouse), e a escolha fica salva no seu perfil. W, A, S, D, Espaço, Esc e Tab ficam reservadas para o Roblox.
 
