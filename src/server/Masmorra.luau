@@ -359,9 +359,13 @@ local function criarPilares(sala, rng: Random)
 			origem + Vector3.new(dx, 0, -dz / 2),
 			origem + Vector3.new(-dx, 0, dz),
 			origem + Vector3.new(dx, 0, dz),
+			origem + Vector3.new(-dx * 1.15, 0, dz * 0.25),
+			origem + Vector3.new(dx * 1.15, 0, dz * 0.25),
 		}
 	elseif sala.tipo == "combate" then
-		for _ = 1, rng:NextInteger(2, 6) do
+		-- mais pilares em salas maiores (cobertura contra disparos)
+		local area = sala.largura * sala.comprimento / 8000
+		for _ = 1, math.floor(rng:NextInteger(3, 6) * area + 0.5) do
 			local pos = posicaoLivre(sala, rng, 9, true)
 			if pos then
 				table.insert(posicoes, pos)
@@ -391,8 +395,8 @@ local function criarLava(sala, rng: Random)
 	if not (sala.tema.lava or (sala.numero >= 7 and rng:NextNumber() < 0.35)) then
 		return
 	end
-	for _ = 1, rng:NextInteger(1, 3) do
-		local tamanho = Vector3.new(rng:NextInteger(8, 14), 0.4, rng:NextInteger(8, 14))
+	for _ = 1, rng:NextInteger(2, 4) do
+		local tamanho = Vector3.new(rng:NextInteger(8, 16), 0.4, rng:NextInteger(8, 16))
 		local pos = posicaoLivre(sala, rng, math.max(tamanho.X, tamanho.Z) / 2 + 2, true)
 		if pos then
 			parte(sala.modelo, "Borda", tamanho + Vector3.new(1.6, 0.3, 1.6), CFrame.new(pos + Vector3.new(0, 0.1, 0)), Enum.Material.Basalt, Color3.fromRGB(35, 28, 28), { colide = false })
@@ -417,7 +421,8 @@ end
 -- Decoração própria de cada tema, encostada nas paredes
 local function criarDecoracao(sala, rng: Random)
 	local tema, modelo = sala.tema, sala.modelo
-	local quantidade = rng:NextInteger(6, 10)
+	local area = sala.largura * sala.comprimento / 7000
+	local quantidade = math.floor(rng:NextInteger(6, 10) * math.max(1, area) + 0.5)
 	for _ = 1, quantidade do
 		local pos, dentro = pontoNaParede(sala, rng, 3)
 		local giro = CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
@@ -552,8 +557,8 @@ local function criarSalaDoChefe(sala)
 	local meiaL, meiaC = sala.largura / 2, sala.comprimento / 2
 	-- Círculo ritual no centro
 	local centro = origem + Vector3.new(0, 0.05, 6)
-	parte(modelo, "Ritual", Vector3.new(0.12, 44, 44), CFrame.new(centro) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.35, sombra = false })
-	parte(modelo, "RitualMiolo", Vector3.new(0.14, 42, 42), CFrame.new(centro + Vector3.new(0, 0.02, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.2), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
+	parte(modelo, "Ritual", Vector3.new(0.12, 60, 60), CFrame.new(centro) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.35, sombra = false })
+	parte(modelo, "RitualMiolo", Vector3.new(0.14, 58, 58), CFrame.new(centro + Vector3.new(0, 0.02, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.2), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
 	parte(modelo, "RitualInterno", Vector3.new(0.12, 20, 20), CFrame.new(centro + Vector3.new(0, 0.04, 0)) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.5, sombra = false })
 	parte(modelo, "RitualInternoMiolo", Vector3.new(0.14, 18.6, 18.6), CFrame.new(centro + Vector3.new(0, 0.06, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.25), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
 	-- Trono no fundo
@@ -624,13 +629,14 @@ end
 -- Cria uma sala nova. "origem" é o centro do chão (a superfície fica em origem.Y).
 function Masmorra.construir(origem: Vector3, numero: number, tipo: string, rng: Random)
 	local largura, comprimento
+	-- salas amplas: espaço para esquivar, cercar e lutar em grupo
 	if tipo == "chefe" then
-		largura, comprimento = 110, 110
+		largura, comprimento = 150, 150
 	elseif tipo == "tesouro" then
-		largura, comprimento = 50, 56
+		largura, comprimento = 64, 70
 	else
-		largura = rng:NextInteger(14, 19) * 5
-		comprimento = rng:NextInteger(14, 19) * 5
+		largura = rng:NextInteger(21, 28) * 5
+		comprimento = rng:NextInteger(21, 28) * 5
 	end
 
 	local modelo = Instance.new("Model")
@@ -662,10 +668,14 @@ function Masmorra.construir(origem: Vector3, numero: number, tipo: string, rng: 
 	elseif tipo == "tesouro" then
 		criarBau(sala)
 	else
-		-- braseiros nos cantos da entrada
+		-- braseiros nos cantos da entrada e no meio das laterais (iluminam a sala grande)
 		local meiaL, meiaC = largura / 2, comprimento / 2
 		criarBraseiro(sala, origem + Vector3.new(-meiaL + 5, 0, -meiaC + 5), 1)
 		criarBraseiro(sala, origem + Vector3.new(meiaL - 5, 0, -meiaC + 5), 1)
+		criarBraseiro(sala, origem + Vector3.new(-meiaL + 5, 0, 0), 1.2)
+		criarBraseiro(sala, origem + Vector3.new(meiaL - 5, 0, 0), 1.2)
+		criarBraseiro(sala, origem + Vector3.new(-meiaL + 5, 0, meiaC - 5), 1)
+		criarBraseiro(sala, origem + Vector3.new(meiaL - 5, 0, meiaC - 5), 1)
 	end
 	return sala
 end
@@ -675,7 +685,7 @@ function Masmorra.posicaoInimigo(sala, rng: Random): Vector3
 	local entrada = sala.spawn.Position
 	for _ = 1, 30 do
 		local pos = posicaoLivre(sala, rng, 3, false)
-		if pos and planar(pos - entrada).Magnitude > 24 then
+		if pos and planar(pos - entrada).Magnitude > 34 then
 			return pos
 		end
 	end

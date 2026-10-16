@@ -3488,6 +3488,259 @@ function Vfx.auraSupremo(dados)
 end
 
 ------------------------------------------------------------------------
+-- Inimigos de suporte: cura, escudo de runas e grito de guerra
+------------------------------------------------------------------------
+
+local function raizDoModelo(modelo: any): BasePart?
+	if typeof(modelo) ~= "Instance" then
+		return nil
+	end
+	return modelo:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+-- Feixe curvo entre dois inimigos (some sozinho)
+local function feixeEntre(de: BasePart, para: BasePart, cor: Color3, largura: number, duracao: number, curva: number)
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, de.Size.Y / 2 + 0.5, 0)
+	a0.Parent = de
+	local a1 = Instance.new("Attachment")
+	a1.Parent = para
+	local feixe = Instance.new("Beam")
+	feixe.Attachment0 = a0
+	feixe.Attachment1 = a1
+	feixe.Width0 = largura * 0.6
+	feixe.Width1 = largura
+	feixe.CurveSize0 = curva
+	feixe.CurveSize1 = -curva
+	feixe.Segments = 20
+	feixe.Color = ColorSequence.new(BRANCO, cor)
+	feixe.LightEmission = 1
+	feixe.LightInfluence = 0
+	feixe.Brightness = 3
+	feixe.FaceCamera = true
+	feixe.TextureMode = Enum.TextureMode.Wrap
+	feixe.TextureLength = 3
+	feixe.TextureSpeed = 2.5
+	VfxKit.texturaFeixe(feixe, "raio", VfxKit.TEX.luz)
+	feixe.Parent = a0
+	Debris:AddItem(a0, duracao)
+	Debris:AddItem(a1, duracao)
+	return a1
+end
+
+-- Acólito canalizando a cura: feixe verde e luz espiralando no aliado
+function Vfx.canalizarCura(dados)
+	local de, para = raizDoModelo(dados.de), raizDoModelo(dados.para)
+	if not de or not para then
+		return
+	end
+	local verde = Color3.fromRGB(110, 255, 150)
+	local duracao = dados.duracao or 0.9
+	local ponta = feixeEntre(de, para, verde, 1.2, duracao + 0.15, 3)
+	VfxKit.continuo(ponta, "brasas", 40, { cor = verde, escala = 0.8, extra = { Acceleration = Vector3.new(0, 10, 0) } })
+	soltar(de.Position - Vector3.new(0, de.Size.Y / 2 + 1.6, 0), "circulo", { cor = verde, escala = 0.6, quantidade = 1, extra = { Lifetime = NumberRange.new(duracao, duracao) } })
+	Sons.tocar("reviver", { pos = de.Position, volume = 0.35, tom = 1.5 })
+end
+
+-- Aliado curado: "+vida" verde, luz subindo e um anel no chão
+function Vfx.curaInimigo(dados)
+	local verde = Color3.fromRGB(110, 255, 150)
+	local pos = dados.pos
+	textoFlutuante(pos + Vector3.new(0, (dados.altura or 4) + 0.6, 0), "+" .. tostring(dados.valor), verde, 34, { pop = 1.8 })
+	soltar(pos, "brasas", { cor = verde, quantidade = 26, escala = 1, extra = { Acceleration = Vector3.new(0, 14, 0) } })
+	soltar(pos, "clarao", { cor = verde, quantidade = 1, escala = 0.9 })
+	soltar(pos - Vector3.new(0, 2, 0), "anel", { cor = verde, quantidade = 1, escala = (dados.raio or 1.5) * 0.5 })
+end
+
+-- Suporte conjurando: círculo de runas no chão (aviso para o jogador correr até ele)
+function Vfx.telegrafoSuporte(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	if not raiz then
+		return
+	end
+	local duracao = dados.duracao or 0.8
+	local chao = raiz.Position - Vector3.new(0, raiz.Size.Y / 2 + 1.6, 0)
+	soltar(chao, "circulo", { cor = dados.cor, escala = 0.8, quantidade = 1, extra = { Lifetime = NumberRange.new(duracao, duracao), RotSpeed = NumberRange.new(120, 120) } })
+	soltar(raiz.Position, "vortice", { cor = dados.cor, escala = 1.2, quantidade = 2 })
+end
+
+-- Guardião erguendo escudos: feixes azuis até cada aliado e estalo de runas
+function Vfx.escudoInimigo(dados)
+	local de = raizDoModelo(dados.de)
+	local azul = Color3.fromRGB(110, 190, 255)
+	if de then
+		soltar(de.Position, "onda", { cor = azul, quantidade = 1, escala = 1.4, extra = { Orientation = Enum.ParticleOrientation.FacingCamera } })
+		Sons.tocar("escudo", { pos = de.Position, tom = 1.5, volume = 0.7 })
+	end
+	for _, modelo in dados.alvos or {} do
+		local alvo = raizDoModelo(modelo)
+		if alvo then
+			if de and alvo ~= de then
+				feixeEntre(de, alvo, azul, 0.8, 0.4, 2)
+			end
+			soltar(alvo.Position, "anel", { cor = azul, quantidade = 1, escala = 0.8, extra = { Orientation = Enum.ParticleOrientation.FacingCamera } })
+			soltar(alvo.Position, "faiscas", { cor = azul, quantidade = 10, escala = 0.7 })
+		end
+	end
+end
+
+-- Escudo de runas quebrou: estilhaços azuis
+function Vfx.escudoQuebrou(dados)
+	local azul = Color3.fromRGB(140, 210, 255)
+	local pos = dados.pos
+	for _ = 1, 10 do
+		local caco = parte(Vector3.new(0.5, 0.08, 0.7), CFrame.new(pos) * CFrame.Angles(math.random() * 6, math.random() * 6, 0), azul, 0.2, nil, Enum.Material.Glass)
+		caco.Anchored = false
+		caco.AssemblyLinearVelocity = Vector3.new(math.random(-22, 22), math.random(8, 24), math.random(-22, 22))
+		sumir({ caco }, 0.3, 0.5)
+	end
+	soltar(pos, "faiscas", { cor = azul, quantidade = 24, escala = 1 })
+	soltar(pos, "clarao", { cor = azul, quantidade = 1, escala = 0.8 })
+	Sons.tocar("geloQuebra", { pos = pos, tom = 0.8 })
+end
+
+-- Grito de guerra: onda vermelha que passa pelos aliados
+function Vfx.gritoGuerra(dados)
+	local vermelho = Color3.fromRGB(255, 70, 50)
+	local escala = (dados.raio or 30) / 12
+	soltar(dados.pos + Vector3.new(0, 0.3, 0), "onda", { cor = vermelho, quantidade = 1, escala = escala })
+	task.delay(0.12, function()
+		soltar(dados.pos + Vector3.new(0, 0.3, 0), "anel", { cor = vermelho, quantidade = 1, escala = escala * 0.8 })
+	end)
+	soltar(dados.pos + Vector3.new(0, 0.3, 0), "poeira", { cor = Color3.fromRGB(160, 120, 100), quantidade = 18, escala = 1.2 })
+	local raiz = raizDoModelo(dados.modelo)
+	if raiz then
+		soltar(raiz.Position + Vector3.new(0, 2, 0), "clarao", { cor = vermelho, quantidade = 1, escala = 1.2 })
+		textoFlutuante(raiz.Position + Vector3.new(0, 5, 0), "AAARGH!", vermelho, 34, { pop = 2 })
+	end
+	Sons.tocar("supremo", { pos = dados.pos, tom = 0.7, volume = 0.6 })
+	Vfx.tremerEm(dados.pos, 0.6, 0.2)
+end
+
+------------------------------------------------------------------------
+-- Chefes: transformação da 2ª fase e anéis de perigo
+------------------------------------------------------------------------
+
+local Lighting = game:GetService("Lighting")
+
+-- Tira a cor da 2ª fase da sala (chamado ao trocar de sala ou voltar ao acampamento)
+function Vfx.limparFase2()
+	local cc = Lighting:FindFirstChild("Fase2Chefe")
+	if cc then
+		cc:Destroy()
+	end
+end
+
+function Vfx.fase2(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local cor = dados.cor or Color3.fromRGB(255, 70, 50)
+	local duracao = dados.duracao or 2.8
+	local centro = dados.pos
+
+	-- a sala muda de cor e fica assim durante a 2ª fase
+	Vfx.limparFase2()
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Name = "Fase2Chefe"
+	cc.Parent = Lighting
+	TweenService:Create(cc, TweenInfo.new(duracao, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		TintColor = cor:Lerp(BRANCO, 0.55),
+		Contrast = 0.15,
+		Saturation = 0.15,
+	}):Play()
+
+	-- círculo enorme sob o chefe e pilares de luz subindo em volta
+	soltar(centro + Vector3.new(0, 0.3, 0), "circulo", { cor = cor, escala = (dados.raio or 16) / 4, quantidade = 1, extra = { Lifetime = NumberRange.new(duracao + 0.3, duracao + 0.3), RotSpeed = NumberRange.new(60, 60) } })
+	for i = 1, 8 do
+		local angulo = i / 8 * math.pi * 2
+		local p = centro + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (dados.raio or 16)
+		task.delay(i * duracao / 12, function()
+			local pilar = parte(Vector3.new(1.2, 0.2, 1.2), CFrame.new(p), cor, 0.2)
+			animar(pilar, 0.35, { Size = Vector3.new(0.8, 40, 0.8), CFrame = CFrame.new(p + Vector3.new(0, 20, 0)) })
+			sumir({ pilar }, 0.5, duracao - i * duracao / 12 + 0.1)
+			soltar(p, "faiscas", { cor = cor, quantidade = 8, escala = 0.8 })
+		end)
+	end
+
+	-- energia sendo sugada para o chefe, cada vez mais forte
+	if raiz then
+		local nucleo = Instance.new("Attachment")
+		nucleo.Parent = raiz
+		local vortice = VfxKit.continuo(nucleo, "vortice", 6, { cor = cor, escala = 2.5 })
+		local brasas = VfxKit.continuo(nucleo, "brasas", 40, {
+			cor = cor,
+			escala = 1.4,
+			extra = { Shape = Enum.ParticleEmitterShape.Sphere, ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface, ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward, Speed = NumberRange.new(18, 26) },
+		})
+		local inicio = os.clock()
+		task.spawn(function()
+			while os.clock() - inicio < duracao and raiz.Parent do
+				local t = (os.clock() - inicio) / duracao
+				vortice.Rate = 6 + 20 * t
+				brasas.Rate = 40 + 160 * t
+				soltar(raiz.Position, "implosao", { cor = cor, escala = 1.5 + t * 1.5, quantidade = 1 })
+				local minha = raizDoJogador(jogador)
+				if minha and (minha.Position - raiz.Position).Magnitude < 120 then
+					Vfx.tremer(0.3 + 1.4 * t, 0.35)
+				end
+				task.wait(0.3)
+			end
+			vortice.Enabled = false
+			brasas.Enabled = false
+			Debris:AddItem(nucleo, 1.5)
+			if raiz.Parent then
+				soltar(raiz.Position, "clarao", { cor = cor, escala = 4, quantidade = 1 })
+				soltar(raiz.Position, "faiscas", { cor = cor, escala = 2, quantidade = 60 })
+				soltar(raiz.Position, "fumaca", { cor = cor:Lerp(Color3.new(0, 0, 0), 0.6), escala = 2, quantidade = 20 })
+				soltar(centro + Vector3.new(0, 0.3, 0), "onda", { cor = cor, escala = (dados.raio or 16) / 7, quantidade = 1 })
+				task.delay(0.12, function()
+					soltar(centro + Vector3.new(0, 0.3, 0), "onda", { cor = BRANCO, escala = (dados.raio or 16) / 9, quantidade = 1 })
+				end)
+			end
+		end)
+		Sons.tocar("tempestade", { pos = raiz.Position, alcance = 260, tom = 0.8 })
+		Sons.tocar("carregar", { pos = raiz.Position, alcance = 200, tom = 0.45, volume = 1.5 })
+	end
+end
+
+-- Aviso de anel de perigo no chão (o jogador vê onde o anel vai explodir)
+function Vfx.anelPerigo(dados)
+	local centro = dados.pos + Vector3.new(0, 0.15, 0)
+	local cor = dados.cor or VERMELHO
+	local segmentos = math.clamp(math.floor(dados.raio * 1.3), 16, 72)
+	local faixa = anel(centro, dados.raio, cor, 0.55, segmentos, dados.largura * 2)
+	local borda1 = anel(centro + Vector3.new(0, 0.02, 0), dados.raio - dados.largura, cor, 0.1, segmentos, 0.25)
+	local borda2 = anel(centro + Vector3.new(0, 0.02, 0), dados.raio + dados.largura, cor, 0.1, segmentos, 0.25)
+	for _, p in faixa do
+		animar(p, dados.duracao, { Transparency = 0.2 }, Enum.EasingStyle.Linear)
+	end
+	local todas = {}
+	for _, lista in { faixa, borda1, borda2 } do
+		for _, p in lista do
+			table.insert(todas, p)
+		end
+	end
+	sumir(todas, 0.1, dados.duracao)
+end
+
+-- O anel explode: fogo/energia em toda a volta
+function Vfx.anelExplode(dados)
+	local centro = dados.pos
+	local cor = dados.cor or VERMELHO
+	local pontos = math.clamp(math.floor(dados.raio * 0.9), 10, 40)
+	for i = 1, pontos do
+		local angulo = i / pontos * math.pi * 2
+		local p = centro + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * dados.raio + Vector3.new(0, 0.5, 0)
+		soltar(p, "fogo", { cor = cor, quantidade = 2, escala = 0.8 })
+		if i % 2 == 0 then
+			soltar(p, "faiscas", { cor = cor, quantidade = 4, escala = 0.7 })
+			soltar(p, "poeira", { cor = Color3.fromRGB(140, 125, 110), quantidade = 1, escala = 0.8 })
+		end
+	end
+	Sons.tocar("explosao", { pos = centro, volume = 0.6, tom = 1.2, alcance = 220 })
+	Vfx.tremerEm(centro, 0.8, 0.15)
+end
+
+------------------------------------------------------------------------
 -- Entrada
 ------------------------------------------------------------------------
 

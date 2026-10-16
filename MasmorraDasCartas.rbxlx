@@ -146,6 +146,9 @@ return Cartas
 -- Campos opcionais: critico (chance base), esquivaMult (recarga da esquiva),
 -- ameacaMult (o quanto chama a atenção dos inimigos)
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
 local Classes = {}
 
 Classes.ordem = { "cavaleiro", "mago", "arqueiro", "assassino" }
@@ -178,6 +181,7 @@ Classes.dados = {
 			arco = 140,
 			combo = { 1, 1.1, 1.9 }, -- o terceiro golpe é o finalizador: um giro que acerta em volta
 			impacto = { 0.13, 0.13, 0.24 }, -- quando a lâmina chega no alvo em cada golpe (segundos)
+			preparo = 1.8, -- golpes pesados: preparação 80% mais longa (veja Config.PREPARO_GOLPE)
 			nome = "Combo de Espada",
 			icone = "⚔️",
 		},
@@ -227,6 +231,7 @@ Classes.dados = {
 			explosao = 4,
 			combo = { 1, 1, 1.7 },
 			impacto = { 0.15, 0.15, 0.28 },
+			preparo = 1.5,
 			nome = "Dardo, Gelo e Fogo",
 			icone = "✨",
 		},
@@ -272,6 +277,7 @@ Classes.dados = {
 			explosao = 0,
 			combo = { 1, 1, 2 },
 			impacto = { 0.26, 0.26, 0.34 },
+			preparo = 1.25, -- já tem o ciclo de pegar a flecha na aljava
 			nome = "Flechada",
 			icone = "🎯",
 		},
@@ -318,6 +324,7 @@ Classes.dados = {
 			arco = 95,
 			combo = { 1, 1, 2.4 },
 			impacto = { 0.09, 0.09, 0.2 },
+			preparo = 1.6,
 			costas = 0.5, -- +50% de dano acertando o inimigo pelas costas
 			nome = "Dança das Adagas",
 			icone = "🗡️",
@@ -337,6 +344,28 @@ Classes.dados = {
 		},
 	},
 }
+
+-- Preparação dos golpes: "impacto" passa a ser o momento real (mais tarde); o original fica em
+-- "impactoBase" (é nele que estão os quadros da animação, que Animacoes estica só na preparação)
+for _, classe in Classes.dados do
+	local ataque = classe.ataque
+	local fator = ataque.preparo or Config.PREPARO_GOLPE or 1
+	ataque.preparoFator = fator
+	ataque.impactoBase = ataque.impacto
+	if ataque.impacto then
+		local atrasado = {}
+		for i, momento in ataque.impacto do
+			atrasado[i] = momento * fator
+		end
+		ataque.impacto = atrasado
+	end
+end
+
+-- Tempo a mais que cada golpe leva por causa da preparação mais longa
+function Classes.atrasoDoPreparo(classe, combo: number): number
+	local base = classe.ataque.impactoBase
+	return if base then (base[combo] or 0) * ((classe.ataque.preparoFator or 1) - 1) else 0
+end
 
 function Classes.obter(id: string?)
 	return Classes.dados[id or ""] or Classes.dados.cavaleiro
@@ -393,6 +422,11 @@ Config.CARGA_ATAQUE_MAX = 1.2 -- carga cheia (dano máximo e efeito especial)
 Config.DANO_CARGA_MIN = 1.6 -- multiplicador de dano com carga mínima
 Config.DANO_CARGA_MAX = 3.2 -- multiplicador de dano com carga cheia
 Config.VELOCIDADE_CARREGANDO = 0.5 -- anda mais devagar enquanto carrega
+
+-- Peso dos golpes: a preparação (do clique até a arma chegar no alvo) fica mais longa.
+-- 1 = como antes; 1.8 = 80% mais tempo preparando. Cada classe pode ter o seu (ataque.preparo).
+Config.PREPARO_GOLPE = 1.7
+Config.VELOCIDADE_ATACANDO = 0.45 -- o personagem quase para enquanto prepara o golpe
 
 -- Defesa com escudo (Cavaleiro): segure F, o botão direito do mouse ou L2
 Config.DEFESA_REDUCAO = 0.75 -- golpes de frente perdem 75% do dano
@@ -459,7 +493,7 @@ Config.TEMAS = {
 	{
 		id = "calabouco",
 		nome = "Calabouço",
-		inimigos = { gosma = 4, esqueleto = 4, esqueletoArqueiro = 2.5, rato = 2 },
+		inimigos = { gosma = 4, esqueleto = 4, esqueletoArqueiro = 2.5, rato = 2, acolito = 1.3, guardiao = 0.9, portaEstandarte = 0.8 },
 		chefe = "reiEsqueleto",
 		chao = { material = Enum.Material.Cobblestone, cor = Color3.fromRGB(98, 94, 100) },
 		parede = { material = Enum.Material.Brick, cor = Color3.fromRGB(84, 74, 76) },
@@ -474,7 +508,7 @@ Config.TEMAS = {
 	{
 		id = "caverna",
 		nome = "Caverna Musgosa",
-		inimigos = { kobold = 4, aranha = 3, cogumelo = 2, xama = 2, gosma = 1.5 },
+		inimigos = { kobold = 4, aranha = 3, cogumelo = 2, xama = 2, gosma = 1.5, portaEstandarte = 1.4, acolito = 0.9, guardiao = 0.8 },
 		chefe = "rainhaAranha",
 		chao = { material = Enum.Material.Ground, cor = Color3.fromRGB(74, 84, 58) },
 		parede = { material = Enum.Material.Rock, cor = Color3.fromRGB(70, 78, 64) },
@@ -489,7 +523,7 @@ Config.TEMAS = {
 	{
 		id = "cripta",
 		nome = "Cripta Congelada",
-		inimigos = { carnical = 4, espectro = 3, cavaleiroMorto = 1.5, esqueleto = 1.5 },
+		inimigos = { carnical = 4, espectro = 3, cavaleiroMorto = 1.5, esqueleto = 1.5, acolito = 1.4, guardiao = 1.3, portaEstandarte = 0.8 },
 		chefe = "lich",
 		chao = { material = Enum.Material.Slate, cor = Color3.fromRGB(120, 140, 165) },
 		parede = { material = Enum.Material.Glacier, cor = Color3.fromRGB(130, 160, 200) },
@@ -504,7 +538,7 @@ Config.TEMAS = {
 	{
 		id = "fornalha",
 		nome = "Fornalha",
-		inimigos = { diabrete = 3.5, elementalFogo = 3, ogro = 1.5, carnical = 1 },
+		inimigos = { diabrete = 3.5, elementalFogo = 3, ogro = 1.5, carnical = 1, guardiao = 1.3, portaEstandarte = 1.3, acolito = 1 },
 		chefe = "senhorChamas",
 		chao = { material = Enum.Material.Basalt, cor = Color3.fromRGB(46, 38, 38) },
 		parede = { material = Enum.Material.CrackedLava, cor = Color3.fromRGB(96, 46, 34) },
@@ -45629,7 +45663,8 @@ function Combate.calcularStats(estado)
 		vidaMax = math.max(25, classe.vida + (melhorias.Vida or 0) * 15 + e("vidaPlana") + e("gigante") * 50),
 		dano = classe.dano * (1 + (melhorias.Forca or 0) * 0.08) * (1 + e("danoPct")),
 		velocidade = classe.velocidade * (1 + e("velocidadePct")) * (0.92 ^ e("gigante")),
-		intervalo = classe.intervalo / (1 + e("ataqueVelPct")),
+		-- intervalo entre golpes: o da classe + o tempo a mais de preparação
+		intervalo = classe.intervalo / (1 + e("ataqueVelPct")) + Classes.atrasoDoPreparo(classe, 1),
 		alcance = classe.alcance * (1 + e("alcancePct")) * (1 + 0.2 * e("gigante")),
 		critico = math.min((classe.critico or 0) + e("critico"), 0.75),
 		multCritico = 3 + e("multCritico"),
@@ -45763,6 +45798,9 @@ function Combate.aplicarVelocidade(estado)
 	end
 	if os.clock() < (estado.rapidoAte or 0) then
 		fator *= 1.3
+	end
+	if os.clock() < (estado.atacandoAte or 0) then
+		fator *= Config.VELOCIDADE_ATACANDO
 	end
 	humanoid.WalkSpeed = estado.stats.velocidade * fator
 end
@@ -45915,6 +45953,33 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		elseif inimigo.vida - dano <= inimigo.vidaMax * 0.2 then
 			dano = math.max(dano, math.ceil(inimigo.vida))
 			opcoes.cor = opcoes.cor or Color3.fromRGB(255, 60, 90)
+		end
+	end
+	-- chefe se transformando (troca de fase): não leva dano
+	if os.clock() < (inimigo.invulneravelAte or 0) then
+		Vfx.partida(run, "dano", {
+			pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra, 0),
+			valor = "IMUNE",
+			cor = Color3.fromRGB(200, 200, 210),
+		})
+		return
+	end
+	-- escudo de runas (Guardião Rúnico): absorve o dano antes da vida
+	if (inimigo.escudo or 0) > 0 then
+		local absorvido = math.min(inimigo.escudo, dano)
+		inimigo.escudo -= absorvido
+		dano -= absorvido
+		inimigo.modelo:SetAttribute("Escudo", inimigo.escudo)
+		Vfx.partida(run, "dano", {
+			pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra + 0.8, 0),
+			valor = math.floor(absorvido + 0.5),
+			cor = Color3.fromRGB(120, 200, 255),
+		})
+		if inimigo.escudo <= 0 then
+			Vfx.partida(run, "escudoQuebrou", { pos = inimigo.raiz.Position, raio = inimigo.raio })
+		end
+		if dano <= 0 then
+			return
 		end
 	end
 	inimigo.vida -= dano
@@ -46499,8 +46564,14 @@ function Combate.atacar(run, estado, direcao: any)
 	local mult = classe.ataque.combo[combo] or 1
 	animar(run, estado, "ataque", { combo = combo }, estado.player)
 
-	-- o golpe acontece quando a arma chega no alvo, no meio da animação
+	-- o golpe acontece quando a arma chega no alvo, no meio da animação; enquanto prepara,
+	-- o personagem finca o pé (anda bem devagar)
 	local impacto = classe.ataque.impacto and classe.ataque.impacto[combo] or 0
+	estado.atacandoAte = agora + impacto + 0.1
+	Combate.aplicarVelocidade(estado)
+	task.delay(impacto + 0.12, function()
+		Combate.aplicarVelocidade(estado)
+	end)
 	task.delay(impacto, function()
 		if not podeAgir(run, estado) or estado.defendendoDesde then
 			return
@@ -47711,6 +47782,36 @@ Inimigos.TIPOS = {
 		},
 	},
 
+	-- Suporte (aparecem em todos os temas, a partir da 2ª sala) -------------
+	-- Ficam atrás dos aliados e fortalecem o grupo: mate-os primeiro!
+	acolito = {
+		nome = "Acólito Necromante", raiz = V(2, 2, 1), quadril = 2, raio = 1.3, alturaBarra = 4.4,
+		vida = 46, dano = 9, velocidade = 13, ouro = 8, comportamento = "suporte", distancia = 24, salaMinima = 2,
+		ataques = {
+			-- canaliza um feixe e cura o aliado mais ferido (22% da vida dele)
+			{ tipo = "curar", alcance = 999, preparo = 0.9, recarga = 4.5, inicial = 2, raio = 34, cura = 0.22 },
+			{ tipo = "disparo", alcance = 36, preparo = 0.8, recarga = 3.2, projetil = "veneno", velocidade = 40 },
+		},
+	},
+	guardiao = {
+		nome = "Guardião Rúnico", raiz = V(3, 3.4, 2), quadril = 2.2, raio = 1.9, alturaBarra = 6.2,
+		vida = 110, dano = 15, velocidade = 11, ouro = 12, armadura = 0.2, comportamento = "suporte", distancia = 14, salaMinima = 2,
+		ataques = {
+			-- ergue escudos de runas em até 4 aliados (absorvem 35% da vida deles por 7s)
+			{ tipo = "escudo", alcance = 999, preparo = 0.8, recarga = 9, inicial = 3, raio = 28, escudo = 0.35, duracao = 7, maximo = 4 },
+			{ tipo = "golpe", alcance = 7, arco = 120, preparo = 0.7, recarga = 1.8, mult = 1.1 },
+		},
+	},
+	portaEstandarte = {
+		nome = "Porta-Estandarte", raiz = V(2, 1.8, 1.2), quadril = 1.4, raio = 1.4, alturaBarra = 5.2,
+		vida = 58, dano = 11, velocidade = 15, ouro = 9, comportamento = "suporte", distancia = 18, salaMinima = 2,
+		ataques = {
+			-- grito de guerra: aliados por perto ficam 35% mais rápidos e atacam mais vezes por 6s
+			{ tipo = "grito", alcance = 999, preparo = 0.7, recarga = 10, inicial = 2.5, raio = 30, duracao = 6 },
+			{ tipo = "golpe", alcance = 6, arco = 100, preparo = 0.5, recarga = 1.4 },
+		},
+	},
+
 	-- Chefes ---------------------------------------------------------------
 	reiEsqueleto = {
 		nome = "Rei Esqueleto", titulo = "Senhor do Calabouço", chefe = true, pesado = true,
@@ -47723,10 +47824,16 @@ Inimigos.TIPOS = {
 			{ tipo = "golpe", alcance = 12, arco = 110, preparo = 0.85, recarga = 2.2, mult = 1.3 },
 		},
 		fase2 = {
-			anuncio = "O Rei Esqueleto se enfurece!",
+			anuncio = "O Rei Esqueleto se enfurece! Ossos voam pela sala!",
+			cor = Color3.fromRGB(255, 70, 50),
 			velocidade = 1.3,
 			recarga = 0.7,
-			ataques = { { tipo = "invocar", recarga = 14, inicial = 1, preparo = 1, invocado = "esqueletoArqueiro", quantidade = 2, maxVivos = 12 } },
+			ataques = {
+				{ tipo = "invocar", recarga = 30, inicial = 1, preparo = 1, invocado = "guardiao", quantidade = 1, maxVivos = 14 },
+				{ tipo = "espiral", recarga = 11, inicial = 3, preparo = 0.9, projetil = "flechaOssea", quantidade = 12, ondas = 5, intervalo = 0.32, giro = 0.22, velocidade = 32, mult = 0.7 },
+				{ tipo = "anel", recarga = 13, inicial = 8, preparo = 0.8, aneis = 3, largura = 4, entre = 0.75, mult = 1.2 },
+				{ tipo = "invocar", recarga = 14, inicial = 5, preparo = 1, invocado = "esqueletoArqueiro", quantidade = 2, maxVivos = 12 },
+			},
 		},
 	},
 	rainhaAranha = {
@@ -47740,7 +47847,17 @@ Inimigos.TIPOS = {
 			{ tipo = "disparo", alcance = 45, preparo = 0.7, recarga = 3.5, projetil = "veneno", velocidade = 45, quantidade = 5, espalhamento = 14 },
 			{ tipo = "golpe", alcance = 9, arco = 120, preparo = 0.7, recarga = 1.8 },
 		},
-		fase2 = { anuncio = "A Rainha Aranha protege sua ninhada!", velocidade = 1.25, recarga = 0.75 },
+		fase2 = {
+			anuncio = "A Rainha Aranha protege sua ninhada! A caverna se enche de teias!",
+			cor = Color3.fromRGB(150, 255, 90),
+			velocidade = 1.25,
+			recarga = 0.75,
+			ataques = {
+				{ tipo = "espiral", recarga = 10, inicial = 3, preparo = 0.8, projetil = "veneno", quantidade = 10, ondas = 4, intervalo = 0.4, giro = -0.3, velocidade = 34, mult = 0.7 },
+				{ tipo = "area", recarga = 8, inicial = 6, preparo = 0.6, quantidade = 7, raio = 7, atraso = 1.2, mult = 1, visual = "teia", efeito = "lento" },
+				{ tipo = "invocar", recarga = 16, inicial = 9, preparo = 0.9, invocado = "acolito", quantidade = 1, maxVivos = 12 },
+			},
+		},
 	},
 	lich = {
 		nome = "Lich Gélido", titulo = "Guardião da Cripta", chefe = true, comportamento = "flutuar", distancia = 22,
@@ -47754,9 +47871,15 @@ Inimigos.TIPOS = {
 			{ tipo = "disparo", alcance = 50, preparo = 0.5, recarga = 1.6, projetil = "gelo", velocidade = 50, quantidade = 3, espalhamento = 12 },
 		},
 		fase2 = {
-			anuncio = "O Lich invoca o inverno eterno!",
+			anuncio = "O Lich invoca o inverno eterno! Seus acólitos o protegem!",
+			cor = Color3.fromRGB(120, 200, 255),
 			recarga = 0.7,
-			ataques = { { tipo = "golpe", alcance = 14, arco = 360, preparo = 1.2, recarga = 10, inicial = 2, mult = 1.6, efeito = "lento" } },
+			ataques = {
+				{ tipo = "invocar", recarga = 20, inicial = 1, preparo = 1, invocado = "acolito", quantidade = 2, maxVivos = 12 },
+				{ tipo = "anel", recarga = 11, inicial = 4, preparo = 0.9, aneis = 4, largura = 3.5, entre = 0.6, mult = 1.1, efeito = "lento" },
+				{ tipo = "espiral", recarga = 12, inicial = 8, preparo = 0.9, projetil = "gelo", quantidade = 14, ondas = 4, intervalo = 0.35, giro = 0.2, velocidade = 30, mult = 0.7, efeito = "lento" },
+				{ tipo = "golpe", alcance = 14, arco = 360, preparo = 1.2, recarga = 10, inicial = 12, mult = 1.6, efeito = "lento" },
+			},
 		},
 	},
 	senhorChamas = {
@@ -47770,10 +47893,16 @@ Inimigos.TIPOS = {
 			{ tipo = "golpe", alcance = 15, arco = 110, preparo = 1, recarga = 2.6, mult = 1.5, efeito = "queimar" },
 		},
 		fase2 = {
-			anuncio = "O Senhor das Chamas desperta a fornalha!",
+			anuncio = "O Senhor das Chamas desperta a fornalha! O chão vira lava!",
+			cor = Color3.fromRGB(255, 110, 30),
 			velocidade = 1.2,
 			recarga = 0.7,
-			ataques = { { tipo = "golpe", alcance = 16, arco = 360, preparo = 1.3, recarga = 11, inicial = 2, mult = 1.6, efeito = "queimar" } },
+			ataques = {
+				{ tipo = "anel", recarga = 10, inicial = 3, preparo = 0.9, aneis = 4, largura = 4.5, entre = 0.65, mult = 1.3, efeito = "queimar" },
+				{ tipo = "espiral", recarga = 12, inicial = 7, preparo = 1, projetil = "fogo", quantidade = 12, ondas = 6, intervalo = 0.3, giro = 0.25, velocidade = 32, mult = 0.7 },
+				{ tipo = "area", recarga = 9, inicial = 11, preparo = 0.8, quantidade = 8, raio = 7, atraso = 1.3, mult = 1.3, visual = "meteoro", efeito = "queimar" },
+				{ tipo = "invocar", recarga = 24, inicial = 14, preparo = 1, invocado = "portaEstandarte", quantidade = 1, maxVivos = 10 },
+			},
 		},
 	},
 }
@@ -48359,6 +48488,216 @@ local function ataqueTeleporte(run, inimigo, ataque, agora: number): boolean
 	return true
 end
 
+------------------------------------------------------------------------
+-- Ataques da 2ª fase dos chefes: espiral de projéteis e anéis de perigo
+------------------------------------------------------------------------
+
+-- Várias ondas de projéteis em todas as direções, cada onda girada um pouco (espiral)
+local function ataqueEspiral(run, inimigo, ataque, agora: number): boolean
+	local preparo = ataque.preparo * inimigo.recargaMult
+	local ondas = ataque.ondas or 4
+	local intervalo = ataque.intervalo or 0.35
+	parar(inimigo)
+	definirAcao(inimigo, "conjurar")
+	inimigo.ocupadoAte = agora + preparo + ondas * intervalo + 0.3
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 4, duracao = preparo, chefe = true })
+	task.delay(preparo, function()
+		local giro = math.random() * math.pi
+		for _ = 1, ondas do
+			if not podeContinuar(run, inimigo) then
+				return
+			end
+			definirAcao(inimigo, "disparo")
+			local origem = inimigo.raiz.Position
+			local lista = {}
+			local quantidade = ataque.quantidade or 10
+			for i = 1, quantidade do
+				local angulo = giro + i * (math.pi * 2 / quantidade)
+				local direcao = Vector3.new(math.sin(angulo), 0, math.cos(angulo))
+				table.insert(lista, {
+					lado = "inimigo",
+					tipo = ataque.projetil,
+					pos = origem + direcao * (inimigo.raio + 1),
+					dir = direcao,
+					velocidade = ataque.velocidade or 32,
+					alcance = 80,
+					raio = 1.2,
+					aoAcertar = function(estado, _, projetil)
+						local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+						opcoes.origem = projetil.pos - projetil.dir * 4
+						Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
+					end,
+				})
+			end
+			Projeteis.disparar(run, lista)
+			giro += ataque.giro or 0.25
+			task.wait(intervalo)
+		end
+		if inimigo.vivo then
+			definirAcao(inimigo, "")
+		end
+	end)
+	return true
+end
+
+-- Anéis de perigo que saem do chefe, um depois do outro: fique entre eles ou pule por cima
+local function ataqueAnel(run, inimigo, ataque, agora: number): boolean
+	local preparo = ataque.preparo * inimigo.recargaMult
+	local aneis = ataque.aneis or 3
+	local largura = ataque.largura or 4
+	local entre = ataque.entre or 0.7
+	local centro = noChao(run, inimigo.raiz.Position)
+	local primeiro = inimigo.raio + 3
+	local passo = largura * 2.6
+	parar(inimigo)
+	definirAcao(inimigo, "prepararGiro")
+	inimigo.ocupadoAte = agora + preparo + aneis * entre + 0.4
+	for i = 1, aneis do
+		local raio = primeiro + (i - 1) * passo
+		local atraso = preparo + (i - 1) * entre
+		Vfx.partida(run, "anelPerigo", { pos = centro, raio = raio, largura = largura, duracao = atraso, cor = corDoEfeito(ataque.efeito) })
+		task.delay(atraso, function()
+			if not inimigo.vivo or not run.ativa then
+				return
+			end
+			definirAcao(inimigo, "giro")
+			Vfx.partida(run, "anelExplode", { pos = centro, raio = raio, largura = largura, cor = corDoEfeito(ataque.efeito) })
+			for _, info in jogadoresAtingiveis(run) do
+				local distancia = planar(info.raiz.Position - centro).Magnitude
+				if math.abs(distancia - raio) <= largura then
+					local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+					opcoes.origem = centro
+					Combate.danoAoJogador(run, info.estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
+				end
+			end
+		end)
+	end
+	task.delay(preparo + aneis * entre + 0.3, function()
+		if inimigo.vivo then
+			definirAcao(inimigo, "")
+		end
+	end)
+	return true
+end
+
+------------------------------------------------------------------------
+-- Suporte: cura, escudo e grito de guerra (não precisam de jogador no alcance)
+------------------------------------------------------------------------
+
+local function aliadosPerto(run, inimigo, raio: number)
+	local lista = {}
+	for outro in run.inimigos do
+		if outro.vivo and planar(outro.raiz.Position - inimigo.raiz.Position).Magnitude <= raio then
+			table.insert(lista, outro)
+		end
+	end
+	return lista
+end
+
+local function ataqueCurar(run, inimigo, ataque, agora: number): boolean
+	-- o aliado mais ferido (em proporção) que ainda não está quase cheio
+	local alvo, menor = nil, 0.8
+	for _, outro in aliadosPerto(run, inimigo, ataque.raio) do
+		local fracao = outro.vida / outro.vidaMax
+		if fracao < menor and (outro ~= inimigo or fracao < 0.5) then
+			alvo, menor = outro, fracao
+		end
+	end
+	if not alvo then
+		return false
+	end
+	local preparo = ataque.preparo * inimigo.recargaMult
+	parar(inimigo)
+	olharPara(inimigo, alvo.raiz.Position)
+	definirAcao(inimigo, "conjurar")
+	inimigo.ocupadoAte = agora + preparo + 0.3
+	Vfx.partida(run, "canalizarCura", { de = inimigo.modelo, para = alvo.modelo, duracao = preparo })
+	task.delay(preparo, function()
+		if not podeContinuar(run, inimigo) or not alvo.vivo then
+			return
+		end
+		local cura = math.floor(alvo.vidaMax * ataque.cura + 0.5)
+		alvo.vida = math.min(alvo.vidaMax, alvo.vida + cura)
+		alvo.modelo:SetAttribute("Vida", alvo.vida)
+		Vfx.partida(run, "curaInimigo", { pos = alvo.raiz.Position, altura = alvo.alturaBarra, valor = cura, raio = alvo.raio })
+		definirAcao(inimigo, "")
+	end)
+	return true
+end
+
+local function ataqueEscudo(run, inimigo, ataque, agora: number): boolean
+	local candidatos = {}
+	for _, outro in aliadosPerto(run, inimigo, ataque.raio) do
+		if (outro.escudo or 0) <= 0 then
+			table.insert(candidatos, outro)
+		end
+	end
+	if #candidatos == 0 then
+		return false
+	end
+	-- protege primeiro quem está mais perto dos jogadores (quem vai apanhar)
+	local jogadores = jogadoresAtingiveis(run)
+	local function perigo(outro): number
+		local menor = math.huge
+		for _, info in jogadores do
+			menor = math.min(menor, planar(info.raiz.Position - outro.raiz.Position).Magnitude)
+		end
+		return menor
+	end
+	table.sort(candidatos, function(a, b)
+		return perigo(a) < perigo(b)
+	end)
+	local preparo = ataque.preparo * inimigo.recargaMult
+	parar(inimigo)
+	definirAcao(inimigo, "conjurar")
+	inimigo.ocupadoAte = agora + preparo + 0.3
+	Vfx.partida(run, "telegrafoSuporte", { modelo = inimigo.modelo, cor = Color3.fromRGB(110, 190, 255), duracao = preparo })
+	task.delay(preparo, function()
+		if not podeContinuar(run, inimigo) then
+			return
+		end
+		local alvos = {}
+		for i = 1, math.min(ataque.maximo or 4, #candidatos) do
+			local outro = candidatos[i]
+			if outro.vivo then
+				outro.escudo = outro.vidaMax * ataque.escudo
+				outro.escudoAte = os.clock() + ataque.duracao
+				outro.modelo:SetAttribute("Escudo", outro.escudo)
+				outro.modelo:SetAttribute("EscudoMax", outro.escudo)
+				table.insert(alvos, outro.modelo)
+			end
+		end
+		Vfx.partida(run, "escudoInimigo", { de = inimigo.modelo, alvos = alvos })
+		definirAcao(inimigo, "")
+	end)
+	return true
+end
+
+local function ataqueGrito(run, inimigo, ataque, agora: number): boolean
+	local aliados = aliadosPerto(run, inimigo, ataque.raio)
+	if #aliados < 2 then
+		return false -- sozinho, não adianta gritar
+	end
+	local preparo = ataque.preparo * inimigo.recargaMult
+	parar(inimigo)
+	definirAcao(inimigo, "conjurar")
+	inimigo.ocupadoAte = agora + preparo + 0.4
+	Vfx.partida(run, "telegrafoSuporte", { modelo = inimigo.modelo, cor = Color3.fromRGB(255, 80, 60), duracao = preparo })
+	task.delay(preparo, function()
+		if not podeContinuar(run, inimigo) then
+			return
+		end
+		local fim = os.clock() + ataque.duracao
+		for _, outro in aliadosPerto(run, inimigo, ataque.raio) do
+			outro.inspiradoAte = fim
+			outro.modelo:SetAttribute("Inspirado", true)
+		end
+		Vfx.partida(run, "gritoGuerra", { pos = noChao(run, inimigo.raiz.Position), raio = ataque.raio, modelo = inimigo.modelo })
+		definirAcao(inimigo, "")
+	end)
+	return true
+end
+
 local function executarAtaque(run, inimigo, ataque, alvo, alvoPos: Vector3, agora: number): boolean
 	local tipo = ataque.tipo
 	if tipo == "golpe" then
@@ -48379,6 +48718,16 @@ local function executarAtaque(run, inimigo, ataque, alvo, alvoPos: Vector3, agor
 		return ataqueArea(run, inimigo, ataque, agora)
 	elseif tipo == "teleporte" then
 		return ataqueTeleporte(run, inimigo, ataque, agora)
+	elseif tipo == "espiral" then
+		return ataqueEspiral(run, inimigo, ataque, agora)
+	elseif tipo == "anel" then
+		return ataqueAnel(run, inimigo, ataque, agora)
+	elseif tipo == "curar" then
+		return ataqueCurar(run, inimigo, ataque, agora)
+	elseif tipo == "escudo" then
+		return ataqueEscudo(run, inimigo, ataque, agora)
+	elseif tipo == "grito" then
+		return ataqueGrito(run, inimigo, ataque, agora)
 	end
 	return false
 end
@@ -48449,20 +48798,44 @@ local function escolherAlvo(run, inimigo)
 	return melhor, melhorDistancia
 end
 
+-- Transformação: o chefe para, fica imune e junta poder por alguns segundos (a sala muda de cor),
+-- solta uma onda de choque e volta mais rápido, com ataques novos
+local TRANSFORMACAO = 2.8
+
 local function entrarNaFase2(run, inimigo)
 	local fase2 = inimigo.def.fase2
+	local agora = os.clock()
+	local cor = fase2.cor or Color3.fromRGB(255, 70, 50)
 	inimigo.fase2 = true
-	inimigo.velocidadeMult *= fase2.velocidade or 1
-	inimigo.recargaMult *= fase2.recarga or 1
-	if fase2.ataques then
-		for i, ataque in fase2.ataques do
-			table.insert(inimigo.ataques, i, ataque)
-			inimigo.prontoEm[ataque] = os.clock() + (ataque.inicial or 1)
-		end
-	end
+	inimigo.invulneravelAte = agora + TRANSFORMACAO
+	inimigo.ocupadoAte = agora + TRANSFORMACAO + 0.3
+	parar(inimigo)
+	definirAcao(inimigo, "conjurar")
 	inimigo.modelo:SetAttribute("Furioso", true)
+	inimigo.modelo:SetAttribute("Fase", 2)
 	run:anunciar("🔥 " .. (fase2.anuncio or (inimigo.def.nome .. " se enfurece!")), Color3.fromRGB(255, 90, 60))
-	Vfx.partida(run, "furia", { pos = inimigo.raiz.Position, tipo = inimigo.tipo })
+	local centro = noChao(run, inimigo.raiz.Position)
+	local raioOnda = inimigo.raio + 14
+	Vfx.partida(run, "fase2", { modelo = inimigo.modelo, pos = centro, cor = cor, duracao = TRANSFORMACAO, raio = raioOnda, tipo = inimigo.tipo })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raioOnda, duracao = TRANSFORMACAO, chefe = true })
+
+	task.delay(TRANSFORMACAO, function()
+		if not inimigo.vivo or not run.ativa then
+			return
+		end
+		Vfx.partida(run, "furia", { pos = inimigo.raiz.Position, tipo = inimigo.tipo })
+		Vfx.partida(run, "explosao", { pos = inimigo.raiz.Position, raio = raioOnda, cor = cor, forte = true })
+		acertarJogadores(run, inimigo, inimigo.raiz.Position, nil, raioOnda, 360, 1.3, nil)
+		inimigo.velocidadeMult *= fase2.velocidade or 1
+		inimigo.recargaMult *= fase2.recarga or 1
+		if fase2.ataques then
+			for i, ataque in fase2.ataques do
+				table.insert(inimigo.ataques, i, ataque)
+				inimigo.prontoEm[ataque] = os.clock() + (ataque.inicial or 1)
+			end
+		end
+		definirAcao(inimigo, "")
+	end)
 end
 
 local function decidir(run, inimigo, agora: number)
@@ -48478,6 +48851,15 @@ local function decidir(run, inimigo, agora: number)
 		inimigo.lentoFator = 1
 		inimigo.modelo:SetAttribute("Lento", false)
 	end
+	-- escudo de runas e grito de guerra acabam com o tempo
+	if (inimigo.escudo or 0) > 0 and agora >= (inimigo.escudoAte or 0) then
+		inimigo.escudo = 0
+		inimigo.modelo:SetAttribute("Escudo", 0)
+	end
+	local inspirado = agora < (inimigo.inspiradoAte or 0)
+	if not inspirado and inimigo.modelo:GetAttribute("Inspirado") then
+		inimigo.modelo:SetAttribute("Inspirado", false)
+	end
 
 	if inimigo.chefe and def.fase2 and not inimigo.fase2 and inimigo.vida <= inimigo.vidaMax * 0.5 then
 		entrarNaFase2(run, inimigo)
@@ -48487,7 +48869,7 @@ local function decidir(run, inimigo, agora: number)
 		return
 	end
 
-	local velocidade = def.velocidade * inimigo.velocidadeMult
+	local velocidade = def.velocidade * inimigo.velocidadeMult * (if inspirado then 1.35 else 1)
 	if agora < inimigo.lentoAte then
 		velocidade *= inimigo.lentoFator
 	end
@@ -48503,7 +48885,8 @@ local function decidir(run, inimigo, agora: number)
 	for _, ataque in inimigo.ataques do
 		if agora >= (inimigo.prontoEm[ataque] or 0) and distancia <= (ataque.alcance or 999) * inimigo.escala and distancia >= (ataque.minimo or 0) then
 			if executarAtaque(run, inimigo, ataque, info.estado, alvoPos, agora) then
-				inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult
+				local apressado = if inspirado and ataque.tipo ~= "grito" then 0.7 else 1
+				inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult * apressado
 				return
 			else
 				inimigo.prontoEm[ataque] = agora + 2
@@ -48521,6 +48904,35 @@ local function decidir(run, inimigo, agora: number)
 			end
 		end
 		if distancia > alcanceGolpe * 0.75 then
+			mover(run, inimigo, alvoPos)
+		else
+			parar(inimigo)
+			olharPara(inimigo, alvoPos)
+		end
+	elseif comportamento == "suporte" then
+		-- fica atrás dos aliados (do lado oposto aos jogadores), sem chegar perto de ninguém
+		local pos = inimigo.raiz.Position
+		local soma, quantos = Vector3.zero, 0
+		for outro in run.inimigos do
+			if outro ~= inimigo and outro.vivo and outro.def.comportamento ~= "suporte" then
+				soma += outro.raiz.Position
+				quantos += 1
+			end
+		end
+		local ideal = def.distancia or 20
+		if distancia < ideal - 6 then
+			-- jogador perto demais: recua
+			mover(run, inimigo, pos + unidade(pos - alvoPos, Vector3.new(1, 0, 0)) * 10)
+		elseif quantos > 0 then
+			local centro = soma / quantos
+			local atras = centro + unidade(centro - alvoPos, Vector3.new(0, 0, 1)) * 7
+			if planar(atras - pos).Magnitude > 4 then
+				mover(run, inimigo, atras)
+			else
+				parar(inimigo)
+				olharPara(inimigo, alvoPos)
+			end
+		elseif distancia > ideal + 4 then
 			mover(run, inimigo, alvoPos)
 		else
 			parar(inimigo)
@@ -49742,9 +50154,13 @@ local function criarPilares(sala, rng: Random)
 			origem + Vector3.new(dx, 0, -dz / 2),
 			origem + Vector3.new(-dx, 0, dz),
 			origem + Vector3.new(dx, 0, dz),
+			origem + Vector3.new(-dx * 1.15, 0, dz * 0.25),
+			origem + Vector3.new(dx * 1.15, 0, dz * 0.25),
 		}
 	elseif sala.tipo == "combate" then
-		for _ = 1, rng:NextInteger(2, 6) do
+		-- mais pilares em salas maiores (cobertura contra disparos)
+		local area = sala.largura * sala.comprimento / 8000
+		for _ = 1, math.floor(rng:NextInteger(3, 6) * area + 0.5) do
 			local pos = posicaoLivre(sala, rng, 9, true)
 			if pos then
 				table.insert(posicoes, pos)
@@ -49774,8 +50190,8 @@ local function criarLava(sala, rng: Random)
 	if not (sala.tema.lava or (sala.numero >= 7 and rng:NextNumber() < 0.35)) then
 		return
 	end
-	for _ = 1, rng:NextInteger(1, 3) do
-		local tamanho = Vector3.new(rng:NextInteger(8, 14), 0.4, rng:NextInteger(8, 14))
+	for _ = 1, rng:NextInteger(2, 4) do
+		local tamanho = Vector3.new(rng:NextInteger(8, 16), 0.4, rng:NextInteger(8, 16))
 		local pos = posicaoLivre(sala, rng, math.max(tamanho.X, tamanho.Z) / 2 + 2, true)
 		if pos then
 			parte(sala.modelo, "Borda", tamanho + Vector3.new(1.6, 0.3, 1.6), CFrame.new(pos + Vector3.new(0, 0.1, 0)), Enum.Material.Basalt, Color3.fromRGB(35, 28, 28), { colide = false })
@@ -49800,7 +50216,8 @@ end
 -- Decoração própria de cada tema, encostada nas paredes
 local function criarDecoracao(sala, rng: Random)
 	local tema, modelo = sala.tema, sala.modelo
-	local quantidade = rng:NextInteger(6, 10)
+	local area = sala.largura * sala.comprimento / 7000
+	local quantidade = math.floor(rng:NextInteger(6, 10) * math.max(1, area) + 0.5)
 	for _ = 1, quantidade do
 		local pos, dentro = pontoNaParede(sala, rng, 3)
 		local giro = CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
@@ -49935,8 +50352,8 @@ local function criarSalaDoChefe(sala)
 	local meiaL, meiaC = sala.largura / 2, sala.comprimento / 2
 	-- Círculo ritual no centro
 	local centro = origem + Vector3.new(0, 0.05, 6)
-	parte(modelo, "Ritual", Vector3.new(0.12, 44, 44), CFrame.new(centro) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.35, sombra = false })
-	parte(modelo, "RitualMiolo", Vector3.new(0.14, 42, 42), CFrame.new(centro + Vector3.new(0, 0.02, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.2), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
+	parte(modelo, "Ritual", Vector3.new(0.12, 60, 60), CFrame.new(centro) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.35, sombra = false })
+	parte(modelo, "RitualMiolo", Vector3.new(0.14, 58, 58), CFrame.new(centro + Vector3.new(0, 0.02, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.2), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
 	parte(modelo, "RitualInterno", Vector3.new(0.12, 20, 20), CFrame.new(centro + Vector3.new(0, 0.04, 0)) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.5, sombra = false })
 	parte(modelo, "RitualInternoMiolo", Vector3.new(0.14, 18.6, 18.6), CFrame.new(centro + Vector3.new(0, 0.06, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.25), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
 	-- Trono no fundo
@@ -50007,13 +50424,14 @@ end
 -- Cria uma sala nova. "origem" é o centro do chão (a superfície fica em origem.Y).
 function Masmorra.construir(origem: Vector3, numero: number, tipo: string, rng: Random)
 	local largura, comprimento
+	-- salas amplas: espaço para esquivar, cercar e lutar em grupo
 	if tipo == "chefe" then
-		largura, comprimento = 110, 110
+		largura, comprimento = 150, 150
 	elseif tipo == "tesouro" then
-		largura, comprimento = 50, 56
+		largura, comprimento = 64, 70
 	else
-		largura = rng:NextInteger(14, 19) * 5
-		comprimento = rng:NextInteger(14, 19) * 5
+		largura = rng:NextInteger(21, 28) * 5
+		comprimento = rng:NextInteger(21, 28) * 5
 	end
 
 	local modelo = Instance.new("Model")
@@ -50045,10 +50463,14 @@ function Masmorra.construir(origem: Vector3, numero: number, tipo: string, rng: 
 	elseif tipo == "tesouro" then
 		criarBau(sala)
 	else
-		-- braseiros nos cantos da entrada
+		-- braseiros nos cantos da entrada e no meio das laterais (iluminam a sala grande)
 		local meiaL, meiaC = largura / 2, comprimento / 2
 		criarBraseiro(sala, origem + Vector3.new(-meiaL + 5, 0, -meiaC + 5), 1)
 		criarBraseiro(sala, origem + Vector3.new(meiaL - 5, 0, -meiaC + 5), 1)
+		criarBraseiro(sala, origem + Vector3.new(-meiaL + 5, 0, 0), 1.2)
+		criarBraseiro(sala, origem + Vector3.new(meiaL - 5, 0, 0), 1.2)
+		criarBraseiro(sala, origem + Vector3.new(-meiaL + 5, 0, meiaC - 5), 1)
+		criarBraseiro(sala, origem + Vector3.new(meiaL - 5, 0, meiaC - 5), 1)
 	end
 	return sala
 end
@@ -50058,7 +50480,7 @@ function Masmorra.posicaoInimigo(sala, rng: Random): Vector3
 	local entrada = sala.spawn.Position
 	for _ = 1, 30 do
 		local pos = posicaoLivre(sala, rng, 3, false)
-		if pos and planar(pos - entrada).Magnitude > 24 then
+		if pos and planar(pos - entrada).Magnitude > 34 then
 			return pos
 		end
 	end
@@ -50481,6 +50903,18 @@ local function sortearDaTabela(rng: Random, pesos): string
 	return ultimo
 end
 
+-- Só os inimigos que já podem aparecer nesta sala (alguns esperam a 2ª sala)
+local function tabelaDaSala(pesos, numero: number)
+	local filtrada = {}
+	for tipo, peso in pesos do
+		local def = Inimigos.TIPOS[tipo]
+		if def and numero >= (def.salaMinima or 1) then
+			filtrada[tipo] = peso
+		end
+	end
+	return filtrada
+end
+
 local function sortearElite(run, numero: number): string?
 	local chance = math.min(Config.CHANCE_ELITE_BASE + numero * Config.CHANCE_ELITE_POR_SALA, Config.CHANCE_ELITE_MAXIMA)
 	if numero >= 2 and run.rng:NextNumber() < chance then
@@ -50501,16 +50935,17 @@ local function salaDeCombate(run, tipo: string): boolean
 		local chefe = Inimigos.TIPOS[sala.tema.chefe]
 		run:enviarTodos("introChefe", { nome = chefe.nome, titulo = chefe.titulo or "" })
 		task.wait(2)
-		run:invocar(sala.tema.chefe, sala.origem + Vector3.new(0, 0, sala.comprimento / 5), nil)
+		run:invocar(sala.tema.chefe, sala.origem + Vector3.new(0, 0, sala.comprimento / 6), nil)
 		terminouDeInvocar = true
 	else
-		local total = math.min(5 + math.floor(numero * 0.9) + (jogadores - 1) * 3, 34)
-		local maximoVivos = math.min(6 + numero // 3 + (jogadores - 1) * 2, 15)
+		-- salas maiores: mais inimigos, chegando em ondas
+		local total = math.min(7 + math.floor(numero * 1.1) + (jogadores - 1) * 4, 42)
+		local maximoVivos = math.min(8 + numero // 3 + (jogadores - 1) * 2, 18)
 		task.spawn(function()
 			local criados = 0
 			while run.ativa and run.sala == sala and criados < total do
 				if run:quantidadeInimigos() + run.inimigosPendentes < maximoVivos then
-					local tipoInimigo = sortearDaTabela(run.rng, sala.tema.inimigos)
+					local tipoInimigo = sortearDaTabela(run.rng, tabelaDaSala(sala.tema.inimigos, numero))
 					local grupo = Inimigos.TIPOS[tipoInimigo].grupo or 1
 					local base = Masmorra.posicaoInimigo(sala, run.rng)
 					for g = 1, grupo do
@@ -51933,6 +52368,17 @@ local function prepararArma(e)
 	table.insert(e.detalhes, esfera)
 end
 
+-- Tempo da animação: nos golpes, a preparação é esticada (o golpe demora mais para sair,
+-- com mais peso) e o resto (o corte e a volta) segue no ritmo normal
+local function tempoAnimado(a, tau: number): number
+	local preparo = a.preparo
+	if not preparo then
+		return tau
+	end
+	local fimPreparo = preparo.base * preparo.fator
+	return if tau < fimPreparo then tau / preparo.fator else tau - (fimPreparo - preparo.base)
+end
+
 local function atualizarArma(e, agora: number)
 	prepararArma(e)
 	if not e.arma then
@@ -52018,7 +52464,7 @@ local function atualizarArma(e, agora: number)
 		-- "trilha" = true (o tempo todo) ou { início, fim } (só durante o corte)
 		local ligada = false
 		if acao and acao.def.trilha and acao.soltando == nil then
-			local tau = agora - acao.inicio
+			local tau = tempoAnimado(acao, agora - acao.inicio)
 			local janela = acao.def.trilha
 			ligada = if type(janela) == "table" then tau >= janela[1] and tau <= janela[2] else true
 		end
@@ -52167,7 +52613,7 @@ local function pesoDaAcao(a, agora: number): (number, number)
 			peso *= math.max(0, resto / saida)
 		end
 	end
-	return peso, tau
+	return peso, tempoAnimado(a, tau)
 end
 
 local function poseDaAcao(a, tau: number)
@@ -52459,6 +52905,14 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 		local combo = math.clamp(dados.combo or 1, 1, 3)
 		sonsDoAtaque(personagem, classe, combo)
 		comecar(e, acoes["ataque" .. combo], dados)
+		-- preparação mais longa (peso do golpe): estica só o começo da animação
+		local ataqueDef = Classes.obter(classe).ataque
+		local base = ataqueDef.impactoBase and ataqueDef.impactoBase[combo] or 0
+		local fator = ataqueDef.preparoFator or 1
+		if e.acao and base > 0 and fator > 1 then
+			e.acao.preparo = { base = base, fator = fator }
+			e.acao.duracao += base * (fator - 1)
+		end
 		if classe == "arqueiro" then
 			local impacto = Classes.obter(classe).ataque.impacto
 			disparoDoArco(e, if impacto then impacto[combo] or 0 else 0, combo == 3, if combo == 3 then 0.3 else 0.55)
@@ -54514,6 +54968,7 @@ local mostrouClasses = false
 local teclasCarregadas = false
 
 local function voltarAoLobby()
+	Vfx.limparFase2()
 	Estado.modo = "lobby"
 	Estado.stats = nil
 	Estado.cartas = {}
@@ -54561,6 +55016,7 @@ local manipuladores = {
 		Hud.transicao(true)
 	end,
 	sala = function(dados)
+		Vfx.limparFase2() -- a cor da 2ª fase do chefe não passa para a próxima sala
 		Estado.sala = dados
 		Ambiente.masmorra(dados.tema)
 		Hud.sala(dados)
@@ -56485,6 +56941,130 @@ function Modelos.ogro()
 		P("bracoD", "canto", V(0.3, 0.6, 0.3), V(2.2, 3.4, -4.4), C(150, 150, 156), { mat = METAL, rot = R(0, 0, 90) }),
 	})
 	return { estilo = "bipede", ossos = ossos, pecas = p, luzes = {}, efeitos = {}, cor = pele, ritmo = 0.7 }
+end
+
+------------------------------------------------------------------------
+-- Suporte: curandeiro, guardião do escudo e porta-estandarte
+------------------------------------------------------------------------
+
+-- Acólito Necromante: esqueleto de túnica e capuz, cajado com crânio verde que cura aliados
+function Modelos.acolito()
+	local verde = C(110, 255, 150)
+	local tunica = C(40, 46, 44)
+	local m = esqueleto(verde)
+	juntar(m.pecas, {
+		-- túnica longa até os pés e capuz
+		P("corpo", "bloco", V(1.9, 2.6, 1.2), V(0, 3.6, 0), tunica, { mat = TECIDO }),
+		P("pernaE", "bloco", V(0.95, 2.6, 1.15), V(-0.45, 1.35, 0), tunica:Lerp(ESCURO, 0.2), { mat = TECIDO }),
+		P("pernaD", "bloco", V(0.95, 2.6, 1.15), V(0.45, 1.35, 0), tunica:Lerp(ESCURO, 0.2), { mat = TECIDO }),
+		P("cabeca", "elipse", V(1.6, 1.6, 1.7), V(0, 5.8, 0.15), tunica, { mat = TECIDO }),
+		P("cabeca", "canto", V(1.2, 0.9, 0.9), V(0, 6.6, 0.45), tunica, { mat = TECIDO, rot = R(0, 180, 0) }),
+		-- faixa e runas verdes
+		P("corpo", "bloco", V(0.4, 2.4, 0.1), V(0, 3.8, -0.62), verde, { neon = true, transp = 0.2 }),
+		P("corpo", "bloco", V(2, 0.25, 1.25), V(0, 3.1, 0), C(70, 50, 30), { mat = TECIDO }),
+		-- cajado com crânio e cristal
+		P("bracoD", "cilindro", V(5.4, 0.22, 0.22), V(1.05, 3.4, -0.35), C(70, 56, 40), { rot = EM_PE, mat = MADEIRA }),
+		P("bracoD", "elipse", V(0.7, 0.75, 0.75), V(1.05, 6.25, -0.35), OSSO),
+		P("bracoD", "bola", V(0.18, 0.18, 0.18), V(0.92, 6.3, -0.7), verde, { neon = true, olho = true }),
+		P("bracoD", "bola", V(0.18, 0.18, 0.18), V(1.18, 6.3, -0.7), verde, { neon = true, olho = true }),
+		P("bracoD", "canto", V(0.35, 1, 0.35), V(1.05, 6.95, -0.35), verde, { neon = true, transp = 0.1 }),
+	})
+	m.luzes = {
+		{ osso = "bracoD", pos = V(1.05, 6.6, -0.35), cor = verde, alcance = 12, brilho = 1.8 },
+		{ osso = "cabeca", pos = V(0, 5.7, -0.7), cor = verde, alcance = 6, brilho = 1 },
+	}
+	m.efeitos = { { osso = "bracoD", pos = V(1.05, 6.6, -0.35), tipo = "alma", cor = verde } }
+	m.curvado = true
+	m.cor = tunica
+	return m
+end
+
+-- Guardião Rúnico: armadura de pedra com um escudo-torre cheio de runas azuis
+function Modelos.guardiao()
+	local pedra = C(96, 100, 112)
+	local pedraEscura = C(62, 64, 74)
+	local runa = C(110, 190, 255)
+	local ossos = {
+		corpo = osso("raiz", V(0, 3.4, 0)),
+		cabeca = osso("corpo", V(0, 5.9, 0)),
+		bracoE = osso("corpo", V(-1.75, 5.5, 0)),
+		bracoD = osso("corpo", V(1.75, 5.5, 0)),
+		pernaE = osso("raiz", V(-0.7, 3.4, 0)),
+		pernaD = osso("raiz", V(0.7, 3.4, 0)),
+	}
+	local p = {
+		P("corpo", "bloco", V(2.8, 2.4, 1.8), V(0, 4.8, 0), pedra, { mat = PEDRA }),
+		P("corpo", "bloco", V(2.2, 0.8, 1.5), V(0, 3.4, 0), pedraEscura, { mat = PEDRA }),
+		P("corpo", "bloco", V(0.9, 0.9, 0.12), V(0, 5, -0.92), runa, { neon = true, rot = R(0, 0, 45) }),
+		P("corpo", "bloco", V(0.4, 0.4, 0.14), V(0, 5, -0.95), C(230, 245, 255), { neon = true, rot = R(0, 0, 45) }),
+		P("cabeca", "bloco", V(1.3, 1.2, 1.3), V(0, 6.5, 0), pedra, { mat = PEDRA }),
+		P("cabeca", "bloco", V(1, 0.16, 0.1), V(0, 6.55, -0.66), runa, { neon = true, olho = true }),
+		P("cabeca", "canto", V(0.4, 1, 0.5), V(-0.5, 7.4, 0), pedraEscura, { mat = PEDRA, rot = R(0, 90, 15) }),
+		P("cabeca", "canto", V(0.4, 1, 0.5), V(0.5, 7.4, 0), pedraEscura, { mat = PEDRA, rot = R(0, -90, -15) }),
+	}
+	for _, lado in { -1, 1 } do
+		local braco = if lado < 0 then "bracoE" else "bracoD"
+		local perna = if lado < 0 then "pernaE" else "pernaD"
+		juntar(p, {
+			P(braco, "elipse", V(1.6, 1.1, 1.7), V(lado * 1.8, 5.8, 0), pedraEscura, { mat = PEDRA }),
+			P(braco, "bloco", V(0.95, 1.6, 0.95), V(lado * 1.8, 4.6, 0), pedra, { mat = PEDRA }),
+			P(braco, "bloco", V(1.1, 1.3, 1.1), V(lado * 1.8, 3.4, 0), pedraEscura, { mat = PEDRA }),
+			P(perna, "bloco", V(1.1, 1.7, 1.1), V(lado * 0.7, 2.5, 0), pedra, { mat = PEDRA }),
+			P(perna, "bloco", V(1.2, 1.6, 1.3), V(lado * 0.7, 0.85, -0.1), pedraEscura, { mat = PEDRA }),
+		})
+	end
+	-- escudo-torre no braço esquerdo, com runas acesas
+	juntar(p, {
+		P("bracoE", "bloco", V(0.5, 5.2, 3), V(-2.6, 3.9, -0.8), pedra:Lerp(ESCURO, 0.1), { mat = PEDRA }),
+		P("bracoE", "bloco", V(0.56, 5.4, 0.3), V(-2.6, 3.9, -2.35), pedraEscura, { mat = PEDRA }),
+		P("bracoE", "bloco", V(0.56, 5.4, 0.3), V(-2.6, 3.9, 0.75), pedraEscura, { mat = PEDRA }),
+		P("bracoE", "bloco", V(0.58, 0.25, 2), V(-2.65, 5.1, -0.8), runa, { neon = true }),
+		P("bracoE", "bloco", V(0.58, 2.6, 0.25), V(-2.65, 3.9, -0.8), runa, { neon = true }),
+		P("bracoE", "bloco", V(0.58, 0.25, 2), V(-2.65, 2.7, -0.8), runa, { neon = true }),
+		-- martelo de pedra
+		P("bracoD", "bloco", V(0.3, 0.3, 3), V(1.8, 2.8, -1.2), C(80, 60, 44), { mat = MADEIRA }),
+		P("bracoD", "bloco", V(1.3, 1, 1.4), V(1.8, 2.8, -2.8), pedraEscura, { mat = PEDRA }),
+	})
+	return {
+		estilo = "bipede",
+		ossos = ossos,
+		pecas = p,
+		luzes = {
+			{ osso = "corpo", pos = V(0, 5, -1.1), cor = runa, alcance = 10, brilho = 1.4 },
+			{ osso = "bracoE", pos = V(-2.9, 3.9, -0.8), cor = runa, alcance = 9, brilho = 1.2 },
+		},
+		efeitos = { { osso = "bracoE", pos = V(-2.9, 3.9, -0.8), tipo = "brilho", cor = runa } },
+		cor = pedra,
+		ritmo = 0.8,
+	}
+end
+
+-- Porta-Estandarte: kobold de guerra com bandeira vermelha nas costas e trombeta
+function Modelos.portaEstandarte()
+	local vermelho = C(200, 40, 40)
+	local m = kobold(C(150, 82, 60))
+	m.ossos.capa = osso("corpo", V(0, 3.6, 0.55))
+	juntar(m.pecas, {
+		-- elmo com chifres
+		P("cabeca", "elipse", V(1.35, 0.7, 1.4), V(0, 4.35, -0.05), C(110, 100, 96), { mat = METAL }),
+		P("cabeca", "canto", V(0.25, 0.8, 0.35), V(-0.7, 4.75, 0), C(230, 220, 200), { rot = R(0, 90, 30) }),
+		P("cabeca", "canto", V(0.25, 0.8, 0.35), V(0.7, 4.75, 0), C(230, 220, 200), { rot = R(0, -90, -30) }),
+		-- mastro e bandeira (balança com a "capa")
+		P("corpo", "cilindro", V(7, 0.18, 0.18), V(0, 4.6, 0.6), C(90, 62, 40), { rot = EM_PE, mat = MADEIRA }),
+		P("corpo", "bola", V(0.4, 0.4, 0.4), V(0, 8.15, 0.6), C(255, 200, 80), { neon = true }),
+		P("capa", "bloco", V(2.2, 2.6, 0.12), V(0, 6.6, 0.68), vermelho, { mat = TECIDO }),
+		P("capa", "bloco", V(0.9, 0.9, 0.14), V(0, 6.7, 0.66), C(255, 200, 80), { neon = true, rot = R(0, 0, 45) }),
+		P("capa", "canto", V(1.1, 0.9, 0.12), V(-0.55, 4.9, 0.68), vermelho, { mat = TECIDO, rot = R(0, 0, 180) }),
+		P("capa", "canto", V(1.1, 0.9, 0.12), V(0.55, 4.9, 0.68), vermelho, { mat = TECIDO, rot = R(0, 180, 180) }),
+		-- trombeta de guerra
+		P("bracoD", "cilindro", V(1.4, 0.32, 0.32), V(0.95, 2.2, -0.6), C(210, 170, 90), { mat = METAL, rot = R(0, 90, 0) }),
+		P("bracoD", "cilindro", V(0.3, 0.7, 0.7), V(0.95, 2.2, -1.35), C(210, 170, 90), { mat = METAL, rot = R(0, 90, 0) }),
+		-- tabardo
+		P("corpo", "bloco", V(1.3, 1.6, 0.12), V(0, 2.7, -0.55), vermelho, { mat = TECIDO }),
+	})
+	m.luzes = { { osso = "corpo", pos = V(0, 8.15, 0.6), cor = C(255, 190, 90), alcance = 12, brilho = 1.4 } }
+	m.efeitos = { { osso = "corpo", pos = V(0, 8.2, 0.6), tipo = "chama", cor = C(255, 170, 70) } }
+	return m
 end
 
 -- Modelo genérico caso surja um tipo sem aparência própria
@@ -62458,6 +63038,259 @@ function Vfx.auraSupremo(dados)
 end
 
 ------------------------------------------------------------------------
+-- Inimigos de suporte: cura, escudo de runas e grito de guerra
+------------------------------------------------------------------------
+
+local function raizDoModelo(modelo: any): BasePart?
+	if typeof(modelo) ~= "Instance" then
+		return nil
+	end
+	return modelo:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+-- Feixe curvo entre dois inimigos (some sozinho)
+local function feixeEntre(de: BasePart, para: BasePart, cor: Color3, largura: number, duracao: number, curva: number)
+	local a0 = Instance.new("Attachment")
+	a0.Position = Vector3.new(0, de.Size.Y / 2 + 0.5, 0)
+	a0.Parent = de
+	local a1 = Instance.new("Attachment")
+	a1.Parent = para
+	local feixe = Instance.new("Beam")
+	feixe.Attachment0 = a0
+	feixe.Attachment1 = a1
+	feixe.Width0 = largura * 0.6
+	feixe.Width1 = largura
+	feixe.CurveSize0 = curva
+	feixe.CurveSize1 = -curva
+	feixe.Segments = 20
+	feixe.Color = ColorSequence.new(BRANCO, cor)
+	feixe.LightEmission = 1
+	feixe.LightInfluence = 0
+	feixe.Brightness = 3
+	feixe.FaceCamera = true
+	feixe.TextureMode = Enum.TextureMode.Wrap
+	feixe.TextureLength = 3
+	feixe.TextureSpeed = 2.5
+	VfxKit.texturaFeixe(feixe, "raio", VfxKit.TEX.luz)
+	feixe.Parent = a0
+	Debris:AddItem(a0, duracao)
+	Debris:AddItem(a1, duracao)
+	return a1
+end
+
+-- Acólito canalizando a cura: feixe verde e luz espiralando no aliado
+function Vfx.canalizarCura(dados)
+	local de, para = raizDoModelo(dados.de), raizDoModelo(dados.para)
+	if not de or not para then
+		return
+	end
+	local verde = Color3.fromRGB(110, 255, 150)
+	local duracao = dados.duracao or 0.9
+	local ponta = feixeEntre(de, para, verde, 1.2, duracao + 0.15, 3)
+	VfxKit.continuo(ponta, "brasas", 40, { cor = verde, escala = 0.8, extra = { Acceleration = Vector3.new(0, 10, 0) } })
+	soltar(de.Position - Vector3.new(0, de.Size.Y / 2 + 1.6, 0), "circulo", { cor = verde, escala = 0.6, quantidade = 1, extra = { Lifetime = NumberRange.new(duracao, duracao) } })
+	Sons.tocar("reviver", { pos = de.Position, volume = 0.35, tom = 1.5 })
+end
+
+-- Aliado curado: "+vida" verde, luz subindo e um anel no chão
+function Vfx.curaInimigo(dados)
+	local verde = Color3.fromRGB(110, 255, 150)
+	local pos = dados.pos
+	textoFlutuante(pos + Vector3.new(0, (dados.altura or 4) + 0.6, 0), "+" .. tostring(dados.valor), verde, 34, { pop = 1.8 })
+	soltar(pos, "brasas", { cor = verde, quantidade = 26, escala = 1, extra = { Acceleration = Vector3.new(0, 14, 0) } })
+	soltar(pos, "clarao", { cor = verde, quantidade = 1, escala = 0.9 })
+	soltar(pos - Vector3.new(0, 2, 0), "anel", { cor = verde, quantidade = 1, escala = (dados.raio or 1.5) * 0.5 })
+end
+
+-- Suporte conjurando: círculo de runas no chão (aviso para o jogador correr até ele)
+function Vfx.telegrafoSuporte(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	if not raiz then
+		return
+	end
+	local duracao = dados.duracao or 0.8
+	local chao = raiz.Position - Vector3.new(0, raiz.Size.Y / 2 + 1.6, 0)
+	soltar(chao, "circulo", { cor = dados.cor, escala = 0.8, quantidade = 1, extra = { Lifetime = NumberRange.new(duracao, duracao), RotSpeed = NumberRange.new(120, 120) } })
+	soltar(raiz.Position, "vortice", { cor = dados.cor, escala = 1.2, quantidade = 2 })
+end
+
+-- Guardião erguendo escudos: feixes azuis até cada aliado e estalo de runas
+function Vfx.escudoInimigo(dados)
+	local de = raizDoModelo(dados.de)
+	local azul = Color3.fromRGB(110, 190, 255)
+	if de then
+		soltar(de.Position, "onda", { cor = azul, quantidade = 1, escala = 1.4, extra = { Orientation = Enum.ParticleOrientation.FacingCamera } })
+		Sons.tocar("escudo", { pos = de.Position, tom = 1.5, volume = 0.7 })
+	end
+	for _, modelo in dados.alvos or {} do
+		local alvo = raizDoModelo(modelo)
+		if alvo then
+			if de and alvo ~= de then
+				feixeEntre(de, alvo, azul, 0.8, 0.4, 2)
+			end
+			soltar(alvo.Position, "anel", { cor = azul, quantidade = 1, escala = 0.8, extra = { Orientation = Enum.ParticleOrientation.FacingCamera } })
+			soltar(alvo.Position, "faiscas", { cor = azul, quantidade = 10, escala = 0.7 })
+		end
+	end
+end
+
+-- Escudo de runas quebrou: estilhaços azuis
+function Vfx.escudoQuebrou(dados)
+	local azul = Color3.fromRGB(140, 210, 255)
+	local pos = dados.pos
+	for _ = 1, 10 do
+		local caco = parte(Vector3.new(0.5, 0.08, 0.7), CFrame.new(pos) * CFrame.Angles(math.random() * 6, math.random() * 6, 0), azul, 0.2, nil, Enum.Material.Glass)
+		caco.Anchored = false
+		caco.AssemblyLinearVelocity = Vector3.new(math.random(-22, 22), math.random(8, 24), math.random(-22, 22))
+		sumir({ caco }, 0.3, 0.5)
+	end
+	soltar(pos, "faiscas", { cor = azul, quantidade = 24, escala = 1 })
+	soltar(pos, "clarao", { cor = azul, quantidade = 1, escala = 0.8 })
+	Sons.tocar("geloQuebra", { pos = pos, tom = 0.8 })
+end
+
+-- Grito de guerra: onda vermelha que passa pelos aliados
+function Vfx.gritoGuerra(dados)
+	local vermelho = Color3.fromRGB(255, 70, 50)
+	local escala = (dados.raio or 30) / 12
+	soltar(dados.pos + Vector3.new(0, 0.3, 0), "onda", { cor = vermelho, quantidade = 1, escala = escala })
+	task.delay(0.12, function()
+		soltar(dados.pos + Vector3.new(0, 0.3, 0), "anel", { cor = vermelho, quantidade = 1, escala = escala * 0.8 })
+	end)
+	soltar(dados.pos + Vector3.new(0, 0.3, 0), "poeira", { cor = Color3.fromRGB(160, 120, 100), quantidade = 18, escala = 1.2 })
+	local raiz = raizDoModelo(dados.modelo)
+	if raiz then
+		soltar(raiz.Position + Vector3.new(0, 2, 0), "clarao", { cor = vermelho, quantidade = 1, escala = 1.2 })
+		textoFlutuante(raiz.Position + Vector3.new(0, 5, 0), "AAARGH!", vermelho, 34, { pop = 2 })
+	end
+	Sons.tocar("supremo", { pos = dados.pos, tom = 0.7, volume = 0.6 })
+	Vfx.tremerEm(dados.pos, 0.6, 0.2)
+end
+
+------------------------------------------------------------------------
+-- Chefes: transformação da 2ª fase e anéis de perigo
+------------------------------------------------------------------------
+
+local Lighting = game:GetService("Lighting")
+
+-- Tira a cor da 2ª fase da sala (chamado ao trocar de sala ou voltar ao acampamento)
+function Vfx.limparFase2()
+	local cc = Lighting:FindFirstChild("Fase2Chefe")
+	if cc then
+		cc:Destroy()
+	end
+end
+
+function Vfx.fase2(dados)
+	local raiz = raizDoModelo(dados.modelo)
+	local cor = dados.cor or Color3.fromRGB(255, 70, 50)
+	local duracao = dados.duracao or 2.8
+	local centro = dados.pos
+
+	-- a sala muda de cor e fica assim durante a 2ª fase
+	Vfx.limparFase2()
+	local cc = Instance.new("ColorCorrectionEffect")
+	cc.Name = "Fase2Chefe"
+	cc.Parent = Lighting
+	TweenService:Create(cc, TweenInfo.new(duracao, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		TintColor = cor:Lerp(BRANCO, 0.55),
+		Contrast = 0.15,
+		Saturation = 0.15,
+	}):Play()
+
+	-- círculo enorme sob o chefe e pilares de luz subindo em volta
+	soltar(centro + Vector3.new(0, 0.3, 0), "circulo", { cor = cor, escala = (dados.raio or 16) / 4, quantidade = 1, extra = { Lifetime = NumberRange.new(duracao + 0.3, duracao + 0.3), RotSpeed = NumberRange.new(60, 60) } })
+	for i = 1, 8 do
+		local angulo = i / 8 * math.pi * 2
+		local p = centro + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * (dados.raio or 16)
+		task.delay(i * duracao / 12, function()
+			local pilar = parte(Vector3.new(1.2, 0.2, 1.2), CFrame.new(p), cor, 0.2)
+			animar(pilar, 0.35, { Size = Vector3.new(0.8, 40, 0.8), CFrame = CFrame.new(p + Vector3.new(0, 20, 0)) })
+			sumir({ pilar }, 0.5, duracao - i * duracao / 12 + 0.1)
+			soltar(p, "faiscas", { cor = cor, quantidade = 8, escala = 0.8 })
+		end)
+	end
+
+	-- energia sendo sugada para o chefe, cada vez mais forte
+	if raiz then
+		local nucleo = Instance.new("Attachment")
+		nucleo.Parent = raiz
+		local vortice = VfxKit.continuo(nucleo, "vortice", 6, { cor = cor, escala = 2.5 })
+		local brasas = VfxKit.continuo(nucleo, "brasas", 40, {
+			cor = cor,
+			escala = 1.4,
+			extra = { Shape = Enum.ParticleEmitterShape.Sphere, ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface, ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward, Speed = NumberRange.new(18, 26) },
+		})
+		local inicio = os.clock()
+		task.spawn(function()
+			while os.clock() - inicio < duracao and raiz.Parent do
+				local t = (os.clock() - inicio) / duracao
+				vortice.Rate = 6 + 20 * t
+				brasas.Rate = 40 + 160 * t
+				soltar(raiz.Position, "implosao", { cor = cor, escala = 1.5 + t * 1.5, quantidade = 1 })
+				local minha = raizDoJogador(jogador)
+				if minha and (minha.Position - raiz.Position).Magnitude < 120 then
+					Vfx.tremer(0.3 + 1.4 * t, 0.35)
+				end
+				task.wait(0.3)
+			end
+			vortice.Enabled = false
+			brasas.Enabled = false
+			Debris:AddItem(nucleo, 1.5)
+			if raiz.Parent then
+				soltar(raiz.Position, "clarao", { cor = cor, escala = 4, quantidade = 1 })
+				soltar(raiz.Position, "faiscas", { cor = cor, escala = 2, quantidade = 60 })
+				soltar(raiz.Position, "fumaca", { cor = cor:Lerp(Color3.new(0, 0, 0), 0.6), escala = 2, quantidade = 20 })
+				soltar(centro + Vector3.new(0, 0.3, 0), "onda", { cor = cor, escala = (dados.raio or 16) / 7, quantidade = 1 })
+				task.delay(0.12, function()
+					soltar(centro + Vector3.new(0, 0.3, 0), "onda", { cor = BRANCO, escala = (dados.raio or 16) / 9, quantidade = 1 })
+				end)
+			end
+		end)
+		Sons.tocar("tempestade", { pos = raiz.Position, alcance = 260, tom = 0.8 })
+		Sons.tocar("carregar", { pos = raiz.Position, alcance = 200, tom = 0.45, volume = 1.5 })
+	end
+end
+
+-- Aviso de anel de perigo no chão (o jogador vê onde o anel vai explodir)
+function Vfx.anelPerigo(dados)
+	local centro = dados.pos + Vector3.new(0, 0.15, 0)
+	local cor = dados.cor or VERMELHO
+	local segmentos = math.clamp(math.floor(dados.raio * 1.3), 16, 72)
+	local faixa = anel(centro, dados.raio, cor, 0.55, segmentos, dados.largura * 2)
+	local borda1 = anel(centro + Vector3.new(0, 0.02, 0), dados.raio - dados.largura, cor, 0.1, segmentos, 0.25)
+	local borda2 = anel(centro + Vector3.new(0, 0.02, 0), dados.raio + dados.largura, cor, 0.1, segmentos, 0.25)
+	for _, p in faixa do
+		animar(p, dados.duracao, { Transparency = 0.2 }, Enum.EasingStyle.Linear)
+	end
+	local todas = {}
+	for _, lista in { faixa, borda1, borda2 } do
+		for _, p in lista do
+			table.insert(todas, p)
+		end
+	end
+	sumir(todas, 0.1, dados.duracao)
+end
+
+-- O anel explode: fogo/energia em toda a volta
+function Vfx.anelExplode(dados)
+	local centro = dados.pos
+	local cor = dados.cor or VERMELHO
+	local pontos = math.clamp(math.floor(dados.raio * 0.9), 10, 40)
+	for i = 1, pontos do
+		local angulo = i / pontos * math.pi * 2
+		local p = centro + Vector3.new(math.cos(angulo), 0, math.sin(angulo)) * dados.raio + Vector3.new(0, 0.5, 0)
+		soltar(p, "fogo", { cor = cor, quantidade = 2, escala = 0.8 })
+		if i % 2 == 0 then
+			soltar(p, "faiscas", { cor = cor, quantidade = 4, escala = 0.7 })
+			soltar(p, "poeira", { cor = Color3.fromRGB(140, 125, 110), quantidade = 1, escala = 0.8 })
+		end
+	end
+	Sons.tocar("explosao", { pos = centro, volume = 0.6, tom = 1.2, alcance = 220 })
+	Vfx.tremerEm(centro, 0.8, 0.15)
+end
+
+------------------------------------------------------------------------
 -- Entrada
 ------------------------------------------------------------------------
 
@@ -63180,8 +64013,20 @@ local function criarBarra(v)
 		Cor = if temNome then Color3.fromRGB(230, 150, 40) else UI.cores.vida,
 	})
 	barra.rotulo.Visible = false
+	-- escudo de runas por cima da barra (azul, encolhe conforme absorve)
+	local escudo = UI.criar("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = Color3.fromRGB(120, 200, 255),
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		ZIndex = 4,
+		Visible = false,
+		Parent = barra.quadro,
+	})
+	UI.cantos(escudo, 3)
 	v.placa = placa
 	v.barra = barra
+	v.barraEscudo = escudo
 end
 
 -- Toca um efeito pronto (ReplicatedStorage.EfeitosVFX) seguindo uma âncora do modelo; para sozinho
@@ -63419,6 +64264,60 @@ local function atualizarEstados(v)
 		e.Name = "Lento"
 	elseif not lento and gelo then
 		gelo:Destroy()
+	end
+
+	-- Escudo de runas (Guardião Rúnico): bolha azul em volta e faixa azul na barra de vida
+	local escudoAtual = modelo:GetAttribute("Escudo") or 0
+	local escudoMax = math.max(1, modelo:GetAttribute("EscudoMax") or 1)
+	if escudoAtual > 0 then
+		if not v.bolha then
+			local bolha = Instance.new("Part")
+			bolha.Name = "BolhaEscudo"
+			bolha.Shape = Enum.PartType.Ball
+			bolha.Material = Enum.Material.ForceField
+			bolha.Color = Color3.fromRGB(110, 190, 255)
+			bolha.Anchored = true
+			bolha.CanCollide = false
+			bolha.CanQuery = false
+			bolha.CanTouch = false
+			bolha.CastShadow = false
+			bolha.Transparency = 0.15
+			bolha.Size = Vector3.one * (v.raiz.Size.Magnitude * 1.4 + 2)
+			bolha.Parent = v.visual
+			v.bolha = bolha
+		end
+		v.bolha.Transparency = 0.15 + 0.5 * (1 - escudoAtual / escudoMax)
+		if v.barraEscudo then
+			v.barraEscudo.Visible = true
+			v.barraEscudo.Size = UDim2.fromScale(math.clamp(escudoAtual / escudoMax, 0, 1), 1)
+		end
+		if v.placa then
+			v.placa.Enabled = true
+		end
+	else
+		if v.bolha then
+			v.bolha:Destroy()
+			v.bolha = nil
+		end
+		if v.barraEscudo then
+			v.barraEscudo.Visible = false
+		end
+	end
+
+	-- Inspirado (grito do Porta-Estandarte): aura vermelha subindo
+	local inspirado = modelo:GetAttribute("Inspirado") == true
+	local aura = ancora:FindFirstChild("Inspirado")
+	if inspirado and not aura then
+		local e = emissor(ancora, Color3.fromRGB(255, 70, 50), {
+			Rate = 30,
+			Speed = NumberRange.new(2, 5),
+			Acceleration = Vector3.new(0, 8, 0),
+			Size = sequencia({ { 0, 0.6 * v.escala }, { 1, 0 } }),
+			Shape = Enum.ParticleEmitterShape.Sphere,
+		})
+		e.Name = "Inspirado"
+	elseif not inspirado and aura then
+		aura:Destroy()
 	end
 
 	-- Sangrando (Assassino): gotas de sangue caindo, mais forte com mais cortes
@@ -63807,6 +64706,10 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 			base = CFrame.new(p - Vector3.new(0, v.alturaRaiz, 0)) * raizCF.Rotation
 		end
 	end
+	-- bolha do escudo de runas acompanha o inimigo, girando devagar
+	if v.bolha then
+		v.bolha.CFrame = CFrame.new(base.Position + Vector3.new(0, v.alturaRaiz, 0)) * CFrame.Angles(0, agora * 0.8, 0)
+	end
 	-- recuo ao levar golpe: escorrega e inclina para longe de quem bateu
 	if v.recuo and v.impacto > 0.01 then
 		local forca = math.min(v.impacto, 1.8)
@@ -63974,7 +64877,7 @@ local function adicionar(modelo: Instance)
 		table.insert(v.conexoes, modelo:GetAttributeChangedSignal("Acao"):Connect(function()
 			atualizarAcao(v)
 		end))
-		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando" } do
+		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando", "Escudo", "Inspirado" } do
 			table.insert(v.conexoes, modelo:GetAttributeChangedSignal(atributo):Connect(function()
 				atualizarEstados(v)
 			end))

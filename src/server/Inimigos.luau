@@ -139,6 +139,36 @@ Inimigos.TIPOS = {
 		},
 	},
 
+	-- Suporte (aparecem em todos os temas, a partir da 2ª sala) -------------
+	-- Ficam atrás dos aliados e fortalecem o grupo: mate-os primeiro!
+	acolito = {
+		nome = "Acólito Necromante", raiz = V(2, 2, 1), quadril = 2, raio = 1.3, alturaBarra = 4.4,
+		vida = 46, dano = 9, velocidade = 13, ouro = 8, comportamento = "suporte", distancia = 24, salaMinima = 2,
+		ataques = {
+			-- canaliza um feixe e cura o aliado mais ferido (22% da vida dele)
+			{ tipo = "curar", alcance = 999, preparo = 0.9, recarga = 4.5, inicial = 2, raio = 34, cura = 0.22 },
+			{ tipo = "disparo", alcance = 36, preparo = 0.8, recarga = 3.2, projetil = "veneno", velocidade = 40 },
+		},
+	},
+	guardiao = {
+		nome = "Guardião Rúnico", raiz = V(3, 3.4, 2), quadril = 2.2, raio = 1.9, alturaBarra = 6.2,
+		vida = 110, dano = 15, velocidade = 11, ouro = 12, armadura = 0.2, comportamento = "suporte", distancia = 14, salaMinima = 2,
+		ataques = {
+			-- ergue escudos de runas em até 4 aliados (absorvem 35% da vida deles por 7s)
+			{ tipo = "escudo", alcance = 999, preparo = 0.8, recarga = 9, inicial = 3, raio = 28, escudo = 0.35, duracao = 7, maximo = 4 },
+			{ tipo = "golpe", alcance = 7, arco = 120, preparo = 0.7, recarga = 1.8, mult = 1.1 },
+		},
+	},
+	portaEstandarte = {
+		nome = "Porta-Estandarte", raiz = V(2, 1.8, 1.2), quadril = 1.4, raio = 1.4, alturaBarra = 5.2,
+		vida = 58, dano = 11, velocidade = 15, ouro = 9, comportamento = "suporte", distancia = 18, salaMinima = 2,
+		ataques = {
+			-- grito de guerra: aliados por perto ficam 35% mais rápidos e atacam mais vezes por 6s
+			{ tipo = "grito", alcance = 999, preparo = 0.7, recarga = 10, inicial = 2.5, raio = 30, duracao = 6 },
+			{ tipo = "golpe", alcance = 6, arco = 100, preparo = 0.5, recarga = 1.4 },
+		},
+	},
+
 	-- Chefes ---------------------------------------------------------------
 	reiEsqueleto = {
 		nome = "Rei Esqueleto", titulo = "Senhor do Calabouço", chefe = true, pesado = true,
@@ -151,10 +181,16 @@ Inimigos.TIPOS = {
 			{ tipo = "golpe", alcance = 12, arco = 110, preparo = 0.85, recarga = 2.2, mult = 1.3 },
 		},
 		fase2 = {
-			anuncio = "O Rei Esqueleto se enfurece!",
+			anuncio = "O Rei Esqueleto se enfurece! Ossos voam pela sala!",
+			cor = Color3.fromRGB(255, 70, 50),
 			velocidade = 1.3,
 			recarga = 0.7,
-			ataques = { { tipo = "invocar", recarga = 14, inicial = 1, preparo = 1, invocado = "esqueletoArqueiro", quantidade = 2, maxVivos = 12 } },
+			ataques = {
+				{ tipo = "invocar", recarga = 30, inicial = 1, preparo = 1, invocado = "guardiao", quantidade = 1, maxVivos = 14 },
+				{ tipo = "espiral", recarga = 11, inicial = 3, preparo = 0.9, projetil = "flechaOssea", quantidade = 12, ondas = 5, intervalo = 0.32, giro = 0.22, velocidade = 32, mult = 0.7 },
+				{ tipo = "anel", recarga = 13, inicial = 8, preparo = 0.8, aneis = 3, largura = 4, entre = 0.75, mult = 1.2 },
+				{ tipo = "invocar", recarga = 14, inicial = 5, preparo = 1, invocado = "esqueletoArqueiro", quantidade = 2, maxVivos = 12 },
+			},
 		},
 	},
 	rainhaAranha = {
@@ -168,7 +204,17 @@ Inimigos.TIPOS = {
 			{ tipo = "disparo", alcance = 45, preparo = 0.7, recarga = 3.5, projetil = "veneno", velocidade = 45, quantidade = 5, espalhamento = 14 },
 			{ tipo = "golpe", alcance = 9, arco = 120, preparo = 0.7, recarga = 1.8 },
 		},
-		fase2 = { anuncio = "A Rainha Aranha protege sua ninhada!", velocidade = 1.25, recarga = 0.75 },
+		fase2 = {
+			anuncio = "A Rainha Aranha protege sua ninhada! A caverna se enche de teias!",
+			cor = Color3.fromRGB(150, 255, 90),
+			velocidade = 1.25,
+			recarga = 0.75,
+			ataques = {
+				{ tipo = "espiral", recarga = 10, inicial = 3, preparo = 0.8, projetil = "veneno", quantidade = 10, ondas = 4, intervalo = 0.4, giro = -0.3, velocidade = 34, mult = 0.7 },
+				{ tipo = "area", recarga = 8, inicial = 6, preparo = 0.6, quantidade = 7, raio = 7, atraso = 1.2, mult = 1, visual = "teia", efeito = "lento" },
+				{ tipo = "invocar", recarga = 16, inicial = 9, preparo = 0.9, invocado = "acolito", quantidade = 1, maxVivos = 12 },
+			},
+		},
 	},
 	lich = {
 		nome = "Lich Gélido", titulo = "Guardião da Cripta", chefe = true, comportamento = "flutuar", distancia = 22,
@@ -182,9 +228,15 @@ Inimigos.TIPOS = {
 			{ tipo = "disparo", alcance = 50, preparo = 0.5, recarga = 1.6, projetil = "gelo", velocidade = 50, quantidade = 3, espalhamento = 12 },
 		},
 		fase2 = {
-			anuncio = "O Lich invoca o inverno eterno!",
+			anuncio = "O Lich invoca o inverno eterno! Seus acólitos o protegem!",
+			cor = Color3.fromRGB(120, 200, 255),
 			recarga = 0.7,
-			ataques = { { tipo = "golpe", alcance = 14, arco = 360, preparo = 1.2, recarga = 10, inicial = 2, mult = 1.6, efeito = "lento" } },
+			ataques = {
+				{ tipo = "invocar", recarga = 20, inicial = 1, preparo = 1, invocado = "acolito", quantidade = 2, maxVivos = 12 },
+				{ tipo = "anel", recarga = 11, inicial = 4, preparo = 0.9, aneis = 4, largura = 3.5, entre = 0.6, mult = 1.1, efeito = "lento" },
+				{ tipo = "espiral", recarga = 12, inicial = 8, preparo = 0.9, projetil = "gelo", quantidade = 14, ondas = 4, intervalo = 0.35, giro = 0.2, velocidade = 30, mult = 0.7, efeito = "lento" },
+				{ tipo = "golpe", alcance = 14, arco = 360, preparo = 1.2, recarga = 10, inicial = 12, mult = 1.6, efeito = "lento" },
+			},
 		},
 	},
 	senhorChamas = {
@@ -198,10 +250,16 @@ Inimigos.TIPOS = {
 			{ tipo = "golpe", alcance = 15, arco = 110, preparo = 1, recarga = 2.6, mult = 1.5, efeito = "queimar" },
 		},
 		fase2 = {
-			anuncio = "O Senhor das Chamas desperta a fornalha!",
+			anuncio = "O Senhor das Chamas desperta a fornalha! O chão vira lava!",
+			cor = Color3.fromRGB(255, 110, 30),
 			velocidade = 1.2,
 			recarga = 0.7,
-			ataques = { { tipo = "golpe", alcance = 16, arco = 360, preparo = 1.3, recarga = 11, inicial = 2, mult = 1.6, efeito = "queimar" } },
+			ataques = {
+				{ tipo = "anel", recarga = 10, inicial = 3, preparo = 0.9, aneis = 4, largura = 4.5, entre = 0.65, mult = 1.3, efeito = "queimar" },
+				{ tipo = "espiral", recarga = 12, inicial = 7, preparo = 1, projetil = "fogo", quantidade = 12, ondas = 6, intervalo = 0.3, giro = 0.25, velocidade = 32, mult = 0.7 },
+				{ tipo = "area", recarga = 9, inicial = 11, preparo = 0.8, quantidade = 8, raio = 7, atraso = 1.3, mult = 1.3, visual = "meteoro", efeito = "queimar" },
+				{ tipo = "invocar", recarga = 24, inicial = 14, preparo = 1, invocado = "portaEstandarte", quantidade = 1, maxVivos = 10 },
+			},
 		},
 	},
 }
@@ -787,6 +845,216 @@ local function ataqueTeleporte(run, inimigo, ataque, agora: number): boolean
 	return true
 end
 
+------------------------------------------------------------------------
+-- Ataques da 2ª fase dos chefes: espiral de projéteis e anéis de perigo
+------------------------------------------------------------------------
+
+-- Várias ondas de projéteis em todas as direções, cada onda girada um pouco (espiral)
+local function ataqueEspiral(run, inimigo, ataque, agora: number): boolean
+	local preparo = ataque.preparo * inimigo.recargaMult
+	local ondas = ataque.ondas or 4
+	local intervalo = ataque.intervalo or 0.35
+	parar(inimigo)
+	definirAcao(inimigo, "conjurar")
+	inimigo.ocupadoAte = agora + preparo + ondas * intervalo + 0.3
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = noChao(run, inimigo.raiz.Position), raio = inimigo.raio + 4, duracao = preparo, chefe = true })
+	task.delay(preparo, function()
+		local giro = math.random() * math.pi
+		for _ = 1, ondas do
+			if not podeContinuar(run, inimigo) then
+				return
+			end
+			definirAcao(inimigo, "disparo")
+			local origem = inimigo.raiz.Position
+			local lista = {}
+			local quantidade = ataque.quantidade or 10
+			for i = 1, quantidade do
+				local angulo = giro + i * (math.pi * 2 / quantidade)
+				local direcao = Vector3.new(math.sin(angulo), 0, math.cos(angulo))
+				table.insert(lista, {
+					lado = "inimigo",
+					tipo = ataque.projetil,
+					pos = origem + direcao * (inimigo.raio + 1),
+					dir = direcao,
+					velocidade = ataque.velocidade or 32,
+					alcance = 80,
+					raio = 1.2,
+					aoAcertar = function(estado, _, projetil)
+						local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+						opcoes.origem = projetil.pos - projetil.dir * 4
+						Combate.danoAoJogador(run, estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
+					end,
+				})
+			end
+			Projeteis.disparar(run, lista)
+			giro += ataque.giro or 0.25
+			task.wait(intervalo)
+		end
+		if inimigo.vivo then
+			definirAcao(inimigo, "")
+		end
+	end)
+	return true
+end
+
+-- Anéis de perigo que saem do chefe, um depois do outro: fique entre eles ou pule por cima
+local function ataqueAnel(run, inimigo, ataque, agora: number): boolean
+	local preparo = ataque.preparo * inimigo.recargaMult
+	local aneis = ataque.aneis or 3
+	local largura = ataque.largura or 4
+	local entre = ataque.entre or 0.7
+	local centro = noChao(run, inimigo.raiz.Position)
+	local primeiro = inimigo.raio + 3
+	local passo = largura * 2.6
+	parar(inimigo)
+	definirAcao(inimigo, "prepararGiro")
+	inimigo.ocupadoAte = agora + preparo + aneis * entre + 0.4
+	for i = 1, aneis do
+		local raio = primeiro + (i - 1) * passo
+		local atraso = preparo + (i - 1) * entre
+		Vfx.partida(run, "anelPerigo", { pos = centro, raio = raio, largura = largura, duracao = atraso, cor = corDoEfeito(ataque.efeito) })
+		task.delay(atraso, function()
+			if not inimigo.vivo or not run.ativa then
+				return
+			end
+			definirAcao(inimigo, "giro")
+			Vfx.partida(run, "anelExplode", { pos = centro, raio = raio, largura = largura, cor = corDoEfeito(ataque.efeito) })
+			for _, info in jogadoresAtingiveis(run) do
+				local distancia = planar(info.raiz.Position - centro).Magnitude
+				if math.abs(distancia - raio) <= largura then
+					local opcoes = opcoesDoEfeito(inimigo, ataque.efeito)
+					opcoes.origem = centro
+					Combate.danoAoJogador(run, info.estado, inimigo.dano * (ataque.mult or 1), inimigo, opcoes)
+				end
+			end
+		end)
+	end
+	task.delay(preparo + aneis * entre + 0.3, function()
+		if inimigo.vivo then
+			definirAcao(inimigo, "")
+		end
+	end)
+	return true
+end
+
+------------------------------------------------------------------------
+-- Suporte: cura, escudo e grito de guerra (não precisam de jogador no alcance)
+------------------------------------------------------------------------
+
+local function aliadosPerto(run, inimigo, raio: number)
+	local lista = {}
+	for outro in run.inimigos do
+		if outro.vivo and planar(outro.raiz.Position - inimigo.raiz.Position).Magnitude <= raio then
+			table.insert(lista, outro)
+		end
+	end
+	return lista
+end
+
+local function ataqueCurar(run, inimigo, ataque, agora: number): boolean
+	-- o aliado mais ferido (em proporção) que ainda não está quase cheio
+	local alvo, menor = nil, 0.8
+	for _, outro in aliadosPerto(run, inimigo, ataque.raio) do
+		local fracao = outro.vida / outro.vidaMax
+		if fracao < menor and (outro ~= inimigo or fracao < 0.5) then
+			alvo, menor = outro, fracao
+		end
+	end
+	if not alvo then
+		return false
+	end
+	local preparo = ataque.preparo * inimigo.recargaMult
+	parar(inimigo)
+	olharPara(inimigo, alvo.raiz.Position)
+	definirAcao(inimigo, "conjurar")
+	inimigo.ocupadoAte = agora + preparo + 0.3
+	Vfx.partida(run, "canalizarCura", { de = inimigo.modelo, para = alvo.modelo, duracao = preparo })
+	task.delay(preparo, function()
+		if not podeContinuar(run, inimigo) or not alvo.vivo then
+			return
+		end
+		local cura = math.floor(alvo.vidaMax * ataque.cura + 0.5)
+		alvo.vida = math.min(alvo.vidaMax, alvo.vida + cura)
+		alvo.modelo:SetAttribute("Vida", alvo.vida)
+		Vfx.partida(run, "curaInimigo", { pos = alvo.raiz.Position, altura = alvo.alturaBarra, valor = cura, raio = alvo.raio })
+		definirAcao(inimigo, "")
+	end)
+	return true
+end
+
+local function ataqueEscudo(run, inimigo, ataque, agora: number): boolean
+	local candidatos = {}
+	for _, outro in aliadosPerto(run, inimigo, ataque.raio) do
+		if (outro.escudo or 0) <= 0 then
+			table.insert(candidatos, outro)
+		end
+	end
+	if #candidatos == 0 then
+		return false
+	end
+	-- protege primeiro quem está mais perto dos jogadores (quem vai apanhar)
+	local jogadores = jogadoresAtingiveis(run)
+	local function perigo(outro): number
+		local menor = math.huge
+		for _, info in jogadores do
+			menor = math.min(menor, planar(info.raiz.Position - outro.raiz.Position).Magnitude)
+		end
+		return menor
+	end
+	table.sort(candidatos, function(a, b)
+		return perigo(a) < perigo(b)
+	end)
+	local preparo = ataque.preparo * inimigo.recargaMult
+	parar(inimigo)
+	definirAcao(inimigo, "conjurar")
+	inimigo.ocupadoAte = agora + preparo + 0.3
+	Vfx.partida(run, "telegrafoSuporte", { modelo = inimigo.modelo, cor = Color3.fromRGB(110, 190, 255), duracao = preparo })
+	task.delay(preparo, function()
+		if not podeContinuar(run, inimigo) then
+			return
+		end
+		local alvos = {}
+		for i = 1, math.min(ataque.maximo or 4, #candidatos) do
+			local outro = candidatos[i]
+			if outro.vivo then
+				outro.escudo = outro.vidaMax * ataque.escudo
+				outro.escudoAte = os.clock() + ataque.duracao
+				outro.modelo:SetAttribute("Escudo", outro.escudo)
+				outro.modelo:SetAttribute("EscudoMax", outro.escudo)
+				table.insert(alvos, outro.modelo)
+			end
+		end
+		Vfx.partida(run, "escudoInimigo", { de = inimigo.modelo, alvos = alvos })
+		definirAcao(inimigo, "")
+	end)
+	return true
+end
+
+local function ataqueGrito(run, inimigo, ataque, agora: number): boolean
+	local aliados = aliadosPerto(run, inimigo, ataque.raio)
+	if #aliados < 2 then
+		return false -- sozinho, não adianta gritar
+	end
+	local preparo = ataque.preparo * inimigo.recargaMult
+	parar(inimigo)
+	definirAcao(inimigo, "conjurar")
+	inimigo.ocupadoAte = agora + preparo + 0.4
+	Vfx.partida(run, "telegrafoSuporte", { modelo = inimigo.modelo, cor = Color3.fromRGB(255, 80, 60), duracao = preparo })
+	task.delay(preparo, function()
+		if not podeContinuar(run, inimigo) then
+			return
+		end
+		local fim = os.clock() + ataque.duracao
+		for _, outro in aliadosPerto(run, inimigo, ataque.raio) do
+			outro.inspiradoAte = fim
+			outro.modelo:SetAttribute("Inspirado", true)
+		end
+		Vfx.partida(run, "gritoGuerra", { pos = noChao(run, inimigo.raiz.Position), raio = ataque.raio, modelo = inimigo.modelo })
+		definirAcao(inimigo, "")
+	end)
+	return true
+end
+
 local function executarAtaque(run, inimigo, ataque, alvo, alvoPos: Vector3, agora: number): boolean
 	local tipo = ataque.tipo
 	if tipo == "golpe" then
@@ -807,6 +1075,16 @@ local function executarAtaque(run, inimigo, ataque, alvo, alvoPos: Vector3, agor
 		return ataqueArea(run, inimigo, ataque, agora)
 	elseif tipo == "teleporte" then
 		return ataqueTeleporte(run, inimigo, ataque, agora)
+	elseif tipo == "espiral" then
+		return ataqueEspiral(run, inimigo, ataque, agora)
+	elseif tipo == "anel" then
+		return ataqueAnel(run, inimigo, ataque, agora)
+	elseif tipo == "curar" then
+		return ataqueCurar(run, inimigo, ataque, agora)
+	elseif tipo == "escudo" then
+		return ataqueEscudo(run, inimigo, ataque, agora)
+	elseif tipo == "grito" then
+		return ataqueGrito(run, inimigo, ataque, agora)
 	end
 	return false
 end
@@ -877,20 +1155,44 @@ local function escolherAlvo(run, inimigo)
 	return melhor, melhorDistancia
 end
 
+-- Transformação: o chefe para, fica imune e junta poder por alguns segundos (a sala muda de cor),
+-- solta uma onda de choque e volta mais rápido, com ataques novos
+local TRANSFORMACAO = 2.8
+
 local function entrarNaFase2(run, inimigo)
 	local fase2 = inimigo.def.fase2
+	local agora = os.clock()
+	local cor = fase2.cor or Color3.fromRGB(255, 70, 50)
 	inimigo.fase2 = true
-	inimigo.velocidadeMult *= fase2.velocidade or 1
-	inimigo.recargaMult *= fase2.recarga or 1
-	if fase2.ataques then
-		for i, ataque in fase2.ataques do
-			table.insert(inimigo.ataques, i, ataque)
-			inimigo.prontoEm[ataque] = os.clock() + (ataque.inicial or 1)
-		end
-	end
+	inimigo.invulneravelAte = agora + TRANSFORMACAO
+	inimigo.ocupadoAte = agora + TRANSFORMACAO + 0.3
+	parar(inimigo)
+	definirAcao(inimigo, "conjurar")
 	inimigo.modelo:SetAttribute("Furioso", true)
+	inimigo.modelo:SetAttribute("Fase", 2)
 	run:anunciar("🔥 " .. (fase2.anuncio or (inimigo.def.nome .. " se enfurece!")), Color3.fromRGB(255, 90, 60))
-	Vfx.partida(run, "furia", { pos = inimigo.raiz.Position, tipo = inimigo.tipo })
+	local centro = noChao(run, inimigo.raiz.Position)
+	local raioOnda = inimigo.raio + 14
+	Vfx.partida(run, "fase2", { modelo = inimigo.modelo, pos = centro, cor = cor, duracao = TRANSFORMACAO, raio = raioOnda, tipo = inimigo.tipo })
+	Vfx.partida(run, "telegrafo", { forma = "circulo", pos = centro, raio = raioOnda, duracao = TRANSFORMACAO, chefe = true })
+
+	task.delay(TRANSFORMACAO, function()
+		if not inimigo.vivo or not run.ativa then
+			return
+		end
+		Vfx.partida(run, "furia", { pos = inimigo.raiz.Position, tipo = inimigo.tipo })
+		Vfx.partida(run, "explosao", { pos = inimigo.raiz.Position, raio = raioOnda, cor = cor, forte = true })
+		acertarJogadores(run, inimigo, inimigo.raiz.Position, nil, raioOnda, 360, 1.3, nil)
+		inimigo.velocidadeMult *= fase2.velocidade or 1
+		inimigo.recargaMult *= fase2.recarga or 1
+		if fase2.ataques then
+			for i, ataque in fase2.ataques do
+				table.insert(inimigo.ataques, i, ataque)
+				inimigo.prontoEm[ataque] = os.clock() + (ataque.inicial or 1)
+			end
+		end
+		definirAcao(inimigo, "")
+	end)
 end
 
 local function decidir(run, inimigo, agora: number)
@@ -906,6 +1208,15 @@ local function decidir(run, inimigo, agora: number)
 		inimigo.lentoFator = 1
 		inimigo.modelo:SetAttribute("Lento", false)
 	end
+	-- escudo de runas e grito de guerra acabam com o tempo
+	if (inimigo.escudo or 0) > 0 and agora >= (inimigo.escudoAte or 0) then
+		inimigo.escudo = 0
+		inimigo.modelo:SetAttribute("Escudo", 0)
+	end
+	local inspirado = agora < (inimigo.inspiradoAte or 0)
+	if not inspirado and inimigo.modelo:GetAttribute("Inspirado") then
+		inimigo.modelo:SetAttribute("Inspirado", false)
+	end
 
 	if inimigo.chefe and def.fase2 and not inimigo.fase2 and inimigo.vida <= inimigo.vidaMax * 0.5 then
 		entrarNaFase2(run, inimigo)
@@ -915,7 +1226,7 @@ local function decidir(run, inimigo, agora: number)
 		return
 	end
 
-	local velocidade = def.velocidade * inimigo.velocidadeMult
+	local velocidade = def.velocidade * inimigo.velocidadeMult * (if inspirado then 1.35 else 1)
 	if agora < inimigo.lentoAte then
 		velocidade *= inimigo.lentoFator
 	end
@@ -931,7 +1242,8 @@ local function decidir(run, inimigo, agora: number)
 	for _, ataque in inimigo.ataques do
 		if agora >= (inimigo.prontoEm[ataque] or 0) and distancia <= (ataque.alcance or 999) * inimigo.escala and distancia >= (ataque.minimo or 0) then
 			if executarAtaque(run, inimigo, ataque, info.estado, alvoPos, agora) then
-				inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult
+				local apressado = if inspirado and ataque.tipo ~= "grito" then 0.7 else 1
+				inimigo.prontoEm[ataque] = agora + (ataque.recarga or 2) * inimigo.recargaMult * apressado
 				return
 			else
 				inimigo.prontoEm[ataque] = agora + 2
@@ -949,6 +1261,35 @@ local function decidir(run, inimigo, agora: number)
 			end
 		end
 		if distancia > alcanceGolpe * 0.75 then
+			mover(run, inimigo, alvoPos)
+		else
+			parar(inimigo)
+			olharPara(inimigo, alvoPos)
+		end
+	elseif comportamento == "suporte" then
+		-- fica atrás dos aliados (do lado oposto aos jogadores), sem chegar perto de ninguém
+		local pos = inimigo.raiz.Position
+		local soma, quantos = Vector3.zero, 0
+		for outro in run.inimigos do
+			if outro ~= inimigo and outro.vivo and outro.def.comportamento ~= "suporte" then
+				soma += outro.raiz.Position
+				quantos += 1
+			end
+		end
+		local ideal = def.distancia or 20
+		if distancia < ideal - 6 then
+			-- jogador perto demais: recua
+			mover(run, inimigo, pos + unidade(pos - alvoPos, Vector3.new(1, 0, 0)) * 10)
+		elseif quantos > 0 then
+			local centro = soma / quantos
+			local atras = centro + unidade(centro - alvoPos, Vector3.new(0, 0, 1)) * 7
+			if planar(atras - pos).Magnitude > 4 then
+				mover(run, inimigo, atras)
+			else
+				parar(inimigo)
+				olharPara(inimigo, alvoPos)
+			end
+		elseif distancia > ideal + 4 then
 			mover(run, inimigo, alvoPos)
 		else
 			parar(inimigo)

@@ -91,7 +91,8 @@ function Combate.calcularStats(estado)
 		vidaMax = math.max(25, classe.vida + (melhorias.Vida or 0) * 15 + e("vidaPlana") + e("gigante") * 50),
 		dano = classe.dano * (1 + (melhorias.Forca or 0) * 0.08) * (1 + e("danoPct")),
 		velocidade = classe.velocidade * (1 + e("velocidadePct")) * (0.92 ^ e("gigante")),
-		intervalo = classe.intervalo / (1 + e("ataqueVelPct")),
+		-- intervalo entre golpes: o da classe + o tempo a mais de preparação
+		intervalo = classe.intervalo / (1 + e("ataqueVelPct")) + Classes.atrasoDoPreparo(classe, 1),
 		alcance = classe.alcance * (1 + e("alcancePct")) * (1 + 0.2 * e("gigante")),
 		critico = math.min((classe.critico or 0) + e("critico"), 0.75),
 		multCritico = 3 + e("multCritico"),
@@ -225,6 +226,9 @@ function Combate.aplicarVelocidade(estado)
 	end
 	if os.clock() < (estado.rapidoAte or 0) then
 		fator *= 1.3
+	end
+	if os.clock() < (estado.atacandoAte or 0) then
+		fator *= Config.VELOCIDADE_ATACANDO
 	end
 	humanoid.WalkSpeed = estado.stats.velocidade * fator
 end
@@ -377,6 +381,33 @@ function Combate.danoAoInimigo(run, inimigo, dano: number, estado, opcoes)
 		elseif inimigo.vida - dano <= inimigo.vidaMax * 0.2 then
 			dano = math.max(dano, math.ceil(inimigo.vida))
 			opcoes.cor = opcoes.cor or Color3.fromRGB(255, 60, 90)
+		end
+	end
+	-- chefe se transformando (troca de fase): não leva dano
+	if os.clock() < (inimigo.invulneravelAte or 0) then
+		Vfx.partida(run, "dano", {
+			pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra, 0),
+			valor = "IMUNE",
+			cor = Color3.fromRGB(200, 200, 210),
+		})
+		return
+	end
+	-- escudo de runas (Guardião Rúnico): absorve o dano antes da vida
+	if (inimigo.escudo or 0) > 0 then
+		local absorvido = math.min(inimigo.escudo, dano)
+		inimigo.escudo -= absorvido
+		dano -= absorvido
+		inimigo.modelo:SetAttribute("Escudo", inimigo.escudo)
+		Vfx.partida(run, "dano", {
+			pos = inimigo.raiz.Position + Vector3.new(0, inimigo.alturaBarra + 0.8, 0),
+			valor = math.floor(absorvido + 0.5),
+			cor = Color3.fromRGB(120, 200, 255),
+		})
+		if inimigo.escudo <= 0 then
+			Vfx.partida(run, "escudoQuebrou", { pos = inimigo.raiz.Position, raio = inimigo.raio })
+		end
+		if dano <= 0 then
+			return
 		end
 	end
 	inimigo.vida -= dano
@@ -961,8 +992,14 @@ function Combate.atacar(run, estado, direcao: any)
 	local mult = classe.ataque.combo[combo] or 1
 	animar(run, estado, "ataque", { combo = combo }, estado.player)
 
-	-- o golpe acontece quando a arma chega no alvo, no meio da animação
+	-- o golpe acontece quando a arma chega no alvo, no meio da animação; enquanto prepara,
+	-- o personagem finca o pé (anda bem devagar)
 	local impacto = classe.ataque.impacto and classe.ataque.impacto[combo] or 0
+	estado.atacandoAte = agora + impacto + 0.1
+	Combate.aplicarVelocidade(estado)
+	task.delay(impacto + 0.12, function()
+		Combate.aplicarVelocidade(estado)
+	end)
 	task.delay(impacto, function()
 		if not podeAgir(run, estado) or estado.defendendoDesde then
 			return

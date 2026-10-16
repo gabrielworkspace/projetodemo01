@@ -342,6 +342,18 @@ local function sortearDaTabela(rng: Random, pesos): string
 	return ultimo
 end
 
+-- Só os inimigos que já podem aparecer nesta sala (alguns esperam a 2ª sala)
+local function tabelaDaSala(pesos, numero: number)
+	local filtrada = {}
+	for tipo, peso in pesos do
+		local def = Inimigos.TIPOS[tipo]
+		if def and numero >= (def.salaMinima or 1) then
+			filtrada[tipo] = peso
+		end
+	end
+	return filtrada
+end
+
 local function sortearElite(run, numero: number): string?
 	local chance = math.min(Config.CHANCE_ELITE_BASE + numero * Config.CHANCE_ELITE_POR_SALA, Config.CHANCE_ELITE_MAXIMA)
 	if numero >= 2 and run.rng:NextNumber() < chance then
@@ -362,16 +374,17 @@ local function salaDeCombate(run, tipo: string): boolean
 		local chefe = Inimigos.TIPOS[sala.tema.chefe]
 		run:enviarTodos("introChefe", { nome = chefe.nome, titulo = chefe.titulo or "" })
 		task.wait(2)
-		run:invocar(sala.tema.chefe, sala.origem + Vector3.new(0, 0, sala.comprimento / 5), nil)
+		run:invocar(sala.tema.chefe, sala.origem + Vector3.new(0, 0, sala.comprimento / 6), nil)
 		terminouDeInvocar = true
 	else
-		local total = math.min(5 + math.floor(numero * 0.9) + (jogadores - 1) * 3, 34)
-		local maximoVivos = math.min(6 + numero // 3 + (jogadores - 1) * 2, 15)
+		-- salas maiores: mais inimigos, chegando em ondas
+		local total = math.min(7 + math.floor(numero * 1.1) + (jogadores - 1) * 4, 42)
+		local maximoVivos = math.min(8 + numero // 3 + (jogadores - 1) * 2, 18)
 		task.spawn(function()
 			local criados = 0
 			while run.ativa and run.sala == sala and criados < total do
 				if run:quantidadeInimigos() + run.inimigosPendentes < maximoVivos then
-					local tipoInimigo = sortearDaTabela(run.rng, sala.tema.inimigos)
+					local tipoInimigo = sortearDaTabela(run.rng, tabelaDaSala(sala.tema.inimigos, numero))
 					local grupo = Inimigos.TIPOS[tipoInimigo].grupo or 1
 					local base = Masmorra.posicaoInimigo(sala, run.rng)
 					for g = 1, grupo do

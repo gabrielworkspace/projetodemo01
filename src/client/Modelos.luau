@@ -833,6 +833,130 @@ function Modelos.ogro()
 	return { estilo = "bipede", ossos = ossos, pecas = p, luzes = {}, efeitos = {}, cor = pele, ritmo = 0.7 }
 end
 
+------------------------------------------------------------------------
+-- Suporte: curandeiro, guardião do escudo e porta-estandarte
+------------------------------------------------------------------------
+
+-- Acólito Necromante: esqueleto de túnica e capuz, cajado com crânio verde que cura aliados
+function Modelos.acolito()
+	local verde = C(110, 255, 150)
+	local tunica = C(40, 46, 44)
+	local m = esqueleto(verde)
+	juntar(m.pecas, {
+		-- túnica longa até os pés e capuz
+		P("corpo", "bloco", V(1.9, 2.6, 1.2), V(0, 3.6, 0), tunica, { mat = TECIDO }),
+		P("pernaE", "bloco", V(0.95, 2.6, 1.15), V(-0.45, 1.35, 0), tunica:Lerp(ESCURO, 0.2), { mat = TECIDO }),
+		P("pernaD", "bloco", V(0.95, 2.6, 1.15), V(0.45, 1.35, 0), tunica:Lerp(ESCURO, 0.2), { mat = TECIDO }),
+		P("cabeca", "elipse", V(1.6, 1.6, 1.7), V(0, 5.8, 0.15), tunica, { mat = TECIDO }),
+		P("cabeca", "canto", V(1.2, 0.9, 0.9), V(0, 6.6, 0.45), tunica, { mat = TECIDO, rot = R(0, 180, 0) }),
+		-- faixa e runas verdes
+		P("corpo", "bloco", V(0.4, 2.4, 0.1), V(0, 3.8, -0.62), verde, { neon = true, transp = 0.2 }),
+		P("corpo", "bloco", V(2, 0.25, 1.25), V(0, 3.1, 0), C(70, 50, 30), { mat = TECIDO }),
+		-- cajado com crânio e cristal
+		P("bracoD", "cilindro", V(5.4, 0.22, 0.22), V(1.05, 3.4, -0.35), C(70, 56, 40), { rot = EM_PE, mat = MADEIRA }),
+		P("bracoD", "elipse", V(0.7, 0.75, 0.75), V(1.05, 6.25, -0.35), OSSO),
+		P("bracoD", "bola", V(0.18, 0.18, 0.18), V(0.92, 6.3, -0.7), verde, { neon = true, olho = true }),
+		P("bracoD", "bola", V(0.18, 0.18, 0.18), V(1.18, 6.3, -0.7), verde, { neon = true, olho = true }),
+		P("bracoD", "canto", V(0.35, 1, 0.35), V(1.05, 6.95, -0.35), verde, { neon = true, transp = 0.1 }),
+	})
+	m.luzes = {
+		{ osso = "bracoD", pos = V(1.05, 6.6, -0.35), cor = verde, alcance = 12, brilho = 1.8 },
+		{ osso = "cabeca", pos = V(0, 5.7, -0.7), cor = verde, alcance = 6, brilho = 1 },
+	}
+	m.efeitos = { { osso = "bracoD", pos = V(1.05, 6.6, -0.35), tipo = "alma", cor = verde } }
+	m.curvado = true
+	m.cor = tunica
+	return m
+end
+
+-- Guardião Rúnico: armadura de pedra com um escudo-torre cheio de runas azuis
+function Modelos.guardiao()
+	local pedra = C(96, 100, 112)
+	local pedraEscura = C(62, 64, 74)
+	local runa = C(110, 190, 255)
+	local ossos = {
+		corpo = osso("raiz", V(0, 3.4, 0)),
+		cabeca = osso("corpo", V(0, 5.9, 0)),
+		bracoE = osso("corpo", V(-1.75, 5.5, 0)),
+		bracoD = osso("corpo", V(1.75, 5.5, 0)),
+		pernaE = osso("raiz", V(-0.7, 3.4, 0)),
+		pernaD = osso("raiz", V(0.7, 3.4, 0)),
+	}
+	local p = {
+		P("corpo", "bloco", V(2.8, 2.4, 1.8), V(0, 4.8, 0), pedra, { mat = PEDRA }),
+		P("corpo", "bloco", V(2.2, 0.8, 1.5), V(0, 3.4, 0), pedraEscura, { mat = PEDRA }),
+		P("corpo", "bloco", V(0.9, 0.9, 0.12), V(0, 5, -0.92), runa, { neon = true, rot = R(0, 0, 45) }),
+		P("corpo", "bloco", V(0.4, 0.4, 0.14), V(0, 5, -0.95), C(230, 245, 255), { neon = true, rot = R(0, 0, 45) }),
+		P("cabeca", "bloco", V(1.3, 1.2, 1.3), V(0, 6.5, 0), pedra, { mat = PEDRA }),
+		P("cabeca", "bloco", V(1, 0.16, 0.1), V(0, 6.55, -0.66), runa, { neon = true, olho = true }),
+		P("cabeca", "canto", V(0.4, 1, 0.5), V(-0.5, 7.4, 0), pedraEscura, { mat = PEDRA, rot = R(0, 90, 15) }),
+		P("cabeca", "canto", V(0.4, 1, 0.5), V(0.5, 7.4, 0), pedraEscura, { mat = PEDRA, rot = R(0, -90, -15) }),
+	}
+	for _, lado in { -1, 1 } do
+		local braco = if lado < 0 then "bracoE" else "bracoD"
+		local perna = if lado < 0 then "pernaE" else "pernaD"
+		juntar(p, {
+			P(braco, "elipse", V(1.6, 1.1, 1.7), V(lado * 1.8, 5.8, 0), pedraEscura, { mat = PEDRA }),
+			P(braco, "bloco", V(0.95, 1.6, 0.95), V(lado * 1.8, 4.6, 0), pedra, { mat = PEDRA }),
+			P(braco, "bloco", V(1.1, 1.3, 1.1), V(lado * 1.8, 3.4, 0), pedraEscura, { mat = PEDRA }),
+			P(perna, "bloco", V(1.1, 1.7, 1.1), V(lado * 0.7, 2.5, 0), pedra, { mat = PEDRA }),
+			P(perna, "bloco", V(1.2, 1.6, 1.3), V(lado * 0.7, 0.85, -0.1), pedraEscura, { mat = PEDRA }),
+		})
+	end
+	-- escudo-torre no braço esquerdo, com runas acesas
+	juntar(p, {
+		P("bracoE", "bloco", V(0.5, 5.2, 3), V(-2.6, 3.9, -0.8), pedra:Lerp(ESCURO, 0.1), { mat = PEDRA }),
+		P("bracoE", "bloco", V(0.56, 5.4, 0.3), V(-2.6, 3.9, -2.35), pedraEscura, { mat = PEDRA }),
+		P("bracoE", "bloco", V(0.56, 5.4, 0.3), V(-2.6, 3.9, 0.75), pedraEscura, { mat = PEDRA }),
+		P("bracoE", "bloco", V(0.58, 0.25, 2), V(-2.65, 5.1, -0.8), runa, { neon = true }),
+		P("bracoE", "bloco", V(0.58, 2.6, 0.25), V(-2.65, 3.9, -0.8), runa, { neon = true }),
+		P("bracoE", "bloco", V(0.58, 0.25, 2), V(-2.65, 2.7, -0.8), runa, { neon = true }),
+		-- martelo de pedra
+		P("bracoD", "bloco", V(0.3, 0.3, 3), V(1.8, 2.8, -1.2), C(80, 60, 44), { mat = MADEIRA }),
+		P("bracoD", "bloco", V(1.3, 1, 1.4), V(1.8, 2.8, -2.8), pedraEscura, { mat = PEDRA }),
+	})
+	return {
+		estilo = "bipede",
+		ossos = ossos,
+		pecas = p,
+		luzes = {
+			{ osso = "corpo", pos = V(0, 5, -1.1), cor = runa, alcance = 10, brilho = 1.4 },
+			{ osso = "bracoE", pos = V(-2.9, 3.9, -0.8), cor = runa, alcance = 9, brilho = 1.2 },
+		},
+		efeitos = { { osso = "bracoE", pos = V(-2.9, 3.9, -0.8), tipo = "brilho", cor = runa } },
+		cor = pedra,
+		ritmo = 0.8,
+	}
+end
+
+-- Porta-Estandarte: kobold de guerra com bandeira vermelha nas costas e trombeta
+function Modelos.portaEstandarte()
+	local vermelho = C(200, 40, 40)
+	local m = kobold(C(150, 82, 60))
+	m.ossos.capa = osso("corpo", V(0, 3.6, 0.55))
+	juntar(m.pecas, {
+		-- elmo com chifres
+		P("cabeca", "elipse", V(1.35, 0.7, 1.4), V(0, 4.35, -0.05), C(110, 100, 96), { mat = METAL }),
+		P("cabeca", "canto", V(0.25, 0.8, 0.35), V(-0.7, 4.75, 0), C(230, 220, 200), { rot = R(0, 90, 30) }),
+		P("cabeca", "canto", V(0.25, 0.8, 0.35), V(0.7, 4.75, 0), C(230, 220, 200), { rot = R(0, -90, -30) }),
+		-- mastro e bandeira (balança com a "capa")
+		P("corpo", "cilindro", V(7, 0.18, 0.18), V(0, 4.6, 0.6), C(90, 62, 40), { rot = EM_PE, mat = MADEIRA }),
+		P("corpo", "bola", V(0.4, 0.4, 0.4), V(0, 8.15, 0.6), C(255, 200, 80), { neon = true }),
+		P("capa", "bloco", V(2.2, 2.6, 0.12), V(0, 6.6, 0.68), vermelho, { mat = TECIDO }),
+		P("capa", "bloco", V(0.9, 0.9, 0.14), V(0, 6.7, 0.66), C(255, 200, 80), { neon = true, rot = R(0, 0, 45) }),
+		P("capa", "canto", V(1.1, 0.9, 0.12), V(-0.55, 4.9, 0.68), vermelho, { mat = TECIDO, rot = R(0, 0, 180) }),
+		P("capa", "canto", V(1.1, 0.9, 0.12), V(0.55, 4.9, 0.68), vermelho, { mat = TECIDO, rot = R(0, 180, 180) }),
+		-- trombeta de guerra
+		P("bracoD", "cilindro", V(1.4, 0.32, 0.32), V(0.95, 2.2, -0.6), C(210, 170, 90), { mat = METAL, rot = R(0, 90, 0) }),
+		P("bracoD", "cilindro", V(0.3, 0.7, 0.7), V(0.95, 2.2, -1.35), C(210, 170, 90), { mat = METAL, rot = R(0, 90, 0) }),
+		-- tabardo
+		P("corpo", "bloco", V(1.3, 1.6, 0.12), V(0, 2.7, -0.55), vermelho, { mat = TECIDO }),
+	})
+	m.luzes = { { osso = "corpo", pos = V(0, 8.15, 0.6), cor = C(255, 190, 90), alcance = 12, brilho = 1.4 } }
+	m.efeitos = { { osso = "corpo", pos = V(0, 8.2, 0.6), tipo = "chama", cor = C(255, 170, 70) } }
+	return m
+end
+
 -- Modelo genérico caso surja um tipo sem aparência própria
 function Modelos.padrao()
 	return gosma(C(200, 200, 200))

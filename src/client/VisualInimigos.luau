@@ -174,8 +174,20 @@ local function criarBarra(v)
 		Cor = if temNome then Color3.fromRGB(230, 150, 40) else UI.cores.vida,
 	})
 	barra.rotulo.Visible = false
+	-- escudo de runas por cima da barra (azul, encolhe conforme absorve)
+	local escudo = UI.criar("Frame", {
+		Size = UDim2.fromScale(0, 1),
+		BackgroundColor3 = Color3.fromRGB(120, 200, 255),
+		BackgroundTransparency = 0.1,
+		BorderSizePixel = 0,
+		ZIndex = 4,
+		Visible = false,
+		Parent = barra.quadro,
+	})
+	UI.cantos(escudo, 3)
 	v.placa = placa
 	v.barra = barra
+	v.barraEscudo = escudo
 end
 
 -- Toca um efeito pronto (ReplicatedStorage.EfeitosVFX) seguindo uma âncora do modelo; para sozinho
@@ -413,6 +425,60 @@ local function atualizarEstados(v)
 		e.Name = "Lento"
 	elseif not lento and gelo then
 		gelo:Destroy()
+	end
+
+	-- Escudo de runas (Guardião Rúnico): bolha azul em volta e faixa azul na barra de vida
+	local escudoAtual = modelo:GetAttribute("Escudo") or 0
+	local escudoMax = math.max(1, modelo:GetAttribute("EscudoMax") or 1)
+	if escudoAtual > 0 then
+		if not v.bolha then
+			local bolha = Instance.new("Part")
+			bolha.Name = "BolhaEscudo"
+			bolha.Shape = Enum.PartType.Ball
+			bolha.Material = Enum.Material.ForceField
+			bolha.Color = Color3.fromRGB(110, 190, 255)
+			bolha.Anchored = true
+			bolha.CanCollide = false
+			bolha.CanQuery = false
+			bolha.CanTouch = false
+			bolha.CastShadow = false
+			bolha.Transparency = 0.15
+			bolha.Size = Vector3.one * (v.raiz.Size.Magnitude * 1.4 + 2)
+			bolha.Parent = v.visual
+			v.bolha = bolha
+		end
+		v.bolha.Transparency = 0.15 + 0.5 * (1 - escudoAtual / escudoMax)
+		if v.barraEscudo then
+			v.barraEscudo.Visible = true
+			v.barraEscudo.Size = UDim2.fromScale(math.clamp(escudoAtual / escudoMax, 0, 1), 1)
+		end
+		if v.placa then
+			v.placa.Enabled = true
+		end
+	else
+		if v.bolha then
+			v.bolha:Destroy()
+			v.bolha = nil
+		end
+		if v.barraEscudo then
+			v.barraEscudo.Visible = false
+		end
+	end
+
+	-- Inspirado (grito do Porta-Estandarte): aura vermelha subindo
+	local inspirado = modelo:GetAttribute("Inspirado") == true
+	local aura = ancora:FindFirstChild("Inspirado")
+	if inspirado and not aura then
+		local e = emissor(ancora, Color3.fromRGB(255, 70, 50), {
+			Rate = 30,
+			Speed = NumberRange.new(2, 5),
+			Acceleration = Vector3.new(0, 8, 0),
+			Size = sequencia({ { 0, 0.6 * v.escala }, { 1, 0 } }),
+			Shape = Enum.ParticleEmitterShape.Sphere,
+		})
+		e.Name = "Inspirado"
+	elseif not inspirado and aura then
+		aura:Destroy()
 	end
 
 	-- Sangrando (Assassino): gotas de sangue caindo, mais forte com mais cortes
@@ -801,6 +867,10 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 			base = CFrame.new(p - Vector3.new(0, v.alturaRaiz, 0)) * raizCF.Rotation
 		end
 	end
+	-- bolha do escudo de runas acompanha o inimigo, girando devagar
+	if v.bolha then
+		v.bolha.CFrame = CFrame.new(base.Position + Vector3.new(0, v.alturaRaiz, 0)) * CFrame.Angles(0, agora * 0.8, 0)
+	end
 	-- recuo ao levar golpe: escorrega e inclina para longe de quem bateu
 	if v.recuo and v.impacto > 0.01 then
 		local forca = math.min(v.impacto, 1.8)
@@ -968,7 +1038,7 @@ local function adicionar(modelo: Instance)
 		table.insert(v.conexoes, modelo:GetAttributeChangedSignal("Acao"):Connect(function()
 			atualizarAcao(v)
 		end))
-		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando" } do
+		for _, atributo in { "Queimando", "Lento", "Atordoado", "Furioso", "Sangrando", "Escudo", "Inspirado" } do
 			table.insert(v.conexoes, modelo:GetAttributeChangedSignal(atributo):Connect(function()
 				atualizarEstados(v)
 			end))

@@ -73,6 +73,7 @@ local mostrouClasses = false
 local teclasCarregadas = false
 
 local function voltarAoLobby()
+	Vfx.limparFase2()
 	Estado.modo = "lobby"
 	Estado.stats = nil
 	Estado.cartas = {}
@@ -120,6 +121,7 @@ local manipuladores = {
 		Hud.transicao(true)
 	end,
 	sala = function(dados)
+		Vfx.limparFase2() -- a cor da 2ª fase do chefe não passa para a próxima sala
 		Estado.sala = dados
 		Ambiente.masmorra(dados.tema)
 		Hud.sala(dados)

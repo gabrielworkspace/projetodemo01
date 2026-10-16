@@ -39,6 +39,11 @@ Config.DANO_CARGA_MIN = 1.6 -- multiplicador de dano com carga mínima
 Config.DANO_CARGA_MAX = 3.2 -- multiplicador de dano com carga cheia
 Config.VELOCIDADE_CARREGANDO = 0.5 -- anda mais devagar enquanto carrega
 
+-- Peso dos golpes: a preparação (do clique até a arma chegar no alvo) fica mais longa.
+-- 1 = como antes; 1.8 = 80% mais tempo preparando. Cada classe pode ter o seu (ataque.preparo).
+Config.PREPARO_GOLPE = 1.7
+Config.VELOCIDADE_ATACANDO = 0.45 -- o personagem quase para enquanto prepara o golpe
+
 -- Defesa com escudo (Cavaleiro): segure F, o botão direito do mouse ou L2
 Config.DEFESA_REDUCAO = 0.75 -- golpes de frente perdem 75% do dano
 Config.DEFESA_ANGULO = 65 -- protege golpes vindos até 65° para cada lado da frente
@@ -104,7 +109,7 @@ Config.TEMAS = {
 	{
 		id = "calabouco",
 		nome = "Calabouço",
-		inimigos = { gosma = 4, esqueleto = 4, esqueletoArqueiro = 2.5, rato = 2 },
+		inimigos = { gosma = 4, esqueleto = 4, esqueletoArqueiro = 2.5, rato = 2, acolito = 1.3, guardiao = 0.9, portaEstandarte = 0.8 },
 		chefe = "reiEsqueleto",
 		chao = { material = Enum.Material.Cobblestone, cor = Color3.fromRGB(98, 94, 100) },
 		parede = { material = Enum.Material.Brick, cor = Color3.fromRGB(84, 74, 76) },
@@ -119,7 +124,7 @@ Config.TEMAS = {
 	{
 		id = "caverna",
 		nome = "Caverna Musgosa",
-		inimigos = { kobold = 4, aranha = 3, cogumelo = 2, xama = 2, gosma = 1.5 },
+		inimigos = { kobold = 4, aranha = 3, cogumelo = 2, xama = 2, gosma = 1.5, portaEstandarte = 1.4, acolito = 0.9, guardiao = 0.8 },
 		chefe = "rainhaAranha",
 		chao = { material = Enum.Material.Ground, cor = Color3.fromRGB(74, 84, 58) },
 		parede = { material = Enum.Material.Rock, cor = Color3.fromRGB(70, 78, 64) },
@@ -134,7 +139,7 @@ Config.TEMAS = {
 	{
 		id = "cripta",
 		nome = "Cripta Congelada",
-		inimigos = { carnical = 4, espectro = 3, cavaleiroMorto = 1.5, esqueleto = 1.5 },
+		inimigos = { carnical = 4, espectro = 3, cavaleiroMorto = 1.5, esqueleto = 1.5, acolito = 1.4, guardiao = 1.3, portaEstandarte = 0.8 },
 		chefe = "lich",
 		chao = { material = Enum.Material.Slate, cor = Color3.fromRGB(120, 140, 165) },
 		parede = { material = Enum.Material.Glacier, cor = Color3.fromRGB(130, 160, 200) },
@@ -149,7 +154,7 @@ Config.TEMAS = {
 	{
 		id = "fornalha",
 		nome = "Fornalha",
-		inimigos = { diabrete = 3.5, elementalFogo = 3, ogro = 1.5, carnical = 1 },
+		inimigos = { diabrete = 3.5, elementalFogo = 3, ogro = 1.5, carnical = 1, guardiao = 1.3, portaEstandarte = 1.3, acolito = 1 },
 		chefe = "senhorChamas",
 		chao = { material = Enum.Material.Basalt, cor = Color3.fromRGB(46, 38, 38) },
 		parede = { material = Enum.Material.CrackedLava, cor = Color3.fromRGB(96, 46, 34) },

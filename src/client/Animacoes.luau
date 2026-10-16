@@ -428,6 +428,17 @@ local function prepararArma(e)
 	table.insert(e.detalhes, esfera)
 end
 
+-- Tempo da animação: nos golpes, a preparação é esticada (o golpe demora mais para sair,
+-- com mais peso) e o resto (o corte e a volta) segue no ritmo normal
+local function tempoAnimado(a, tau: number): number
+	local preparo = a.preparo
+	if not preparo then
+		return tau
+	end
+	local fimPreparo = preparo.base * preparo.fator
+	return if tau < fimPreparo then tau / preparo.fator else tau - (fimPreparo - preparo.base)
+end
+
 local function atualizarArma(e, agora: number)
 	prepararArma(e)
 	if not e.arma then
@@ -513,7 +524,7 @@ local function atualizarArma(e, agora: number)
 		-- "trilha" = true (o tempo todo) ou { início, fim } (só durante o corte)
 		local ligada = false
 		if acao and acao.def.trilha and acao.soltando == nil then
-			local tau = agora - acao.inicio
+			local tau = tempoAnimado(acao, agora - acao.inicio)
 			local janela = acao.def.trilha
 			ligada = if type(janela) == "table" then tau >= janela[1] and tau <= janela[2] else true
 		end
@@ -662,7 +673,7 @@ local function pesoDaAcao(a, agora: number): (number, number)
 			peso *= math.max(0, resto / saida)
 		end
 	end
-	return peso, tau
+	return peso, tempoAnimado(a, tau)
 end
 
 local function poseDaAcao(a, tau: number)
@@ -954,6 +965,14 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 		local combo = math.clamp(dados.combo or 1, 1, 3)
 		sonsDoAtaque(personagem, classe, combo)
 		comecar(e, acoes["ataque" .. combo], dados)
+		-- preparação mais longa (peso do golpe): estica só o começo da animação
+		local ataqueDef = Classes.obter(classe).ataque
+		local base = ataqueDef.impactoBase and ataqueDef.impactoBase[combo] or 0
+		local fator = ataqueDef.preparoFator or 1
+		if e.acao and base > 0 and fator > 1 then
+			e.acao.preparo = { base = base, fator = fator }
+			e.acao.duracao += base * (fator - 1)
+		end
 		if classe == "arqueiro" then
 			local impacto = Classes.obter(classe).ataque.impacto
 			disparoDoArco(e, if impacto then impacto[combo] or 0 else 0, combo == 3, if combo == 3 then 0.3 else 0.55)

@@ -10,6 +10,9 @@
 -- Campos opcionais: critico (chance base), esquivaMult (recarga da esquiva),
 -- ameacaMult (o quanto chama a atenção dos inimigos)
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+
 local Classes = {}
 
 Classes.ordem = { "cavaleiro", "mago", "arqueiro", "assassino" }
@@ -42,6 +45,7 @@ Classes.dados = {
 			arco = 140,
 			combo = { 1, 1.1, 1.9 }, -- o terceiro golpe é o finalizador: um giro que acerta em volta
 			impacto = { 0.13, 0.13, 0.24 }, -- quando a lâmina chega no alvo em cada golpe (segundos)
+			preparo = 1.8, -- golpes pesados: preparação 80% mais longa (veja Config.PREPARO_GOLPE)
 			nome = "Combo de Espada",
 			icone = "⚔️",
 		},
@@ -91,6 +95,7 @@ Classes.dados = {
 			explosao = 4,
 			combo = { 1, 1, 1.7 },
 			impacto = { 0.15, 0.15, 0.28 },
+			preparo = 1.5,
 			nome = "Dardo, Gelo e Fogo",
 			icone = "✨",
 		},
@@ -136,6 +141,7 @@ Classes.dados = {
 			explosao = 0,
 			combo = { 1, 1, 2 },
 			impacto = { 0.26, 0.26, 0.34 },
+			preparo = 1.25, -- já tem o ciclo de pegar a flecha na aljava
 			nome = "Flechada",
 			icone = "🎯",
 		},
@@ -182,6 +188,7 @@ Classes.dados = {
 			arco = 95,
 			combo = { 1, 1, 2.4 },
 			impacto = { 0.09, 0.09, 0.2 },
+			preparo = 1.6,
 			costas = 0.5, -- +50% de dano acertando o inimigo pelas costas
 			nome = "Dança das Adagas",
 			icone = "🗡️",
@@ -201,6 +208,28 @@ Classes.dados = {
 		},
 	},
 }
+
+-- Preparação dos golpes: "impacto" passa a ser o momento real (mais tarde); o original fica em
+-- "impactoBase" (é nele que estão os quadros da animação, que Animacoes estica só na preparação)
+for _, classe in Classes.dados do
+	local ataque = classe.ataque
+	local fator = ataque.preparo or Config.PREPARO_GOLPE or 1
+	ataque.preparoFator = fator
+	ataque.impactoBase = ataque.impacto
+	if ataque.impacto then
+		local atrasado = {}
+		for i, momento in ataque.impacto do
+			atrasado[i] = momento * fator
+		end
+		ataque.impacto = atrasado
+	end
+end
+
+-- Tempo a mais que cada golpe leva por causa da preparação mais longa
+function Classes.atrasoDoPreparo(classe, combo: number): number
+	local base = classe.ataque.impactoBase
+	return if base then (base[combo] or 0) * ((classe.ataque.preparoFator or 1) - 1) else 0
+end
 
 function Classes.obter(id: string?)
 	return Classes.dados[id or ""] or Classes.dados.cavaleiro

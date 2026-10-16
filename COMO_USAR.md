@@ -64,7 +64,17 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 - **Caído e reviver:** quem perde toda a vida cai. Um aliado precisa ficar perto por 3 segundos para levantar quem caiu. Sem ajuda em 15 segundos, a pessoa só volta quando a sala for limpa.
 - **Ameaça:** os inimigos atacam quem causa mais dano. O Cavaleiro chama o dobro de atenção, então ele funciona como o tanque do grupo.
 - **Elites:** inimigos com ★ e um poder (Blindado, Veloz, Gélido, Explosivo, Gigante). Dão 3x mais ouro.
-- **Temas e chefes:** Calabouço (Rei Esqueleto), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas). Os chefes têm uma segunda fase com metade da vida.
+- **Peso dos golpes:** os personagens se preparam antes de cada ataque (erguem a espada, puxam a flecha, juntam a magia) e andam mais devagar enquanto atacam. O golpe só acerta no fim da preparação. Para deixar tudo mais rápido ou mais lento, mude `Config.PREPARO_GOLPE` (1 = sem atraso extra; padrão 1,7). A velocidade ao atacar é `Config.VELOCIDADE_ATACANDO`. O ajuste de cada classe fica em `preparo` dentro de `ataque` em Classes.luau.
+- **Salas maiores:** as salas de combate são bem mais largas (105 a 140 studs), com mais pilares, poças de lava e enfeites. A sala do chefe tem 150x150. As ondas têm mais inimigos e mais inimigos vivos ao mesmo tempo.
+- **Inimigos de apoio** (a partir da 2ª sala de cada andar). Vale matar esses primeiro:
+  - **Acólito** (manto verde): fica atrás do grupo e **cura** os aliados com um feixe verde.
+  - **Guardião** (armadura de pedra e escudo de runas): dá **escudos azuis** aos aliados. O escudo absorve o dano antes da vida e aparece como uma bolha e uma barra azul.
+  - **Porta-Estandarte** (estandarte e corneta): dá um **grito de guerra**. Os aliados ficam com uma aura vermelha e andam e atacam mais rápido por alguns segundos.
+- **Temas e chefes:** Calabouço (Rei Esqueleto), Caverna (Rainha Aranha), Cripta (Lich Gélido) e Fornalha (Senhor das Chamas).
+- **Segunda fase dos chefes:** com metade da vida, o chefe para e se **transforma** (cerca de 3 segundos, sem levar dano). A sala muda de cor, sobem pilares de luz e a energia é sugada para ele. No fim, ele solta uma onda que empurra todo mundo para longe: saia de perto! Na 2ª fase, ele fica mais rápido e ganha ataques novos:
+  - **Espiral:** ondas de projéteis girando em todas as direções.
+  - **Anéis de perigo:** anéis no chão que explodem. Fique dentro ou fora da faixa marcada.
+  - Ele também chama inimigos de apoio para ajudar.
 
 ## Efeitos visuais
 
