@@ -147,19 +147,7 @@ function BracoMalha.criar(original: MeshPart, def)
 			local g = paraGlb(posicoes[id])
 			local w, wE = pesos(def, g)
 			if w > 0.001 then
-				local normais = {}
-				local okNormais, ids = pcall(function()
-					return malha:GetVertexNormals(id)
-				end)
-				if okNormais and ids then
-					for _, idNormal in ids do
-						local n = malha:GetNormal(idNormal)
-						if n then
-							table.insert(normais, { idNormal, n * sinal })
-						end
-					end
-				end
-				table.insert(braco, { id, g, w, wE, normais })
+				table.insert(braco, { id, g, w, wE, {} })
 			end
 		end
 		if #braco == 0 then
@@ -195,6 +183,20 @@ function BracoMalha.criar(original: MeshPart, def)
 		end
 		for _, face in remover do
 			malha:RemoveFace(face)
+		end
+		-- normais de cada vértice (lidas depois de apagar os triângulos, só as que sobraram)
+		for _, v in braco do
+			local okNormais, ids = pcall(function()
+				return malha:GetVertexNormals(v[1])
+			end)
+			if okNormais and ids then
+				for _, idNormal in ids do
+					local n = malha:GetNormal(idNormal)
+					if n then
+						table.insert(v[5], { idNormal, n * sinal })
+					end
+				end
+			end
 		end
 
 		local parte = AssetService:CreateMeshPartAsync(Content.fromObject(malha))

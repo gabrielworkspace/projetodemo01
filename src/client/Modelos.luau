@@ -277,8 +277,9 @@ local VERDE_ALMA = C(90, 255, 120)
 local POEIRA_PASSO = C(120, 110, 95)
 
 function Modelos.skullbane()
-	local pasta = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
-	if not (pasta and pasta:FindFirstChild("Skullbane")) then
+	-- espera o modelo chegar (ele é grande e pode demorar a carregar no computador do jogador)
+	local pasta = game:GetService("ReplicatedStorage"):WaitForChild("ModelosChefes", 10)
+	if not (pasta and pasta:WaitForChild("Skullbane", 10)) then
 		warn("[Modelos] ReplicatedStorage > ModelosChefes > Skullbane não encontrado; usando o Rei Esqueleto.")
 		return Modelos.reiEsqueleto()
 	end
@@ -430,8 +431,9 @@ end
 	O braço da espada se mexe como o do chefe (BracoMalha); a espada dele fica em pé na guarda.
 	Sai do chão rachando a terra quando é chamado. ]]
 function Modelos.ceifadorEsmeralda()
-	local pasta = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
-	if not (pasta and pasta:FindFirstChild("EmeraldBoneReaver")) then
+	-- espera o modelo chegar (ele é grande e pode demorar a carregar no computador do jogador)
+	local pasta = game:GetService("ReplicatedStorage"):WaitForChild("ModelosChefes", 10)
+	if not (pasta and pasta:WaitForChild("EmeraldBoneReaver", 10)) then
 		warn("[Modelos] ReplicatedStorage > ModelosChefes > EmeraldBoneReaver não encontrado; usando o esqueleto.")
 		return Modelos.esqueleto()
 	end

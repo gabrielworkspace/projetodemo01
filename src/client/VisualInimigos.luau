@@ -3,11 +3,13 @@
 -- dano, fogo, gelo, atordoamento, aura de elite e a explosão de peças na morte.
 
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local BracoMalha = require(script.Parent.BracoMalha)
 local Modelos = require(script.Parent.Modelos)
 local Sons = require(script.Parent.Sons)
@@ -538,7 +540,7 @@ local function criarVisual(modelo: Model)
 	if not v.chefe then
 		criarBarra(v)
 	end
-	if malhaComBraco then
+	if malhaComBraco and Config.BRACO_ANIMADO ~= false then
 		task.spawn(function()
 			local braco = BracoMalha.criar(malhaComBraco.parte, malhaComBraco.def)
 			if not braco or not malhaComBraco.parte.Parent then
@@ -1570,8 +1572,14 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 				or math.abs(ultimo[1] - atual[1]) + math.abs(ultimo[2] - atual[2]) + math.abs(ultimo[3] - atual[3]) + math.abs(ultimo[4] - atual[4]) > 0.004
 			if mudou and agora >= (v.proximoBraco or 0) then
 				v.proximoBraco = agora + 1 / 30
-				v.braco.aplicar(atual[1], atual[2], atual[3], atual[4])
-				v.bracoAplicado = { atual[1], atual[2], atual[3], atual[4] }
+				local ok, erro = pcall(v.braco.aplicar, atual[1], atual[2], atual[3], atual[4])
+				if ok then
+					v.bracoAplicado = { atual[1], atual[2], atual[3], atual[4] }
+				else
+					-- deu erro: o braço fica parado (o resto do chefe continua normal)
+					warn("[BracoMalha] Erro ao mexer o braço; ele vai ficar parado: " .. tostring(erro))
+					v.braco = nil
+				end
 			end
 			local aplicado = v.bracoAplicado
 			local lamina = v.ossos.lamina
@@ -1891,7 +1899,12 @@ function VisualInimigos.iniciar()
 		local partes, cframes = {}, {}
 		for modelo, v in visuais do
 			if v.raiz.Parent then
-				atualizarVisual(v, dt, agora, partes, cframes)
+				-- um inimigo com erro não pode travar o desenho dos outros
+				local ok, erro = pcall(atualizarVisual, v, dt, agora, partes, cframes)
+				if not ok and not v.erroAvisado then
+					v.erroAvisado = true
+					warn("[VisualInimigos] Erro ao animar " .. tostring(modelo:GetAttribute("Tipo")) .. ": " .. tostring(erro))
+				end
 			else
 				remover(modelo)
 			end

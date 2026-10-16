@@ -440,6 +440,9 @@ Config.VELOCIDADE_CARREGANDO = 0.5 -- anda mais devagar enquanto carrega
 -- Peso dos golpes: a preparação (do clique até a arma chegar no alvo) fica mais longa.
 -- 1 = como antes; 1.8 = 80% mais tempo preparando. Cada classe pode ter o seu (ataque.preparo).
 Config.PREPARO_GOLPE = 1.7
+-- Braço da espada animado nos modelos 3D (Skullbane, Ceifador): deforma a malha com
+-- EditableMesh. Se der problema no seu jogo, troque para false (o braço fica parado).
+Config.BRACO_ANIMADO = true
 Config.VELOCIDADE_CORRIDA = 1.35 -- segurando Shift: corrida leve (não vale atacando, carregando ou defendendo)
 Config.VELOCIDADE_ATACANDO = 0.45 -- o personagem quase para enquanto prepara o golpe
 
@@ -51358,11 +51361,12 @@ end
 local function criarSalaDoChefe(sala)
 	local origem, tema, modelo = sala.origem, sala.tema, sala.modelo
 	local meiaL, meiaC = sala.largura / 2, sala.comprimento / 2
-	-- Círculo ritual no centro
+	-- Círculo ritual no centro: escuro e discreto (vermelho forte parecia um aviso de golpe)
 	local centro = origem + Vector3.new(0, 0.05, 6)
-	parte(modelo, "Ritual", Vector3.new(0.12, 60, 60), CFrame.new(centro) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.35, sombra = false })
+	local runa = Color3.fromRGB(60, 110, 70)
+	parte(modelo, "Ritual", Vector3.new(0.12, 60, 60), CFrame.new(centro) * EM_PE, Enum.Material.Neon, runa, { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.8, sombra = false })
 	parte(modelo, "RitualMiolo", Vector3.new(0.14, 58, 58), CFrame.new(centro + Vector3.new(0, 0.02, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.2), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
-	parte(modelo, "RitualInterno", Vector3.new(0.12, 20, 20), CFrame.new(centro + Vector3.new(0, 0.04, 0)) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.5, sombra = false })
+	parte(modelo, "RitualInterno", Vector3.new(0.12, 20, 20), CFrame.new(centro + Vector3.new(0, 0.04, 0)) * EM_PE, Enum.Material.Neon, runa, { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.8, sombra = false })
 	parte(modelo, "RitualInternoMiolo", Vector3.new(0.14, 18.6, 18.6), CFrame.new(centro + Vector3.new(0, 0.06, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.25), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
 	-- Trono no fundo
 	local trono = origem + Vector3.new(0, 0, meiaC - 8)
@@ -54419,19 +54423,7 @@ function BracoMalha.criar(original: MeshPart, def)
 			local g = paraGlb(posicoes[id])
 			local w, wE = pesos(def, g)
 			if w > 0.001 then
-				local normais = {}
-				local okNormais, ids = pcall(function()
-					return malha:GetVertexNormals(id)
-				end)
-				if okNormais and ids then
-					for _, idNormal in ids do
-						local n = malha:GetNormal(idNormal)
-						if n then
-							table.insert(normais, { idNormal, n * sinal })
-						end
-					end
-				end
-				table.insert(braco, { id, g, w, wE, normais })
+				table.insert(braco, { id, g, w, wE, {} })
 			end
 		end
 		if #braco == 0 then
@@ -54467,6 +54459,20 @@ function BracoMalha.criar(original: MeshPart, def)
 		end
 		for _, face in remover do
 			malha:RemoveFace(face)
+		end
+		-- normais de cada vértice (lidas depois de apagar os triângulos, só as que sobraram)
+		for _, v in braco do
+			local okNormais, ids = pcall(function()
+				return malha:GetVertexNormals(v[1])
+			end)
+			if okNormais and ids then
+				for _, idNormal in ids do
+					local n = malha:GetNormal(idNormal)
+					if n then
+						table.insert(v[5], { idNormal, n * sinal })
+					end
+				end
+			end
 		end
 
 		local parte = AssetService:CreateMeshPartAsync(Content.fromObject(malha))
@@ -57986,8 +57992,9 @@ local VERDE_ALMA = C(90, 255, 120)
 local POEIRA_PASSO = C(120, 110, 95)
 
 function Modelos.skullbane()
-	local pasta = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
-	if not (pasta and pasta:FindFirstChild("Skullbane")) then
+	-- espera o modelo chegar (ele é grande e pode demorar a carregar no computador do jogador)
+	local pasta = game:GetService("ReplicatedStorage"):WaitForChild("ModelosChefes", 10)
+	if not (pasta and pasta:WaitForChild("Skullbane", 10)) then
 		warn("[Modelos] ReplicatedStorage > ModelosChefes > Skullbane não encontrado; usando o Rei Esqueleto.")
 		return Modelos.reiEsqueleto()
 	end
@@ -58139,8 +58146,9 @@ end
 	O braço da espada se mexe como o do chefe (BracoMalha); a espada dele fica em pé na guarda.
 	Sai do chão rachando a terra quando é chamado. ]]
 function Modelos.ceifadorEsmeralda()
-	local pasta = game:GetService("ReplicatedStorage"):FindFirstChild("ModelosChefes")
-	if not (pasta and pasta:FindFirstChild("EmeraldBoneReaver")) then
+	-- espera o modelo chegar (ele é grande e pode demorar a carregar no computador do jogador)
+	local pasta = game:GetService("ReplicatedStorage"):WaitForChild("ModelosChefes", 10)
+	if not (pasta and pasta:WaitForChild("EmeraldBoneReaver", 10)) then
 		warn("[Modelos] ReplicatedStorage > ModelosChefes > EmeraldBoneReaver não encontrado; usando o esqueleto.")
 		return Modelos.esqueleto()
 	end
@@ -66237,11 +66245,13 @@ return VfxKit
 -- dano, fogo, gelo, atordoamento, aura de elite e a explosão de peças na morte.
 
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local BracoMalha = require(script.Parent.BracoMalha)
 local Modelos = require(script.Parent.Modelos)
 local Sons = require(script.Parent.Sons)
@@ -66772,7 +66782,7 @@ local function criarVisual(modelo: Model)
 	if not v.chefe then
 		criarBarra(v)
 	end
-	if malhaComBraco then
+	if malhaComBraco and Config.BRACO_ANIMADO ~= false then
 		task.spawn(function()
 			local braco = BracoMalha.criar(malhaComBraco.parte, malhaComBraco.def)
 			if not braco or not malhaComBraco.parte.Parent then
@@ -67804,8 +67814,14 @@ local function atualizarVisual(v, dt: number, agora: number, partes, cframes)
 				or math.abs(ultimo[1] - atual[1]) + math.abs(ultimo[2] - atual[2]) + math.abs(ultimo[3] - atual[3]) + math.abs(ultimo[4] - atual[4]) > 0.004
 			if mudou and agora >= (v.proximoBraco or 0) then
 				v.proximoBraco = agora + 1 / 30
-				v.braco.aplicar(atual[1], atual[2], atual[3], atual[4])
-				v.bracoAplicado = { atual[1], atual[2], atual[3], atual[4] }
+				local ok, erro = pcall(v.braco.aplicar, atual[1], atual[2], atual[3], atual[4])
+				if ok then
+					v.bracoAplicado = { atual[1], atual[2], atual[3], atual[4] }
+				else
+					-- deu erro: o braço fica parado (o resto do chefe continua normal)
+					warn("[BracoMalha] Erro ao mexer o braço; ele vai ficar parado: " .. tostring(erro))
+					v.braco = nil
+				end
 			end
 			local aplicado = v.bracoAplicado
 			local lamina = v.ossos.lamina
@@ -68125,7 +68141,12 @@ function VisualInimigos.iniciar()
 		local partes, cframes = {}, {}
 		for modelo, v in visuais do
 			if v.raiz.Parent then
-				atualizarVisual(v, dt, agora, partes, cframes)
+				-- um inimigo com erro não pode travar o desenho dos outros
+				local ok, erro = pcall(atualizarVisual, v, dt, agora, partes, cframes)
+				if not ok and not v.erroAvisado then
+					v.erroAvisado = true
+					warn("[VisualInimigos] Erro ao animar " .. tostring(modelo:GetAttribute("Tipo")) .. ": " .. tostring(erro))
+				end
 			else
 				remover(modelo)
 			end

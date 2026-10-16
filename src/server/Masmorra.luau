@@ -555,11 +555,12 @@ end
 local function criarSalaDoChefe(sala)
 	local origem, tema, modelo = sala.origem, sala.tema, sala.modelo
 	local meiaL, meiaC = sala.largura / 2, sala.comprimento / 2
-	-- Círculo ritual no centro
+	-- Círculo ritual no centro: escuro e discreto (vermelho forte parecia um aviso de golpe)
 	local centro = origem + Vector3.new(0, 0.05, 6)
-	parte(modelo, "Ritual", Vector3.new(0.12, 60, 60), CFrame.new(centro) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.35, sombra = false })
+	local runa = Color3.fromRGB(60, 110, 70)
+	parte(modelo, "Ritual", Vector3.new(0.12, 60, 60), CFrame.new(centro) * EM_PE, Enum.Material.Neon, runa, { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.8, sombra = false })
 	parte(modelo, "RitualMiolo", Vector3.new(0.14, 58, 58), CFrame.new(centro + Vector3.new(0, 0.02, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.2), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
-	parte(modelo, "RitualInterno", Vector3.new(0.12, 20, 20), CFrame.new(centro + Vector3.new(0, 0.04, 0)) * EM_PE, Enum.Material.Neon, Color3.fromRGB(200, 40, 40), { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.5, sombra = false })
+	parte(modelo, "RitualInterno", Vector3.new(0.12, 20, 20), CFrame.new(centro + Vector3.new(0, 0.04, 0)) * EM_PE, Enum.Material.Neon, runa, { formato = Enum.PartType.Cylinder, colide = false, transparencia = 0.8, sombra = false })
 	parte(modelo, "RitualInternoMiolo", Vector3.new(0.14, 18.6, 18.6), CFrame.new(centro + Vector3.new(0, 0.06, 0)) * EM_PE, tema.chao.material, escurecer(tema.chao.cor, 0.25), { formato = Enum.PartType.Cylinder, colide = false, sombra = false })
 	-- Trono no fundo
 	local trono = origem + Vector3.new(0, 0, meiaC - 8)

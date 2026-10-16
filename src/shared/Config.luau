@@ -42,6 +42,9 @@ Config.VELOCIDADE_CARREGANDO = 0.5 -- anda mais devagar enquanto carrega
 -- Peso dos golpes: a preparação (do clique até a arma chegar no alvo) fica mais longa.
 -- 1 = como antes; 1.8 = 80% mais tempo preparando. Cada classe pode ter o seu (ataque.preparo).
 Config.PREPARO_GOLPE = 1.7
+-- Braço da espada animado nos modelos 3D (Skullbane, Ceifador): deforma a malha com
+-- EditableMesh. Se der problema no seu jogo, troque para false (o braço fica parado).
+Config.BRACO_ANIMADO = true
 Config.VELOCIDADE_CORRIDA = 1.35 -- segurando Shift: corrida leve (não vale atacando, carregando ou defendendo)
 Config.VELOCIDADE_ATACANDO = 0.45 -- o personagem quase para enquanto prepara o golpe
 
