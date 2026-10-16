@@ -820,6 +820,14 @@ local function animacaoNoLobby(player: Player, tipo: string, extra: any, ativo: 
 		dados.acao = "cancelar"
 	elseif tipo == "esquiva" then
 		dados.acao = "esquiva"
+	elseif tipo == "correr" then
+		-- no acampamento também dá para correr
+		local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.WalkSpeed = 16 * (if ativo == true then Config.VELOCIDADE_CORRIDA else 1)
+		end
+		player:SetAttribute("Correndo", ativo == true)
+		return
 	elseif tipo == "defender" then
 		if dados.classe ~= "cavaleiro" then
 			return
@@ -855,6 +863,8 @@ function Partida.acaoDeCombate(player: Player, tipo: string, direcao: any, extra
 		Combate.esquiva(run, estado, direcao)
 	elseif tipo == "supremo" then
 		Combate.supremo(run, estado)
+	elseif tipo == "correr" then
+		Combate.correr(estado, direcao == true)
 	end
 end
 

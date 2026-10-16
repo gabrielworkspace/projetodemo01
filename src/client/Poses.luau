@@ -281,6 +281,88 @@ Poses.ANDAR = {
 	end,
 }
 
+-- Corrida leve (Shift), por cima do andar. Como numa corrida de verdade: o corpo inclina para
+-- a frente (a partir do tornozelo, não dobrando a cintura), os cotovelos dobram perto de 90° e
+-- os braços balançam ao contrário das pernas, o joelho sobe mais na volta da perna e o corpo
+-- "flutua" um pouco entre um apoio e outro.
+local function pernasDeCorrida(fase: number, frente: number, lado: number, dobra: number)
+	local function perna(f: number, abertura: number)
+		local sf, cf = math.sin(f), math.cos(f)
+		local quadril = A(dobra + 0.9 * frente * sf, 0, abertura + 0.5 * lado * sf)
+		local joelho = A(-(0.3 + dobra + 1.5 * math.max(0, cf)))
+		local tornozelo = A(0.25 + 0.35 * math.max(0, cf) - 0.35 * math.max(0, -sf))
+		return quadril, joelho, tornozelo
+	end
+	local quadrilD, joelhoD, tornozeloD = perna(fase, 0.12)
+	local quadrilE, joelhoE, tornozeloE = perna(fase + PI, -0.12)
+	return {
+		quadrilD = quadrilD,
+		joelhoD = joelhoD,
+		tornozeloD = tornozeloD,
+		quadrilE = quadrilE,
+		joelhoE = joelhoE,
+		tornozeloE = tornozeloE,
+	}
+end
+
+Poses.CORRER = {
+	-- espada pronta perto do corpo, o escudo balança com o passo
+	cavaleiro = function(fase: number, frente: number, lado: number)
+		local s = math.sin(fase)
+		local pose = pernasDeCorrida(fase, frente, lado, 0)
+		pose.raiz = A(-0.2 * frente, 0.1 * s * frente, -0.05 * lado, 0, -0.2 + 0.18 * math.abs(math.cos(fase)), 0)
+		pose.cintura = A(-0.06, -0.14 * s * frente)
+		pose.pescoco = A(0.14, 0.06 * s * frente)
+		pose.ombroD = A(0.35 - 0.3 * s, -0.2, 0.3)
+		pose.cotoveloD = A(1.5)
+		pose.pulsoD = A(-0.59, -0.03, 0.9)
+		pose.ombroE = A(0.25 + 0.55 * s, 0, -0.15)
+		pose.cotoveloE = A(1.4)
+		return pose
+	end,
+	-- arco baixo na mão, a mão da corda bate o ritmo
+	arqueiro = function(fase: number, frente: number, lado: number)
+		local s = math.sin(fase)
+		local pose = pernasDeCorrida(fase, frente, lado, 0.05)
+		pose.raiz = A(-0.25 * frente, 0.1 * s * frente, -0.05 * lado, 0, -0.18 + 0.2 * math.abs(math.cos(fase)), 0)
+		pose.cintura = A(-0.05, -0.14 * s * frente)
+		pose.pescoco = A(0.2, 0.06 * s * frente)
+		pose.ombroE = A(0.2 + 0.5 * s, 0.1, -0.15)
+		pose.cotoveloE = A(0.7)
+		pose.ombroD = A(-0.6 * s, 0, 0.12)
+		pose.cotoveloD = A(1.55)
+		return pose
+	end,
+	-- corrida de ninja: bem inclinado, braços esticados para trás, cabeça erguida
+	assassino = function(fase: number, frente: number, lado: number)
+		local s = math.sin(fase)
+		local pose = pernasDeCorrida(fase, frente, lado, 0.35)
+		pose.raiz = A(-0.55 * frente, 0.08 * s * frente, -0.06 * lado, 0, -0.45 + 0.12 * math.abs(math.cos(fase)), 0)
+		pose.cintura = A(-0.15, -0.08 * s * frente)
+		pose.pescoco = A(0.65, 0.04 * s * frente)
+		pose.ombroD = A(-1.25 - 0.12 * s, 0, 0.25)
+		pose.ombroE = A(-1.25 + 0.12 * s, 0, -0.25)
+		pose.cotoveloD = A(0.15)
+		pose.cotoveloE = A(0.15)
+		pose.pulsoD = A(-1.05)
+		pose.pulsoE = A(-1.05)
+		return pose
+	end,
+	-- o Mago voa mais deitado, a mão livre para trás (as pernas vêm da levitação)
+	mago = function(fase: number, frente: number, lado: number)
+		local balanco = math.sin(fase * 0.5)
+		return {
+			raiz = A(-0.45 * frente, 0, 0.18 * lado + 0.04 * balanco),
+			cintura = A(-0.15 * frente, 0.05 * balanco),
+			pescoco = A(0.35 * frente),
+			ombroE = A(-0.8, 0.2, -0.5),
+			cotoveloE = A(0.3),
+			pulsoE = A(0.3),
+			brilho = A(0.7),
+		}
+	end,
+}
+
 -- Distância (em studs) de um ciclo inteiro da passada (dois passos). Quem não está aqui usa 8.
 Poses.PASSADA = { arqueiro = 6.5, assassino = 7 }
 
@@ -1250,117 +1332,187 @@ Poses.ACOES = { cavaleiro = cavaleiro, mago = mago, arqueiro = arqueiro, assassi
 -- Esquivas (uma por classe) e reação ao levar dano
 ------------------------------------------------------------------------
 
+-- Rolamento calculado (e não feito por quadros): gira em volta do meio do corpo encolhido, e
+-- não do quadril, assim a cabeça não entra no chão. "bracos" diz onde ficam os braços
+-- encolhidos (cada classe segura a arma de um jeito). Fases, como num rolamento de verdade:
+-- agacha e mergulha (antecipação), rola encolhido rente ao chão e levanta já em guarda.
+local function rolamento(duracao: number, bracos)
+	return function(tau)
+		local s = math.clamp(tau / duracao, 0, 1)
+		local function passo(a: number, b: number, x: number): number
+			local k = math.clamp((x - a) / (b - a), 0, 1)
+			return k * k * (3 - 2 * k)
+		end
+		local k = passo(0, 0.16, s) * (1 - passo(0.7, 1, s)) -- o quanto está encolhido
+		local giro = -2 * PI * passo(0.07, 0.74, s)
+		-- centro do corpo encolhido (acima do quadril) e quanto ele desce até encostar no chão
+		local cy, cz = 0.55, -0.15
+		local c, sn = math.cos(giro), math.sin(giro)
+		local py = cy - (cy * c - cz * sn) - 1.15 * k
+		local pz = cz - (cy * sn + cz * c)
+		local function encolhido(rx: number, ry: number?, rz: number?)
+			local v = A(rx, ry, rz)
+			v[7] = k
+			return v
+		end
+		local pose = {
+			raiz = A(giro, 0, 0, 0, py, pz),
+			cintura = encolhido(-0.85),
+			pescoco = encolhido(-0.55),
+			quadrilD = encolhido(1.7, 0, 0.12),
+			joelhoD = encolhido(-2.1),
+			tornozeloD = encolhido(0.4),
+			quadrilE = encolhido(1.6, 0, -0.12),
+			joelhoE = encolhido(-2.1),
+			tornozeloE = encolhido(0.4),
+		}
+		for junta, v in bracos do
+			pose[junta] = encolhido(v[1], v[2], v[3])
+		end
+		return pose
+	end
+end
+
 Poses.ESQUIVAS = {
 	-- Rolamento: mergulha encolhido, dá uma cambalhota inteira para a frente rente ao chão e
-	-- levanta já em guarda. É calculado (e não feito por quadros) para girar em volta do meio do
-	-- corpo encolhido, e não do quadril: assim a cabeça não entra no chão.
+	-- levanta já em guarda; a espada vai deitada para o lado (no eixo do giro)
 	cavaleiro = {
 		duracao = 0.44,
-		continuo = function(tau)
-			local s = math.clamp(tau / 0.44, 0, 1)
-			local function passo(a: number, b: number, x: number): number
-				local k = math.clamp((x - a) / (b - a), 0, 1)
-				return k * k * (3 - 2 * k)
-			end
-			local k = passo(0, 0.16, s) * (1 - passo(0.7, 1, s)) -- o quanto está encolhido
-			local giro = -2 * PI * passo(0.07, 0.74, s)
-			-- centro do corpo encolhido (acima do quadril) e quanto ele desce até encostar no chão
-			local cy, cz = 0.55, -0.15
-			local c, sn = math.cos(giro), math.sin(giro)
-			local py = cy - (cy * c - cz * sn) - 1.15 * k
-			local pz = cz - (cy * sn + cz * c)
-			local function encolhido(rx: number, ry: number?, rz: number?)
-				local v = A(rx, ry, rz)
-				v[7] = k
-				return v
-			end
-			return {
-				raiz = A(giro, 0, 0, 0, py, pz),
-				cintura = encolhido(-0.85),
-				pescoco = encolhido(-0.55),
-				-- espada deitada para o lado (no eixo do giro): gira junto sem bater no chão
-				ombroD = encolhido(1.31, 1.12, 1.32),
-				cotoveloD = encolhido(0.7),
-				pulsoD = encolhido(0.21, -1.6, 0.9),
-				ombroE = encolhido(1.1, 0, -0.3),
-				cotoveloE = encolhido(1.7),
-				quadrilD = encolhido(1.7, 0, 0.12),
-				joelhoD = encolhido(-2.1),
-				tornozeloD = encolhido(0.4),
-				quadrilE = encolhido(1.6, 0, -0.12),
-				joelhoE = encolhido(-2.1),
-				tornozeloE = encolhido(0.4),
-			}
-		end,
+		continuo = rolamento(0.44, {
+			ombroD = { 1.31, 1.12, 1.32 },
+			cotoveloD = { 0.7 },
+			pulsoD = { 0.21, -1.6, 0.9 },
+			ombroE = { 1.1, 0, -0.3 },
+			cotoveloE = { 1.7 },
+		}),
 	},
-	-- Deslize arcano: corpo inclinado, braços abertos para trás, como se flutuasse
+	-- Deslize arcano: inclina para trás um instante juntando energia, dispara deitado no ar com
+	-- o cajado apontado para trás e a mão livre à frente, e freia endireitando o corpo
 	mago = {
-		duracao = 0.32,
-		quadros = {
-			{
-				t = 0.05,
-				suave = "forte",
-				pose = {
-					raiz = A(-0.55, 0, 0, 0, -0.35, 0),
-					cintura = A(-0.25),
-					pescoco = A(0.35),
-					ombroD = A(-0.7, 0, 0.55),
-					ombroE = A(-0.7, 0, -0.55),
-					cotoveloD = A(0.2),
-					cotoveloE = A(0.2),
-					quadrilD = A(-0.35),
-					joelhoD = A(-0.6),
-					quadrilE = A(-0.5),
-					joelhoE = A(-0.9),
-					brilho = A(1),
-				},
-			},
-		},
-	},
-	-- Rolamento: encolhe e dá uma cambalhota para frente
-	arqueiro = {
-		duracao = 0.36,
+		duracao = 0.34,
 		quadros = {
 			{
 				t = 0.04,
-				suave = "forte",
 				pose = {
-					raiz = A(-0.7, 0, 0, 0, -1.1, 0),
-					cintura = A(-0.6),
-					pescoco = A(-0.5),
-					ombroD = A(0.9, 0, 0.2),
-					cotoveloD = A(1.6),
-					ombroE = A(0.9, 0, -0.2),
-					cotoveloE = A(1.6),
-					quadrilD = A(1.6),
-					joelhoD = A(-2),
-					quadrilE = A(1.6),
-					joelhoE = A(-2),
+					raiz = A(0.15, 0, 0, 0, 0.1, 0),
+					cintura = A(0.2),
+					pescoco = A(-0.15),
+					ombroD = A(0.08, -0.14, 0.38),
+					cotoveloD = A(1.42),
+					pulsoD = A(-1.7, -0.35, -0.1),
+					ombroE = A(0.4, 0.3, -0.6),
+					cotoveloE = A(1.2),
+					brilho = A(1.6),
 				},
 			},
-			{ t = 0.24, suave = "linear", pose = { raiz = A(-0.7 - PI * 2, 0, 0, 0, -1.1, 0) } },
-			{ t = 0.33, pose = { raiz = A(-PI * 2, 0, 0, 0, -0.3, 0), cintura = A(-0.15), pescoco = A(0), quadrilD = A(0.4), joelhoD = A(-0.6), quadrilE = A(-0.2), joelhoE = A(-0.3) } },
+			{
+				t = 0.09,
+				suave = "forte",
+				pose = {
+					raiz = A(-0.75, 0, 0, 0, -0.2, 0),
+					cintura = A(-0.2),
+					pescoco = A(0.55),
+					-- cajado junto ao corpo, inclinado com ele (o cristal vai na frente, no alto)
+					ombroD = A(0.1, -0.14, 0.45),
+					cotoveloD = A(1.42),
+					pulsoD = A(-1.7, -0.35, -0.1),
+					-- mão livre à frente abrindo o caminho
+					ombroE = A(1.5, 0.2, -0.2),
+					cotoveloE = A(0.2),
+					pulsoE = A(0.4),
+					brilho = A(2),
+				},
+			},
+			{ t = 0.22, suave = "linear", pose = { raiz = A(-0.7, 0, 0.05, 0, -0.15, 0), pescoco = A(0.5) } },
+			{
+				t = 0.3,
+				pose = {
+					raiz = A(0.12, 0, 0, 0, 0, 0.15),
+					cintura = A(0.15),
+					pescoco = A(-0.1),
+					ombroD = A(0.08, -0.14, 0.38),
+					cotoveloD = A(1.42),
+					pulsoD = A(-1.7, -0.35, -0.1),
+					ombroE = A(0.5, 0.2, -0.5),
+					cotoveloE = A(0.8),
+					brilho = A(0.8),
+				},
+			},
 		},
 	},
-	-- Passo de sombra: corrida baixa de ninja, braços para trás
+	-- Rolamento do Arqueiro: igual ao do Cavaleiro, mais rápido, com o arco apertado no peito
+	arqueiro = {
+		duracao = 0.38,
+		continuo = rolamento(0.38, {
+			ombroE = { 1.2, 0.3, -0.2 },
+			cotoveloE = { 1.9 },
+			pulsoE = { 0.3 },
+			ombroD = { 1.1, -0.3, 0.25 },
+			cotoveloD = { 1.8 },
+		}),
+	},
+	-- Passo de sombra: dá o impulso agachando, dispara numa corrida baixa de ninja com os
+	-- braços para trás e freia derrapando, com a mão esquerda quase no chão
 	assassino = {
-		duracao = 0.3,
+		duracao = 0.34,
 		quadros = {
 			{
 				t = 0.035,
+				pose = {
+					raiz = A(-0.3, 0, 0, 0, -0.75, 0),
+					cintura = A(-0.45),
+					pescoco = A(0.5),
+					ombroD = A(-0.4, 0, 0.4),
+					ombroE = A(-0.4, 0, -0.4),
+					cotoveloD = A(0.6),
+					cotoveloE = A(0.6),
+					quadrilD = A(1.2),
+					joelhoD = A(-1.6),
+					tornozeloD = A(0.5),
+					quadrilE = A(0.2),
+					joelhoE = A(-1.2),
+					tornozeloE = A(0.6),
+				},
+			},
+			{
+				t = 0.08,
 				suave = "forte",
 				pose = {
-					raiz = A(-0.6, 0, 0, 0, -0.6, 0),
+					raiz = A(-0.65, 0, 0, 0, -0.55, 0),
 					cintura = A(-0.3),
-					pescoco = A(0.6),
-					ombroD = A(-1.25, 0, 0.25),
-					ombroE = A(-1.25, 0, -0.25),
+					pescoco = A(0.65),
+					ombroD = A(-1.3, 0, 0.25),
+					ombroE = A(-1.3, 0, -0.25),
 					cotoveloD = A(0.1),
 					cotoveloE = A(0.1),
-					quadrilD = A(1.15),
+					pulsoD = A(-1),
+					pulsoE = A(-1),
+					quadrilD = A(1.2),
+					joelhoD = A(-1.5),
+					tornozeloD = A(0.3),
+					quadrilE = A(-0.6),
+					joelhoE = A(-0.6),
+					tornozeloE = A(0.2),
+				},
+			},
+			{ t = 0.2, suave = "linear", pose = { raiz = A(-0.6, 0.08, 0, 0, -0.55, 0), quadrilD = A(-0.4), joelhoD = A(-0.8), quadrilE = A(1.1), joelhoE = A(-1.5) } },
+			{
+				t = 0.27,
+				pose = {
+					-- derrapa: corpo para trás, base larga, mão esquerda perto do chão
+					raiz = A(0.05, 0.35, 0, 0, -0.8, 0.35),
+					cintura = A(-0.35, -0.2),
+					pescoco = A(0.35, 0.3),
+					ombroE = A(1.1, 0, -0.5),
+					cotoveloE = A(0.3),
+					ombroD = A(0.5, 0, 0.6),
+					cotoveloD = A(1.2),
+					pulsoD = A(-0.3),
+					pulsoE = A(-0.3),
+					quadrilD = A(0.9, 0, 0.35),
 					joelhoD = A(-1.4),
-					quadrilE = A(-0.55),
-					joelhoE = A(-0.7),
+					quadrilE = A(-0.2, 0, -0.45),
+					joelhoE = A(-0.5),
 				},
 			},
 		},

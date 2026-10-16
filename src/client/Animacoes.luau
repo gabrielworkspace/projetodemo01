@@ -24,6 +24,9 @@ pasta.Parent = workspace
 
 local PESO_POSTURA = 0.75
 
+-- Pausa no instante do impacto de cada golpe (segundos): golpes pesados param mais
+local PAUSA_IMPACTO = { cavaleiro = 0.065, mago = 0.045, arqueiro = 0.04, assassino = 0.03 }
+
 -- Escudo do Cavaleiro: duas posições no antebraço, trocadas aos poucos (preso numa só, ele ficava
 -- de cabeça para baixo com o braço solto ou obrigava o braço a ficar encolhido).
 --   carregado: ao lado do corpo, em pé, virado para fora (comprido ao longo do braço)
@@ -430,13 +433,28 @@ end
 
 -- Tempo da animação: nos golpes, a preparação é esticada (o golpe demora mais para sair,
 -- com mais peso) e o resto (o corte e a volta) segue no ritmo normal
+-- Depois do impacto: uma pausa curta no ponto de contato ("hit-stop", dá peso ao golpe) e a
+-- volta para a guarda esticada até o próximo ataque ficar liberado (cadência): o corpo
+-- acompanha o golpe e se recompõe em vez de ficar parado esperando.
 local function tempoAnimado(a, tau: number): number
 	local preparo = a.preparo
-	if not preparo then
-		return tau
+	local t = tau
+	if preparo then
+		local fimPreparo = preparo.base * preparo.fator
+		if tau < fimPreparo then
+			return tau / preparo.fator
+		end
+		t = tau - (fimPreparo - preparo.base)
 	end
-	local fimPreparo = preparo.base * preparo.fator
-	return if tau < fimPreparo then tau / preparo.fator else tau - (fimPreparo - preparo.base)
+	local volta = a.recuperacao
+	if volta and t > volta.inicio then
+		local depois = t - volta.inicio
+		if depois < volta.pausa then
+			return volta.inicio
+		end
+		return volta.inicio + (depois - volta.pausa) / volta.fator
+	end
+	return t
 end
 
 local function atualizarArma(e, agora: number)
@@ -750,6 +768,13 @@ local function animarPersonagem(e, agora: number)
 			local passada = Poses.PASSADA[classe] or 8
 			e.fase = ((e.fase or 0) + dt * velocidade * (2 * math.pi / passada)) % (2 * math.pi)
 			aplicarCamada(andar(e.fase, frente, lado, math.clamp(velocidade / 16, 0, 1)), e.andando)
+			-- correndo (Shift): a corrida entra por cima do andar
+			local correr = Poses.CORRER[classe]
+			local querCorrer = e.jogador ~= nil and e.jogador:GetAttribute("Correndo") == true and velocidade > 10
+			e.correndo = (e.correndo or 0) + ((if querCorrer then 1 else 0) - (e.correndo or 0)) * math.min(1, dt * 8)
+			if correr and e.correndo > 0.01 then
+				aplicarCamada(correr(e.fase, frente, lado), e.correndo * e.andando)
+			end
 		end
 	end
 
@@ -972,6 +997,16 @@ function Animacoes.tocar(personagem: Model, acao: string, dados)
 		if e.acao and base > 0 and fator > 1 then
 			e.acao.preparo = { base = base, fator = fator }
 			e.acao.duracao += base * (fator - 1)
+		end
+		-- depois do impacto: pausa curta e a volta dura até o próximo ataque (cadência)
+		if e.acao and base > 0 then
+			local impacto = base * fator
+			local pausa = PAUSA_IMPACTO[classe] or 0.04
+			local restoBase = math.max(0.05, (e.acao.def.duracao or 0.5) - base)
+			local cadencia = Classes.cadencia(Classes.obter(classe), combo, dados.velAtaque or 1)
+			local esticar = math.max(1, (cadencia - impacto - pausa) / restoBase)
+			e.acao.recuperacao = { inicio = base, pausa = pausa, fator = esticar }
+			e.acao.duracao = impacto + pausa + restoBase * esticar
 		end
 		if classe == "arqueiro" then
 			local impacto = Classes.obter(classe).ataque.impacto

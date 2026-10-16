@@ -182,7 +182,7 @@ local function tentarAtacar()
 	mirar(direcao)
 	Acao:FireServer("atacar", direcao, comboLocal)
 	if jogador.Character then
-		Animacoes.tocar(jogador.Character, "ataque", { combo = comboLocal })
+		Animacoes.tocar(jogador.Character, "ataque", { combo = comboLocal, velAtaque = velocidade })
 	end
 
 	-- O próprio corte aparece na hora, sem esperar o servidor
@@ -445,6 +445,19 @@ function Controles.puxar(dados)
 	end)
 end
 
+-- Corrida leve (segurando a tecla): o servidor aumenta a velocidade (menos atacando,
+-- carregando ou defendendo) e todos veem a animação de corrida
+local querCorrer = false
+local function correr(ativo: boolean)
+	if ativo == querCorrer then
+		return
+	end
+	querCorrer = ativo
+	Estado.correndo = ativo
+	Acao:FireServer("correr", ativo)
+end
+Controles.correr = correr
+
 Controles.atacar = tentarAtacar
 Controles.habilidade = usarHabilidade
 Controles.supremo = usarSupremo
@@ -468,6 +481,7 @@ function Controles.pararAtaque()
 	segurandoAtaque = false
 	cancelarCarga()
 	defender(false)
+	correr(false)
 end
 
 -- Liga os botões de toque criados pelo HUD
@@ -519,6 +533,8 @@ function Controles.iniciar()
 			usarSupremo()
 		elseif acao == "defender" then
 			defender(true)
+		elseif acao == "correr" then
+			correr(true)
 		end
 	end)
 	-- soltar a tecla: termina o ataque segurado (solta o golpe carregado) e abaixa o escudo
@@ -528,7 +544,23 @@ function Controles.iniciar()
 			Controles.segurarAtaque(false)
 		elseif acao == "defender" then
 			defender(false)
+		elseif acao == "correr" then
+			correr(false)
 		end
+	end)
+
+	-- correndo, o campo de visão abre um pouco (soma por cima, sem brigar com outros efeitos)
+	local fovCorrida = 0
+	RunService.RenderStepped:Connect(function(dt)
+		local _, humanoidAtual = personagem()
+		local movendo = humanoidAtual ~= nil and humanoidAtual.MoveDirection.Magnitude > 0.2
+		local alvo = if querCorrer and movendo and not carregando and not defendendo then 6 else 0
+		local novo = fovCorrida + (alvo - fovCorrida) * math.min(1, dt * 6)
+		local camera = workspace.CurrentCamera
+		if camera then
+			camera.FieldOfView += novo - fovCorrida
+		end
+		fovCorrida = novo
 	end)
 
 	RunService.Heartbeat:Connect(function()

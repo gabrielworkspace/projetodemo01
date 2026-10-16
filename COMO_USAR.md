@@ -22,6 +22,9 @@ Tudo é criado por código quando o jogo começa (terreno, salas, monstros, inte
 | Esquiva | Q | Botão 💨 | B |
 | Supremo | R (com a barra dourada cheia) | Botão do topo | Y |
 | Defender com o escudo (Cavaleiro) | Segurar F ou o botão direito | Segurar 🛡️ | Segurar L2 |
+| Correr (corrida leve, 35% mais rápido) | Segurar Shift esquerdo | — | Apertar o analógico esquerdo (L3) |
+
+A corrida não vale enquanto você ataca, carrega o golpe ou defende. Correndo, o personagem inclina, os braços balançam ao contrário das pernas e a câmera abre um pouco. (O "Shift Lock" do Roblox fica desligado no jogo para o Shift poder ser usado na corrida.)
 
 Essas são as teclas padrão. Para trocar, use o botão **⚙️ TECLAS** no acampamento ou a engrenagem ao lado da barra de ações durante a partida. Cada ação aceita uma tecla principal e uma alternativa (tecla ou botão do mouse), e a escolha fica salva no seu perfil. W, A, S, D, Espaço, Esc e Tab ficam reservadas para o Roblox.
 
@@ -59,7 +62,8 @@ Cada classe tem pelo menos **11 cartas próprias** (o Mago tem 15, com as de man
 ## Mecânicas
 
 - **Combo:** todo terceiro ataque é um golpe final mais forte.
-- **Esquiva:** você fica invulnerável por um instante e atravessa projéteis.
+- **Esquiva:** você fica invulnerável por um instante e atravessa projéteis. Cada classe tem a sua: o Cavaleiro e o Arqueiro dão um rolamento encolhido (agacha, rola rente ao chão e levanta em guarda), o Mago dispara deitado no ar com o cajado à frente e o Assassino arranca agachado e freia derrapando.
+- **Golpes sincronizados:** cada golpe tem preparação, impacto e volta. No instante do impacto o corpo para um tiquinho (dá peso ao golpe), e a volta para a guarda dura exatamente até o próximo ataque ficar liberado (a cadência).
 - **Avisos no chão:** áreas vermelhas mostram onde o golpe do inimigo vai cair. O círculo de dentro enche até a hora do golpe.
 - **Caído e reviver:** quem perde toda a vida cai. Um aliado precisa ficar perto por 3 segundos para levantar quem caiu. Sem ajuda em 15 segundos, a pessoa só volta quando a sala for limpa.
 - **Ameaça:** os inimigos atacam quem causa mais dano. O Cavaleiro chama o dobro de atenção, então ele funciona como o tanque do grupo.

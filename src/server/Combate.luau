@@ -229,10 +229,20 @@ function Combate.aplicarVelocidade(estado)
 	if os.clock() < (estado.rapidoAte or 0) then
 		fator *= 1.3
 	end
-	if os.clock() < (estado.atacandoAte or 0) then
+	local atacando = os.clock() < (estado.atacandoAte or 0)
+	if atacando then
 		fator *= Config.VELOCIDADE_ATACANDO
+	elseif estado.correndo and not estado.carregandoDesde and not estado.defendendoDesde then
+		fator *= Config.VELOCIDADE_CORRIDA
 	end
 	humanoid.WalkSpeed = estado.stats.velocidade * fator
+end
+
+-- Corrida leve (Shift): todos veem o personagem correndo pelo atributo "Correndo"
+function Combate.correr(estado, ativo: boolean)
+	estado.correndo = ativo
+	estado.player:SetAttribute("Correndo", ativo)
+	Combate.aplicarVelocidade(estado)
 end
 
 function Combate.aplicarStats(estado, curarTudo: boolean?)
